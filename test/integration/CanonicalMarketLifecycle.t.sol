@@ -128,6 +128,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     function test_RealBuyAndSellRouteBothOnePercentFeesDirectlyToTreasury() public {
         _createTreasuryInventory();
         market.launchMarket();
+        _setExternalBuys(true);
         uint256 claimableBefore = claims.treasuryEthAvailable();
         uint256 treasuryBefore = treasury.balance;
         uint256 diamondBefore = address(diamond).balance;
@@ -204,6 +205,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.startPrank(authority);
         hook.setFeeAddress(nextTreasury);
         hook.setFeeBps(500);
+        hook.setExternalBuysEnabled(true);
         vm.stopPrank();
 
         uint256 originalBefore = treasury.balance;
@@ -215,8 +217,10 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     }
 
     function test_HookSupportsZeroAndFullBilateralFees() public {
-        vm.prank(authority);
+        vm.startPrank(authority);
         hook.setFeeBps(0);
+        hook.setExternalBuysEnabled(true);
+        vm.stopPrank();
         _createTreasuryInventory();
         market.launchMarket();
 
@@ -242,6 +246,9 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(alice);
         vm.expectRevert();
         hook.setFeeBps(500);
+        vm.prank(alice);
+        vm.expectRevert();
+        hook.setExternalBuysEnabled(true);
 
         vm.prank(authority);
         vm.expectRevert(Errors.InvalidBps.selector);
@@ -334,6 +341,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     function test_TransientAuthorizationCannotBeReusedForDirectPoolMovement() public {
         _createTreasuryInventory();
         market.launchMarket();
+        _setExternalBuys(true);
         uint256 bought = _buy(alice, 0.0001 ether);
         assertEq(potato.transientPoolManagerAllowance(), 0);
 
@@ -361,6 +369,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     function test_GuardianPauseCannotDisableCanonicalMarketSettlement() public {
         _createTreasuryInventory();
         market.launchMarket();
+        _setExternalBuys(true);
         vm.prank(guardian);
         IGovernance(address(diamond)).setPauseState(true, true);
 
@@ -371,6 +380,30 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         uint256 nativeBefore = alice.balance;
         _sell(alice, bought);
         assertGt(alice.balance, nativeBefore);
+    }
+
+    function test_ExternalBuysDefaultClosedAndOwnerCanToggleWhileSellsStayOpen() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        assertFalse(hook.externalBuysEnabled());
+
+        _expectBuyDisabled(alice, 0.0001 ether);
+
+        _setExternalBuys(true);
+        uint256 bought = _buy(alice, 0.0001 ether);
+        assertGt(bought, 0);
+
+        _setExternalBuys(false);
+        _expectBuyDisabled(bob, 0.0001 ether);
+
+        vm.prank(alice);
+        potato.approve(address(swapRouter), bought);
+        uint256 before = alice.balance;
+        _sell(alice, bought);
+        assertGt(alice.balance, before);
+
+        _setExternalBuys(true);
+        assertGt(_buy(bob, 0.0001 ether), 0);
     }
 
     function _createTreasuryInventory() internal {
@@ -411,6 +444,22 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         swapRouter.swap(
             key,
             SwapParams({zeroForOne: false, amountSpecified: -int256(amount), sqrtPriceLimitX96: MAX_PRICE_LIMIT}),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ZERO_BYTES
+        );
+    }
+
+    function _setExternalBuys(bool enabled) internal {
+        vm.prank(authority);
+        hook.setExternalBuysEnabled(enabled);
+    }
+
+    function _expectBuyDisabled(address buyer, uint256 nativeIn) internal {
+        vm.prank(buyer);
+        vm.expectRevert();
+        swapRouter.swap{value: nativeIn}(
+            key,
+            SwapParams({zeroForOne: true, amountSpecified: -int256(nativeIn), sqrtPriceLimitX96: MIN_PRICE_LIMIT}),
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
             ZERO_BYTES
         );

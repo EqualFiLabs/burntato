@@ -27,9 +27,11 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     address public feeAddress;
     uint16 public feeBps;
     uint64 public deploymentBlock;
+    bool public externalBuysEnabled;
 
     event FeeAddressSet(address indexed feeAddress);
     event FeeBpsSet(uint16 feeBps);
+    event ExternalBuysEnabledSet(bool enabled);
     event PoolLaunched(bytes32 indexed poolId, uint256 deploymentBlock);
     event HookFee(bytes32 indexed poolId, address indexed sender, uint128 nativeFee, uint128 potatoFee);
     event Trade(bytes32 indexed poolId, address indexed sender, int128 nativeDelta, int128 potatoDelta);
@@ -64,6 +66,11 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         if (newFeeBps > Constants.BPS) revert Errors.InvalidBps();
         feeBps = newFeeBps;
         emit FeeBpsSet(newFeeBps);
+    }
+
+    function setExternalBuysEnabled(bool enabled) external onlyOwner {
+        externalBuysEnabled = enabled;
+        emit ExternalBuysEnabledSet(enabled);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -123,6 +130,14 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     ) internal override returns (bytes4, int128 feeDelta) {
         _validateKey(key);
         if (sender == address(this)) return (BaseHook.afterSwap.selector, 0);
+        if (sender == token) {
+            if (params.zeroForOne) {
+                int128 potatoOut = delta.amount1();
+                if (potatoOut > 0) IPotatoToken(token).authorizePoolManagerTransfer(uint256(uint128(potatoOut)));
+            }
+            return (BaseHook.afterSwap.selector, 0);
+        }
+        if (params.zeroForOne && !externalBuysEnabled) revert Errors.ExternalBuysDisabled();
         if (params.amountSpecified > 0) revert Errors.ExactOutputNotAllowed();
 
         bool specifiedTokenIs0 = (params.amountSpecified < 0 == params.zeroForOne);

@@ -20,6 +20,7 @@ library Errors {
     error NativeTransferFailed();
     error AlreadyLaunched();
     error ExactOutputNotAllowed();
+    error ExternalBuysDisabled();
     error InvalidMarketConfiguration();
     error InvalidProtocolConfig();
     error MarketNotConfigured();

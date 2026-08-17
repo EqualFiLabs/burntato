@@ -143,6 +143,7 @@ contract BurntatoDeploymentVerifier {
         _check(hook.tickSpacing() == config.tickSpacing, "HOOK_TICK_SPACING");
         _check(address(hook.poolManager()) == deployment.poolManager, "HOOK_POOL_MANAGER");
         _check(hook.deploymentBlock() == 0, "HOOK_POOL_UNINITIALIZED");
+        _check(!hook.externalBuysEnabled(), "EXTERNAL_BUYS_DISABLED");
         uint160 flags = uint160(
             Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
                 | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG

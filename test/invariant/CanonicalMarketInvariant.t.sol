@@ -228,6 +228,8 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         );
         _createTreasuryInventory();
         market.launchMarket();
+        vm.prank(authority);
+        hook.setExternalBuysEnabled(true);
         treasuryFloor = claims.treasuryEthAvailable();
 
         PoolKey memory canonicalKey = market.canonicalPoolKey();
