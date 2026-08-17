@@ -131,15 +131,20 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(claims.claimRecovery(3, bob), 0.015 ether);
     }
 
-    function test_FutureRoundSnapshotIgnoresLaterConfigurationMutation() public {
+    function test_RoundActivationSnapshotsNextRoundBeforeAnyCommitment() public {
         _buy(alice);
+        Round memory preMutationRoundTwo = game.getRound(2);
+        assertEq(preMutationRoundTwo.config.startingPrice, 0.01 ether);
+        assertEq(preMutationRoundTwo.config.priceIncreaseBps, 1_000);
+        assertEq(recovery.totalRecoveryCommitment(2), 0);
+
+        vm.prank(authority);
+        governance.setProtocolConfig(0.02 ether, 2_000);
+
         _advance(120);
         game.materializeMaturedEmission();
         vm.prank(alice);
         recovery.commitRecovery(1 ether);
-
-        vm.prank(authority);
-        governance.setProtocolConfig(0.02 ether, 2_000);
         _expireAndSettle();
         Round memory roundTwo = game.getRound(2);
         assertEq(roundTwo.config.startingPrice, 0.01 ether);

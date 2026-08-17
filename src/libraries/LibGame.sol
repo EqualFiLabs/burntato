@@ -25,6 +25,7 @@ library LibGame {
         round.remainingEmission = Constants.ROUND_EMISSION_BUDGET;
         round.recoveryCarryIn = recoveryCarryIn;
         round.recoveryPool = recoveryCarryIn;
+        snapshotFutureRound(roundId + 1);
         emit IGame.RoundStarted(roundId, round.nextPrice, round.remainingEmission);
     }
 
