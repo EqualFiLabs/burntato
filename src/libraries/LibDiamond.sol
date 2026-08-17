@@ -39,6 +39,10 @@ library LibDiamond {
         diamondStorage().authority = authority_;
     }
 
+    function authority() internal view returns (address) {
+        return diamondStorage().authority;
+    }
+
     function enforceAuthority() internal view {
         if (msg.sender != diamondStorage().authority) revert Errors.NotAuthority(msg.sender);
     }
