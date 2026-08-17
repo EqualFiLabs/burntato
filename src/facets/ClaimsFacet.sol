@@ -48,7 +48,8 @@ contract ClaimsFacet is IClaims {
 
     function claimTreasury() external nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        amount = ts.purchaseEth + ts.hookEth - ts.reservedEth;
+        uint256 total = ts.purchaseEth + ts.hookEth;
+        amount = total > ts.reservedEth ? total - ts.reservedEth : 0;
         if (amount == 0) revert Errors.NothingToClaim();
         uint256 fromPurchase = amount > ts.purchaseEth ? ts.purchaseEth : amount;
         ts.purchaseEth -= fromPurchase;
@@ -59,7 +60,7 @@ contract ClaimsFacet is IClaims {
 
     function claimTreasuryPotato() external nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        amount = ts.potatoInventory - ts.reservedPotato;
+        amount = ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
         if (amount == 0) revert Errors.NothingToClaim();
         ts.potatoInventory -= amount;
         LibToken.protocolMove(address(this), ts.recipient, amount);
@@ -72,12 +73,13 @@ contract ClaimsFacet is IClaims {
 
     function treasuryEthAvailable() external view returns (uint256) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        return ts.purchaseEth + ts.hookEth - ts.reservedEth;
+        uint256 total = ts.purchaseEth + ts.hookEth;
+        return total > ts.reservedEth ? total - ts.reservedEth : 0;
     }
 
     function treasuryPotatoAvailable() external view returns (uint256) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        return ts.potatoInventory - ts.reservedPotato;
+        return ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
     }
 
     function _sendNative(address recipient, uint256 amount) private {

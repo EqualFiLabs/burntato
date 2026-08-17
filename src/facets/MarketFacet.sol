@@ -1,0 +1,237 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.26;
+
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
+import {PoolId} from "@uniswap/v4-core/src/types/PoolId.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {IAllowanceTransfer} from "@uniswap/v4-periphery/lib/permit2/src/interfaces/IAllowanceTransfer.sol";
+import {IPoolInitializer_v4} from "@uniswap/v4-periphery/src/interfaces/IPoolInitializer_v4.sol";
+import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
+import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
+
+import {IMarket} from "../interfaces/IMarket.sol";
+import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
+import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
+import {Constants} from "../shared/Constants.sol";
+import {Errors} from "../shared/Errors.sol";
+
+interface ICanonicalHookConfig {
+    function treasury() external view returns (address);
+    function poolManager() external view returns (IPoolManager);
+}
+
+contract MarketFacet is IMarket {
+    function configureMarket(MarketConfig calldata config) external {
+        LibDiamond.enforceAuthority();
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        if (ms.configured) revert Errors.AlreadyConfigured();
+        _validateConfiguration(config);
+        if (
+            ICanonicalHookConfig(config.hook).treasury() != address(this)
+                || address(ICanonicalHookConfig(config.hook).poolManager()) != config.poolManager
+        ) revert Errors.InvalidMarketConfiguration();
+
+        ms.hook = config.hook;
+        ms.poolManager = config.poolManager;
+        ms.positionManager = config.positionManager;
+        ms.permit2 = config.permit2;
+        ms.sqrtPriceX96 = config.sqrtPriceX96;
+        ms.tickLower = config.tickLower;
+        ms.tickUpper = config.tickUpper;
+        ms.tickSpacing = config.tickSpacing;
+        ms.nativeSeed = config.nativeSeed;
+        ms.potatoSeed = config.potatoSeed;
+        ms.configured = true;
+
+        LibProtocolStorage.TokenStorage storage token = LibProtocolStorage.token();
+        token.canonicalHook = config.hook;
+        token.poolManager = config.poolManager;
+
+        LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
+        treasuryStorage.reservedEth = config.nativeSeed;
+        treasuryStorage.reservedPotato = config.potatoSeed;
+
+        emit MarketConfigured(
+            config.hook,
+            config.poolManager,
+            config.positionManager,
+            config.permit2,
+            config.sqrtPriceX96,
+            config.tickLower,
+            config.tickUpper,
+            config.tickSpacing,
+            config.nativeSeed,
+            config.potatoSeed
+        );
+    }
+
+    function launchMarket() external returns (bytes32 poolId, uint128 liquidity) {
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        if (!ms.configured) revert Errors.MarketNotConfigured();
+        if (ms.launched) revert Errors.AlreadyLaunched();
+        if (!_marketReady(ms)) revert Errors.MarketNotReady();
+
+        PoolKey memory key = _poolKey(ms);
+        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(ms.tickLower);
+        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(ms.tickUpper);
+        liquidity = LiquidityAmounts.getLiquidityForAmounts(
+            ms.sqrtPriceX96, sqrtLower, sqrtUpper, ms.nativeSeed, ms.potatoSeed
+        );
+        if (liquidity == 0) revert Errors.InvalidMarketConfiguration();
+
+        uint256 nativeBefore = address(this).balance;
+        LibProtocolStorage.TokenStorage storage token = LibProtocolStorage.token();
+        uint256 potatoBefore = token.balanceOf[address(this)];
+
+        ms.launched = true;
+        _setLaunching(true);
+        IPotatoToken(address(this)).approve(ms.permit2, type(uint256).max);
+        IAllowanceTransfer(ms.permit2).approve(address(this), ms.positionManager, type(uint160).max, type(uint48).max);
+
+        bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
+        bytes[] memory mintParams = new bytes[](2);
+        mintParams[0] = abi.encode(
+            key,
+            ms.tickLower,
+            ms.tickUpper,
+            liquidity,
+            ms.nativeSeed,
+            ms.potatoSeed,
+            Constants.LOCKED_LP_RECIPIENT,
+            bytes("")
+        );
+        mintParams[1] = abi.encode(key.currency0, key.currency1);
+
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(IPoolInitializer_v4.initializePool.selector, key, ms.sqrtPriceX96);
+        calls[1] = abi.encodeWithSelector(
+            IPositionManager.modifyLiquidities.selector, abi.encode(actions, mintParams), block.timestamp + 60
+        );
+        IPositionManager(ms.positionManager).multicall{value: ms.nativeSeed}(calls);
+        _setLaunching(false);
+
+        uint256 nativeUsed = nativeBefore - address(this).balance;
+        uint256 potatoUsed = potatoBefore - token.balanceOf[address(this)];
+        if (nativeUsed == 0 || potatoUsed == 0) revert Errors.InvalidMarketConfiguration();
+
+        LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
+        _consumeTreasuryEth(treasuryStorage, nativeUsed);
+        treasuryStorage.potatoInventory -= potatoUsed;
+        treasuryStorage.reservedEth = 0;
+        treasuryStorage.reservedPotato = 0;
+
+        poolId = PoolId.unwrap(key.toId());
+        ms.poolId = poolId;
+        emit MarketLaunched(poolId, liquidity, nativeUsed, potatoUsed, Constants.LOCKED_LP_RECIPIENT);
+    }
+
+    function recordHookRevenue() external payable {
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        if (msg.sender != ms.hook || msg.sender == address(0)) revert Errors.NotCanonicalHook(msg.sender);
+        if (msg.value == 0) revert Errors.ZeroAmount();
+        LibProtocolStorage.treasury().hookEth += msg.value;
+        emit HookRevenueRecorded(msg.value);
+    }
+
+    function marketConfig() external view returns (MarketConfig memory config) {
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        config = MarketConfig({
+            hook: ms.hook,
+            poolManager: ms.poolManager,
+            positionManager: ms.positionManager,
+            permit2: ms.permit2,
+            sqrtPriceX96: ms.sqrtPriceX96,
+            tickLower: ms.tickLower,
+            tickUpper: ms.tickUpper,
+            tickSpacing: ms.tickSpacing,
+            nativeSeed: ms.nativeSeed,
+            potatoSeed: ms.potatoSeed
+        });
+    }
+
+    function canonicalPoolKey() external view returns (PoolKey memory key) {
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        if (!ms.configured) revert Errors.MarketNotConfigured();
+        return _poolKey(ms);
+    }
+
+    function marketState() external view returns (bytes32 poolId, bool configured, bool launching, bool launched) {
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        return (ms.poolId, ms.configured, _launching(), ms.launched);
+    }
+
+    function marketLaunching() external view returns (bool) {
+        return _launching();
+    }
+
+    function marketReady() external view returns (bool) {
+        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        return ms.configured && !ms.launched && _marketReady(ms);
+    }
+
+    function lockedLpRecipient() external pure returns (address) {
+        return Constants.LOCKED_LP_RECIPIENT;
+    }
+
+    function _validateConfiguration(MarketConfig calldata config) private view {
+        int24 initialTick;
+        if (config.sqrtPriceX96 > TickMath.MIN_SQRT_PRICE && config.sqrtPriceX96 < TickMath.MAX_SQRT_PRICE) {
+            initialTick = TickMath.getTickAtSqrtPrice(config.sqrtPriceX96);
+        }
+        if (
+            config.hook == address(0) || config.poolManager == address(0) || config.positionManager == address(0)
+                || config.permit2 == address(0) || config.nativeSeed == 0 || config.potatoSeed == 0
+                || config.tickSpacing <= 0 || config.tickLower >= config.tickUpper
+                || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
+                || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK
+                || initialTick <= config.tickLower || initialTick >= config.tickUpper
+                || config.sqrtPriceX96 <= TickMath.MIN_SQRT_PRICE || config.sqrtPriceX96 >= TickMath.MAX_SQRT_PRICE
+        ) revert Errors.InvalidMarketConfiguration();
+        LibDiamond.enforceHasCode(config.hook);
+        LibDiamond.enforceHasCode(config.poolManager);
+        LibDiamond.enforceHasCode(config.positionManager);
+        LibDiamond.enforceHasCode(config.permit2);
+    }
+
+    function _poolKey(LibProtocolStorage.MarketStorage storage ms) private view returns (PoolKey memory key) {
+        return PoolKey({
+            currency0: Currency.wrap(address(0)),
+            currency1: Currency.wrap(address(this)),
+            fee: Constants.POOL_LP_FEE,
+            tickSpacing: ms.tickSpacing,
+            hooks: IHooks(ms.hook)
+        });
+    }
+
+    function _marketReady(LibProtocolStorage.MarketStorage storage ms) private view returns (bool) {
+        LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
+        return ts.purchaseEth + ts.hookEth >= ms.nativeSeed && ts.potatoInventory >= ms.potatoSeed
+            && address(this).balance >= ms.nativeSeed
+            && LibProtocolStorage.token().balanceOf[address(this)] >= ms.potatoSeed;
+    }
+
+    function _consumeTreasuryEth(LibProtocolStorage.TreasuryStorage storage ts, uint256 amount) private {
+        uint256 fromPurchase = amount > ts.purchaseEth ? ts.purchaseEth : amount;
+        ts.purchaseEth -= fromPurchase;
+        ts.hookEth -= amount - fromPurchase;
+    }
+
+    function _setLaunching(bool value) private {
+        bytes32 slot = LibProtocolStorage.MARKET_LAUNCH_SLOT;
+        assembly ("memory-safe") {
+            tstore(slot, value)
+        }
+    }
+
+    function _launching() private view returns (bool value) {
+        bytes32 slot = LibProtocolStorage.MARKET_LAUNCH_SLOT;
+        assembly ("memory-safe") {
+            value := tload(slot)
+        }
+    }
+}

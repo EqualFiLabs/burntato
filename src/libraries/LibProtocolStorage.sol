@@ -59,9 +59,16 @@ library LibProtocolStorage {
     struct MarketStorage {
         address hook;
         address poolManager;
+        address positionManager;
+        address permit2;
         bytes32 poolId;
         uint256 nativeSeed;
         uint256 potatoSeed;
+        uint160 sqrtPriceX96;
+        int24 tickLower;
+        int24 tickUpper;
+        int24 tickSpacing;
+        bool configured;
         bool launched;
     }
 
