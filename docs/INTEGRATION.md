@@ -115,6 +115,11 @@ and one block.
 
 This is the bounded Burntato adaptation of FWA's production buyback path:
 
+The reward is gross-slice based, not fill based. A terminal-price partial fill
+can therefore pay the configured reward even when little or no ETH is consumed
+by the swap. Integrators should expose the current cap, reward, delay, and
+reserve so governance and users can evaluate that explicit tradeoff.
+
 - [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
 
 ## Claims and recipients

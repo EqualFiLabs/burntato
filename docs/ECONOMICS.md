@@ -159,7 +159,10 @@ uses no quote, TWAP, minimum output, deadline, or offchain sequencing. This
 matches the deployed FWA.fun buyback behavior and accepts public execution and
 MEV exposure as part of the demand mechanism. If the pool partially fills,
 unspent requested input returns to the tracked reserve. The caller reward is
-still based on the gross slice.
+still based on the gross slice. A caller can therefore earn the configured
+reward when the pool consumes little or none of the requested input. The
+unspent swap input is restored, but the reward is not; governance bounds this
+explicit tradeoff through the cap, reward rate, and block delay.
 
 Buyback swaps bypass the bilateral hook fee and send purchased POTATO directly
 from PoolManager to the current Diamond Treasury recipient. Treasury may hold,
