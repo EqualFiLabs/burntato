@@ -28,11 +28,21 @@ interface IERC721Owner {
     function ownerOf(uint256 tokenId) external view returns (address);
 }
 
+contract CanonicalHookConfigStub {
+    address public immutable treasury;
+    IPoolManager public immutable poolManager;
+
+    constructor(address treasury_, IPoolManager poolManager_) {
+        treasury = treasury_;
+        poolManager = poolManager_;
+    }
+}
+
 contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     int24 internal constant TICK_SPACING = 60;
     int24 internal constant INITIAL_TICK = 69_060;
-    uint256 internal constant NATIVE_SEED = 0.001 ether;
+    uint256 internal constant NATIVE_SEED = 0.004 ether;
     uint256 internal constant POTATO_SEED = 1 ether;
 
     address internal alice = makeAddr("alice");
@@ -106,6 +116,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertTrue(launched);
         assertEq(IERC721Owner(address(positionManager)).ownerOf(1), market.lockedLpRecipient());
         assertEq(market.lockedLpRecipient(), 0x000000000000000000000000000000000000dEaD);
+        assertEq(address(positionManager).balance, 0);
+        assertGt(claims.treasuryEthAvailable(), 0);
     }
 
     function test_RealBuyAndSellRouteBothOnePercentFeesToTreasury() public {
@@ -144,15 +156,38 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
 
     function test_ConfiguredReservesCannotBeClaimedAndStillLaunchAfterExcessClaims() public {
         _createTreasuryInventory();
-        assertEq(claims.treasuryEthAvailable(), 0.004 ether);
+        assertEq(claims.treasuryEthAvailable(), 0.001 ether);
         assertEq(claims.treasuryPotatoAvailable(), 999 ether);
 
         claims.claimTreasury();
         claims.claimTreasuryPotato();
         assertTrue(market.marketReady());
         market.launchMarket();
-        assertEq(claims.treasuryEthAvailable(), 0);
+        assertGt(claims.treasuryEthAvailable(), 0);
         assertLt(claims.treasuryPotatoAvailable(), 0.003 ether);
+    }
+
+    function test_ConfigurationRejectsTickSpacingOutsidePoolManagerDomain() public {
+        _deployCore();
+        IMarket candidate = IMarket(address(diamond));
+        CanonicalHookConfigStub stub = new CanonicalHookConfigStub(address(diamond), IPoolManager(address(manager)));
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidMarketConfiguration.selector);
+        candidate.configureMarket(
+            IMarket.MarketConfig({
+                hook: address(stub),
+                poolManager: address(manager),
+                positionManager: address(positionManager),
+                permit2: PERMIT2_ADDRESS,
+                sqrtPriceX96: TickMath.getSqrtPriceAtTick(0),
+                tickLower: -655_360,
+                tickUpper: 655_360,
+                tickSpacing: TickMath.MAX_TICK_SPACING + 1,
+                nativeSeed: NATIVE_SEED,
+                potatoSeed: POTATO_SEED
+            })
+        );
     }
 
     function test_RejectsForeignInitializationExactOutputAndRepeatedLaunch() public {
@@ -186,6 +221,21 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         potato.approve(address(this), bought);
         vm.expectRevert(abi.encodeWithSelector(Errors.PoolManagerAllowanceExceeded.selector, 0, bought));
         potato.transferFrom(alice, address(manager), bought);
+    }
+
+    function test_TransientAuthorizationAggregatesWithinOneTransaction() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        vm.startPrank(address(hook));
+        potato.authorizePoolManagerTransfer(1);
+        potato.authorizePoolManagerTransfer(2);
+        vm.stopPrank();
+        assertEq(potato.transientPoolManagerAllowance(), 3);
+
+        vm.prank(address(manager));
+        potato.transfer(alice, 3);
+        assertEq(potato.transientPoolManagerAllowance(), 0);
     }
 
     function test_GuardianPauseCannotDisableCanonicalMarketSettlement() public {

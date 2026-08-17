@@ -95,8 +95,9 @@ contract MarketFacet is IMarket {
         }
         IAllowanceTransfer(ms.permit2).approve(address(this), ms.positionManager, type(uint160).max, type(uint48).max);
 
-        bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
-        bytes[] memory mintParams = new bytes[](2);
+        bytes memory actions =
+            abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP));
+        bytes[] memory mintParams = new bytes[](3);
         mintParams[0] = abi.encode(
             key,
             ms.tickLower,
@@ -108,6 +109,7 @@ contract MarketFacet is IMarket {
             bytes("")
         );
         mintParams[1] = abi.encode(key.currency0, key.currency1);
+        mintParams[2] = abi.encode(key.currency0, address(this));
 
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeWithSelector(IPoolInitializer_v4.initializePool.selector, key, ms.sqrtPriceX96);
@@ -188,11 +190,12 @@ contract MarketFacet is IMarket {
         if (
             config.hook == address(0) || config.poolManager == address(0) || config.positionManager == address(0)
                 || config.permit2 == address(0) || config.nativeSeed == 0 || config.potatoSeed == 0
-                || config.tickSpacing <= 0 || config.tickLower >= config.tickUpper
-                || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
-                || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK
-                || initialTick <= config.tickLower || initialTick >= config.tickUpper
-                || config.sqrtPriceX96 <= TickMath.MIN_SQRT_PRICE || config.sqrtPriceX96 >= TickMath.MAX_SQRT_PRICE
+                || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
+                || config.tickLower >= config.tickUpper || config.tickLower % config.tickSpacing != 0
+                || config.tickUpper % config.tickSpacing != 0 || config.tickLower < TickMath.MIN_TICK
+                || config.tickUpper > TickMath.MAX_TICK || initialTick <= config.tickLower
+                || initialTick >= config.tickUpper || config.sqrtPriceX96 <= TickMath.MIN_SQRT_PRICE
+                || config.sqrtPriceX96 >= TickMath.MAX_SQRT_PRICE
         ) revert Errors.InvalidMarketConfiguration();
         LibDiamond.enforceHasCode(config.hook);
         LibDiamond.enforceHasCode(config.poolManager);

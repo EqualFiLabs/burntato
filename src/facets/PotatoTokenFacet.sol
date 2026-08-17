@@ -64,7 +64,7 @@ contract PotatoTokenFacet is IPotatoToken {
     function authorizePoolManagerTransfer(uint256 amount) external {
         LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
         if (msg.sender != ts.canonicalHook || msg.sender == address(0)) revert Errors.NotCanonicalHook(msg.sender);
-        LibToken.setPoolManagerAllowance(amount);
+        LibToken.setPoolManagerAllowance(LibToken.poolManagerAllowance() + amount);
         emit PoolManagerAllowanceAuthorized(amount);
     }
 
