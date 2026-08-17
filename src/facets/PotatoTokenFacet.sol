@@ -74,7 +74,7 @@ contract PotatoTokenFacet is IPotatoToken {
 
     function _restrictedMove(address from, address to, uint256 amount) private {
         LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
-        bool poolMovement = msg.sender == ts.poolManager && (from == ts.poolManager || to == ts.poolManager);
+        bool poolMovement = from == ts.poolManager || to == ts.poolManager;
         if (!poolMovement) revert Errors.TransferRestricted(from, to);
         LibToken.consumePoolManagerAllowance(amount);
         LibToken.protocolMove(from, to, amount);
