@@ -13,6 +13,12 @@ import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
+contract ForceNativeIntoDiamond {
+    constructor(address payable target) payable {
+        selfdestruct(target);
+    }
+}
+
 contract ProtocolHandler is Test {
     address internal immutable diamond;
     address internal immutable guardian;
@@ -140,7 +146,8 @@ contract ProtocolHandler is Test {
 
     function forceNative(uint96 rawAmount) external {
         uint256 amount = bound(uint256(rawAmount), 0, 10 ether);
-        vm.deal(diamond, diamond.balance + amount);
+        vm.deal(address(this), address(this).balance + amount);
+        new ForceNativeIntoDiamond{value: amount}(payable(diamond));
         forcedNative += amount;
     }
 

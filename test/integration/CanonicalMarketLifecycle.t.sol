@@ -3,6 +3,8 @@ pragma solidity 0.8.26;
 
 import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
+import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
@@ -16,13 +18,13 @@ import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
+import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {Round} from "../../src/shared/Types.sol";
-import {BuybackConfig} from "../../src/shared/Types.sol";
+import {BuybackConfig, FacetCut, FacetCutAction, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
 
@@ -45,6 +47,12 @@ contract CanonicalHookConfigStub {
 contract ForceNativeIntoPositionManager {
     constructor(address payable target) payable {
         selfdestruct(target);
+    }
+}
+
+contract FalseApproveFacet {
+    function approve(address, uint256) external pure returns (bool) {
+        return false;
     }
 }
 
@@ -148,6 +156,48 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(address(positionManager).balance, 0);
         assertGe(claims.treasuryEthAvailable(), treasuryBefore);
         assertLe(claims.treasuryEthAvailable(), treasuryBefore + NATIVE_SEED);
+    }
+
+    function test_LaunchRevertsWhenPotatoApprovalReturnsFalse() public {
+        _createTreasuryInventory();
+        _replaceSelector(address(new FalseApproveFacet()), IPotatoToken.approve.selector);
+
+        vm.expectRevert(Errors.TokenOperationFailed.selector);
+        market.launchMarket();
+    }
+
+    function test_BuyFeeConversionRevertsWhenPotatoTransferReturnsFalse() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        _setExternalBuys(true);
+        uint256 snapshot = vm.snapshotState();
+
+        vm.recordLogs();
+        _buy(alice, 0.0001 ether);
+        (, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
+        assertGt(potatoFee, 0);
+        assertTrue(vm.revertToStateAndDelete(snapshot));
+
+        vm.mockCall(
+            address(diamond), abi.encodeCall(IPotatoToken.transfer, (address(manager), potatoFee)), abi.encode(false)
+        );
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CustomRevert.WrappedError.selector,
+                address(hook),
+                IHooks.afterSwap.selector,
+                abi.encodeWithSelector(Errors.TokenOperationFailed.selector),
+                abi.encodeWithSelector(Hooks.HookCallFailed.selector)
+            )
+        );
+        swapRouter.swap{value: 0.0001 ether}(
+            key,
+            SwapParams({zeroForOne: true, amountSpecified: -int256(0.0001 ether), sqrtPriceLimitX96: MIN_PRICE_LIMIT}),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ZERO_BYTES
+        );
+        vm.clearMockedCalls();
     }
 
     function test_RealBuyAndSellRouteBothOnePercentFeesDirectlyToTreasury() public {
@@ -640,6 +690,15 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     function _setExternalBuys(bool enabled) internal {
         vm.prank(authority);
         hook.setExternalBuysEnabled(enabled);
+    }
+
+    function _replaceSelector(address facet, bytes4 selector) internal {
+        bytes4[] memory selectors = new bytes4[](1);
+        selectors[0] = selector;
+        FacetCut[] memory cuts = new FacetCut[](1);
+        cuts[0] = FacetCut({facetAddress: facet, action: FacetCutAction.Replace, functionSelectors: selectors});
+        vm.prank(authority);
+        IDiamondCut(address(diamond)).diamondCut(cuts, address(0), "");
     }
 
     function _expectBuyDisabled(address buyer, uint256 nativeIn) internal {

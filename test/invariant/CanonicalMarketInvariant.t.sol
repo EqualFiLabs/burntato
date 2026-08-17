@@ -46,6 +46,8 @@ contract CanonicalMarketHandler is Test {
     bool public treasuryRevenueDecreased;
     bool public feeMismatch;
     bool public buybackAccountingMismatch;
+    uint256 public successfulBuys;
+    uint256 public successfulSells;
 
     constructor(
         address diamond,
@@ -87,6 +89,7 @@ contract CanonicalMarketHandler is Test {
         ) returns (
             BalanceDelta
         ) {
+            ++successfulBuys;
             uint256 treasuryAfter = claims.treasuryEthAvailable();
             if (treasuryAfter < treasuryBefore) treasuryRevenueDecreased = true;
             (uint256 nativeFee, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
@@ -120,6 +123,7 @@ contract CanonicalMarketHandler is Test {
         ) returns (
             BalanceDelta
         ) {
+            ++successfulSells;
             uint256 treasuryAfter = claims.treasuryEthAvailable();
             if (treasuryAfter < treasuryBefore) treasuryRevenueDecreased = true;
             (uint256 nativeFee, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
@@ -253,6 +257,8 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         handler = new CanonicalMarketHandler(
             address(diamond), IPoolManager(address(manager)), swapRouter, hook, canonicalKey, treasury
         );
+        handler.buy(0, 0.0001 ether);
+        handler.sell(0, type(uint256).max);
         targetContract(address(handler));
     }
 
@@ -268,6 +274,8 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         assertFalse(handler.treasuryRevenueDecreased());
         assertFalse(handler.feeMismatch());
         assertFalse(handler.buybackAccountingMismatch());
+        assertGt(handler.successfulBuys(), 0);
+        assertGt(handler.successfulSells(), 0);
     }
 
     function invariant_UnsupportedSettlementPathsNeverOpen() public view {

@@ -97,16 +97,24 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(potato.totalSupply(), 20_000 ether);
     }
 
-    function test_CommitmentIsIrrevocableAndClosesAtRoundStart() public {
-        _prepareRoundTwoCommitment();
-        assertEq(recovery.recoveryCommitment(2, alice), 10_000 ether);
-        assertEq(potato.balanceOf(alice), 0);
-        assertEq(potato.balanceOf(address(diamond)), 10_000 ether);
+    function test_CommitmentIsIrrevocableAndTargetAdvancesAtRoundStart() public {
+        _buy(alice, 0.01 ether);
+        vm.warp(block.timestamp + 120);
+        vm.prank(keeper);
+        game.materializeMaturedEmission();
+        vm.prank(alice);
+        recovery.commitRecovery(9_000 ether);
+        assertEq(recovery.recoveryCommitment(2, alice), 9_000 ether);
+        assertEq(potato.balanceOf(alice), 1_000 ether);
 
         _expireAndSettle();
         vm.prank(alice);
-        vm.expectRevert(Errors.InsufficientBalance.selector);
-        recovery.commitRecovery(1 ether);
+        recovery.commitRecovery(1_000 ether);
+
+        assertEq(recovery.recoveryCommitment(2, alice), 9_000 ether);
+        assertEq(recovery.recoveryCommitment(3, alice), 1_000 ether);
+        assertEq(potato.balanceOf(alice), 0);
+        assertEq(potato.balanceOf(address(diamond)), 10_000 ether);
     }
 
     function test_ClaimsCannotBeRepeated() public {
