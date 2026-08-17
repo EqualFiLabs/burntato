@@ -59,14 +59,23 @@ contract DeployBurntato is Script {
         returns (BurntatoDeployment memory deployment)
     {
         _validateConfig(config, bootstrapAuthority);
+        _deployTimelock(config, deployment);
+        _deployUniswap(deployment);
+        _deployDiamond(config, bootstrapAuthority, deployment);
+        _deployHook(config, deployment);
+        _configureProtocol(config, deployment);
+    }
 
+    function _deployTimelock(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         address[] memory proposers = new address[](1);
         proposers[0] = config.proposer;
         address[] memory executors = new address[](1);
         executors[0] = address(0);
         deployment.timelock = address(new TimelockController(config.timelockDelay, proposers, executors, address(0)));
+    }
 
-        deployment.poolManager = address(new PoolManager(address(0)));
+    function _deployUniswap(BurntatoDeployment memory deployment) private {
+        deployment.poolManager = address(new PoolManager(deployment.timelock));
         deployment.permit2 = address(new LocalPermit2());
         deployment.weth9 = address(new LocalWETH9());
         deployment.positionDescriptor = address(
@@ -81,7 +90,13 @@ contract DeployBurntato is Script {
                 IWETH9(deployment.weth9)
             )
         );
+    }
 
+    function _deployDiamond(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        BurntatoDeployment memory deployment
+    ) private {
         deployment.diamondCutFacet = address(new DiamondCutFacet());
         deployment.diamond = address(new BurntatoDiamond(bootstrapAuthority, deployment.diamondCutFacet));
         deployment.diamondLoupeFacet = address(new DiamondLoupeFacet());
@@ -98,9 +113,11 @@ contract DeployBurntato is Script {
             .diamondCut(
                 _initialCut(deployment),
                 deployment.foundationInit,
-                abi.encodeCall(FoundationInit.initialize, (_protocolConfig(config), config.treasuryRecipient))
+                abi.encodeCall(FoundationInit.initialize, (config.protocol, config.treasuryRecipient))
             );
+    }
 
+    function _deployHook(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         deployment.hookDeployer = address(new BurntatoHookDeployer());
         bytes memory constructorArgs = abi.encode(
             IPoolManager(deployment.poolManager),
@@ -126,7 +143,9 @@ contract DeployBurntato is Script {
                 )
         );
         if (deployment.hook != expectedHook) revert UnexpectedHookAddress(expectedHook, deployment.hook);
+    }
 
+    function _configureProtocol(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         IGovernance(deployment.diamond).setGuardian(config.guardian);
         IMarket(deployment.diamond)
             .configureMarket(
@@ -157,27 +176,31 @@ contract DeployBurntato is Script {
         config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
         config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
-        config.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.startingPrice);
-        config.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.priceIncreaseBps))
+        config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
+        config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
         );
-        config.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.roundTimeout);
-        config.roundEmissionBudget = vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.roundEmissionBudget);
-        config.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_EMISSION_STEP_BPS", uint256(config.emissionStepBps))
+        config.protocol.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.protocol.roundTimeout);
+        config.protocol.roundEmissionBudget =
+            vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.protocol.roundEmissionBudget);
+        config.protocol.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_EMISSION_STEP_BPS", uint256(config.protocol.emissionStepBps))
         );
-        config.emissionVestingDuration = vm.envOr("BURNTATO_EMISSION_VESTING_DURATION", config.emissionVestingDuration);
-        config.winnerBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_WINNER_BPS", uint256(config.winnerBps)));
-        config.recoveryBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_RECOVERY_BPS", uint256(config.recoveryBps)));
-        config.treasuryBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.treasuryBps)));
-        config.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.recoveryBurnBps))
+        config.protocol.emissionVestingDuration =
+            vm.envOr("BURNTATO_EMISSION_VESTING_DURATION", config.protocol.emissionVestingDuration);
+        config.protocol.winnerBps =
+            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_WINNER_BPS", uint256(config.protocol.winnerBps)));
+        config.protocol.recoveryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_BPS", uint256(config.protocol.recoveryBps))
         );
-        config.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.recoveryTreasuryBps))
+        config.protocol.treasuryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.protocol.treasuryBps))
+        );
+        config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
+        );
+        config.protocol.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.protocol.recoveryTreasuryBps))
         );
         config.hookFeeBps =
             BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
@@ -243,39 +266,23 @@ contract DeployBurntato is Script {
     }
 
     function _validateConfig(GenesisConfig memory config, address bootstrapAuthority) private pure {
+        ProtocolConfig memory protocol = config.protocol;
         if (
             bootstrapAuthority == address(0) || config.deployer == address(0) || config.proposer == address(0)
-                || config.guardian == address(0) || config.treasuryRecipient == address(0)
-                || config.proposer == bootstrapAuthority || config.timelockDelay < Constants.MIN_TIMELOCK_DELAY
-                || config.startingPrice == 0 || config.roundTimeout == 0 || config.emissionVestingDuration == 0
-                || config.priceIncreaseBps > Constants.BPS || config.emissionStepBps > Constants.BPS
-                || config.winnerBps > Constants.BPS || config.recoveryBps > Constants.BPS
-                || config.treasuryBps > Constants.BPS || config.recoveryBurnBps > Constants.BPS
-                || config.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
-                || uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps != Constants.BPS
-                || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
+                || config.treasuryRecipient == address(0) || protocol.startingPrice == 0 || protocol.roundTimeout == 0
+                || protocol.emissionVestingDuration == 0 || protocol.priceIncreaseBps > Constants.BPS
+                || protocol.emissionStepBps > Constants.BPS || protocol.winnerBps > Constants.BPS
+                || protocol.recoveryBps > Constants.BPS || protocol.treasuryBps > Constants.BPS
+                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
+                || config.hookFeeBps > Constants.BPS
+                || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps != Constants.BPS
+                || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK
                 || config.tickLower >= config.initialTick || config.initialTick >= config.tickUpper
                 || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
                 || config.nativeSeed == 0 || config.potatoSeed == 0
         ) revert InvalidGenesisConfiguration();
-    }
-
-    function _protocolConfig(GenesisConfig memory config) private pure returns (ProtocolConfig memory protocol) {
-        protocol = ProtocolConfig({
-            startingPrice: config.startingPrice,
-            priceIncreaseBps: config.priceIncreaseBps,
-            roundTimeout: config.roundTimeout,
-            roundEmissionBudget: config.roundEmissionBudget,
-            emissionStepBps: config.emissionStepBps,
-            emissionVestingDuration: config.emissionVestingDuration,
-            winnerBps: config.winnerBps,
-            recoveryBps: config.recoveryBps,
-            treasuryBps: config.treasuryBps,
-            recoveryBurnBps: config.recoveryBurnBps,
-            recoveryTreasuryBps: config.recoveryTreasuryBps
-        });
     }
 
     function _log(BurntatoDeployment memory deployment) private pure {

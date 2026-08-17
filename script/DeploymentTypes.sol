@@ -1,23 +1,15 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {ProtocolConfig} from "../src/shared/Types.sol";
+
 struct GenesisConfig {
     address deployer;
     address proposer;
     address guardian;
     address treasuryRecipient;
     uint256 timelockDelay;
-    uint256 startingPrice;
-    uint16 priceIncreaseBps;
-    uint256 roundTimeout;
-    uint256 roundEmissionBudget;
-    uint16 emissionStepBps;
-    uint256 emissionVestingDuration;
-    uint16 winnerBps;
-    uint16 recoveryBps;
-    uint16 treasuryBps;
-    uint16 recoveryBurnBps;
-    uint16 recoveryTreasuryBps;
+    ProtocolConfig protocol;
     uint16 hookFeeBps;
     int24 initialTick;
     int24 tickSpacing;

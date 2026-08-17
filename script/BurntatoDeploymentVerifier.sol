@@ -22,7 +22,6 @@ import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
 
 interface IOwnedPoolManager {
     function owner() external view returns (address);
-    function protocolFeeController() external view returns (address);
 }
 
 contract BurntatoDeploymentVerifier {
@@ -65,20 +64,13 @@ contract BurntatoDeploymentVerifier {
         IGovernance governance = IGovernance(deployment.diamond);
         TimelockController timelock = TimelockController(payable(deployment.timelock));
         _check(governance.authority() == deployment.timelock, "DIAMOND_AUTHORITY");
-        _check(IOwnedPoolManager(deployment.poolManager).owner() == address(0), "POOL_MANAGER_OWNER_DISABLED");
-        _check(
-            IOwnedPoolManager(deployment.poolManager).protocolFeeController() == address(0),
-            "POOL_PROTOCOL_FEE_DISABLED"
-        );
+        _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
         _check(timelock.getMinDelay() == config.timelockDelay, "TIMELOCK_DELAY");
-        _check(timelock.getMinDelay() >= Constants.MIN_TIMELOCK_DELAY, "TIMELOCK_MINIMUM_DELAY");
         _check(timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), deployment.timelock), "TIMELOCK_SELF_ADMIN");
         _check(timelock.hasRole(timelock.PROPOSER_ROLE(), config.proposer), "PROPOSER_ROLE");
         _check(timelock.hasRole(timelock.CANCELLER_ROLE(), config.proposer), "CANCELLER_ROLE");
         _check(timelock.hasRole(timelock.EXECUTOR_ROLE(), address(0)), "OPEN_EXECUTION");
         _check(!timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), config.deployer), "NO_DEPLOYER_ADMIN");
-        _check(!timelock.hasRole(timelock.PROPOSER_ROLE(), config.deployer), "NO_DEPLOYER_PROPOSER");
-        _check(!timelock.hasRole(timelock.CANCELLER_ROLE(), config.deployer), "NO_DEPLOYER_CANCELLER");
     }
 
     function _verifyProtocolState(GenesisConfig memory config, BurntatoDeployment memory deployment) private view {
@@ -91,17 +83,18 @@ contract BurntatoDeploymentVerifier {
         _check(!governance.commitmentsPaused(), "COMMITMENTS_UNPAUSED");
         _check(!governance.protocolFinalized(), "NOT_FINALIZED");
         ProtocolConfig memory protocol = governance.protocolConfig();
-        _check(protocol.startingPrice == config.startingPrice, "STARTING_PRICE");
-        _check(protocol.priceIncreaseBps == config.priceIncreaseBps, "PRICE_INCREASE_BPS");
-        _check(protocol.roundTimeout == config.roundTimeout, "ROUND_TIMEOUT");
-        _check(protocol.roundEmissionBudget == config.roundEmissionBudget, "ROUND_EMISSION_BUDGET");
-        _check(protocol.emissionStepBps == config.emissionStepBps, "EMISSION_STEP_BPS");
-        _check(protocol.emissionVestingDuration == config.emissionVestingDuration, "EMISSION_VESTING_DURATION");
-        _check(protocol.winnerBps == config.winnerBps, "WINNER_BPS");
-        _check(protocol.recoveryBps == config.recoveryBps, "RECOVERY_BPS");
-        _check(protocol.treasuryBps == config.treasuryBps, "TREASURY_BPS");
-        _check(protocol.recoveryBurnBps == config.recoveryBurnBps, "RECOVERY_BURN_BPS");
-        _check(protocol.recoveryTreasuryBps == config.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
+        ProtocolConfig memory expected = config.protocol;
+        _check(protocol.startingPrice == expected.startingPrice, "STARTING_PRICE");
+        _check(protocol.priceIncreaseBps == expected.priceIncreaseBps, "PRICE_INCREASE_BPS");
+        _check(protocol.roundTimeout == expected.roundTimeout, "ROUND_TIMEOUT");
+        _check(protocol.roundEmissionBudget == expected.roundEmissionBudget, "ROUND_EMISSION_BUDGET");
+        _check(protocol.emissionStepBps == expected.emissionStepBps, "EMISSION_STEP_BPS");
+        _check(protocol.emissionVestingDuration == expected.emissionVestingDuration, "EMISSION_VESTING_DURATION");
+        _check(protocol.winnerBps == expected.winnerBps, "WINNER_BPS");
+        _check(protocol.recoveryBps == expected.recoveryBps, "RECOVERY_BPS");
+        _check(protocol.treasuryBps == expected.treasuryBps, "TREASURY_BPS");
+        _check(protocol.recoveryBurnBps == expected.recoveryBurnBps, "RECOVERY_BURN_BPS");
+        _check(protocol.recoveryTreasuryBps == expected.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
         _check(claims.treasuryEthAvailable() == 0, "TREASURY_ETH_AVAILABLE");
         _check(claims.treasuryPotatoAvailable() == 0, "TREASURY_POTATO_AVAILABLE");
@@ -163,16 +156,18 @@ contract BurntatoDeploymentVerifier {
     }
 
     function _verifyConfigDomain(GenesisConfig memory config) private pure {
-        _check(config.timelockDelay >= Constants.MIN_TIMELOCK_DELAY, "TIMELOCK_MINIMUM_DELAY");
-        _check(config.startingPrice != 0, "STARTING_PRICE_DOMAIN");
-        _check(config.roundTimeout != 0 && config.emissionVestingDuration != 0, "TIME_DOMAIN");
-        _check(config.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
-        _check(config.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
+        ProtocolConfig memory protocol = config.protocol;
+        _check(protocol.startingPrice != 0, "STARTING_PRICE_DOMAIN");
+        _check(protocol.roundTimeout != 0 && protocol.emissionVestingDuration != 0, "TIME_DOMAIN");
+        _check(protocol.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
+        _check(protocol.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
         _check(
-            uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps == Constants.BPS,
+            uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps == Constants.BPS,
             "PURCHASE_SPLIT_DOMAIN"
         );
-        _check(uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN");
+        _check(
+            uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN"
+        );
         _check(config.hookFeeBps <= Constants.BPS, "HOOK_FEE_DOMAIN");
         _check(
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,

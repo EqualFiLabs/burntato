@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 import {GenesisConfig} from "../DeploymentTypes.sol";
+import {ProtocolConfig} from "../../src/shared/Types.sol";
 
 library BurntatoDeploymentConfig {
     error NarrowingOverflow();
@@ -22,17 +23,19 @@ library BurntatoDeploymentConfig {
             guardian: ANVIL_GUARDIAN,
             treasuryRecipient: ANVIL_TREASURY,
             timelockDelay: 1 days,
-            startingPrice: 0.01 ether,
-            priceIncreaseBps: 1_000,
-            roundTimeout: 1 hours,
-            roundEmissionBudget: 100_000 ether,
-            emissionStepBps: 1_000,
-            emissionVestingDuration: 120 seconds,
-            winnerBps: 2_500,
-            recoveryBps: 5_000,
-            treasuryBps: 2_500,
-            recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000,
+            protocol: ProtocolConfig({
+                startingPrice: 0.01 ether,
+                priceIncreaseBps: 1_000,
+                roundTimeout: 1 hours,
+                roundEmissionBudget: 100_000 ether,
+                emissionStepBps: 1_000,
+                emissionVestingDuration: 120 seconds,
+                winnerBps: 2_500,
+                recoveryBps: 5_000,
+                treasuryBps: 2_500,
+                recoveryBurnBps: 9_000,
+                recoveryTreasuryBps: 1_000
+            }),
             hookFeeBps: 100,
             initialTick: DEFAULT_INITIAL_TICK,
             tickSpacing: DEFAULT_TICK_SPACING,

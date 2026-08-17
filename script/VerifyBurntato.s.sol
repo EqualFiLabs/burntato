@@ -43,10 +43,34 @@ contract VerifyBurntato is Script {
         config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
         config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
-        config.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.startingPrice);
-        config.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.priceIncreaseBps))
+        config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
+        config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
         );
+        config.protocol.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.protocol.roundTimeout);
+        config.protocol.roundEmissionBudget =
+            vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.protocol.roundEmissionBudget);
+        config.protocol.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_EMISSION_STEP_BPS", uint256(config.protocol.emissionStepBps))
+        );
+        config.protocol.emissionVestingDuration =
+            vm.envOr("BURNTATO_EMISSION_VESTING_DURATION", config.protocol.emissionVestingDuration);
+        config.protocol.winnerBps =
+            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_WINNER_BPS", uint256(config.protocol.winnerBps)));
+        config.protocol.recoveryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_BPS", uint256(config.protocol.recoveryBps))
+        );
+        config.protocol.treasuryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.protocol.treasuryBps))
+        );
+        config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
+        );
+        config.protocol.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.protocol.recoveryTreasuryBps))
+        );
+        config.hookFeeBps =
+            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
         config.initialTick =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
         config.tickSpacing =

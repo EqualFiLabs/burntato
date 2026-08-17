@@ -15,11 +15,13 @@ import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
+import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
 import {Round} from "../../src/shared/Types.sol";
 
 interface IPoolManagerAuthority {
     function owner() external view returns (address);
     function protocolFeeController() external view returns (address);
+    function setProtocolFeeController(address controller) external;
 }
 
 interface IPositionOwner {
@@ -53,16 +55,26 @@ contract DeterministicDeploymentTest is Test {
 
     function test_VerifierConfirmsCompleteGenesisDeployment() public view {
         assertTrue(verifier.verify(config, deployment));
-        assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), address(0));
-        assertEq(IPoolManagerAuthority(deployment.poolManager).protocolFeeController(), address(0));
+        assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), deployment.timelock);
+        assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), deployment.timelock);
     }
 
-    function test_DeploymentRejectsDelayBelowProtocolMinimum() public {
-        GenesisConfig memory unsafeConfig = config;
-        unsafeConfig.timelockDelay = 1 days - 1;
+    function test_DeploymentAcceptsZeroTimelockDelay() public {
+        GenesisConfig memory zeroDelayConfig = config;
+        zeroDelayConfig.timelockDelay = 0;
 
-        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
-        deployScript.deploy(unsafeConfig, address(deployScript));
+        BurntatoDeployment memory zeroDelayDeployment = deployScript.deploy(zeroDelayConfig, address(deployScript));
+        assertTrue(verifier.verify(zeroDelayConfig, zeroDelayDeployment));
+    }
+
+    function test_DeploymentAcceptsBootstrapAsTimelockProposer() public {
+        GenesisConfig memory sharedAuthorityConfig = config;
+        sharedAuthorityConfig.proposer = address(deployScript);
+
+        BurntatoDeployment memory sharedAuthorityDeployment =
+            deployScript.deploy(sharedAuthorityConfig, address(deployScript));
+        TimelockController timelock = TimelockController(payable(sharedAuthorityDeployment.timelock));
+        assertTrue(timelock.hasRole(timelock.PROPOSER_ROLE(), address(deployScript)));
     }
 
     function test_DeploymentRejectsTickSpacingOutsidePoolManagerDomain() public {
@@ -86,7 +98,7 @@ contract DeterministicDeploymentTest is Test {
 
     function test_VerifierRejectsProtocolConfigurationMismatch() public {
         GenesisConfig memory mismatched = config;
-        mismatched.startingPrice += 1;
+        mismatched.protocol.startingPrice += 1;
 
         vm.expectRevert(
             abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("STARTING_PRICE"))
@@ -95,16 +107,19 @@ contract DeterministicDeploymentTest is Test {
     }
 
     function test_GenesisPurchaseSnapshotsFixedEmissionBudget() public {
-        vm.deal(buyer, config.startingPrice);
+        vm.deal(buyer, config.protocol.startingPrice);
         vm.prank(buyer);
-        IGame(deployment.diamond).buyPotato{value: config.startingPrice}();
+        IGame(deployment.diamond).buyPotato{value: config.protocol.startingPrice}();
 
         Round memory round = IGame(deployment.diamond).getRound(1);
         assertEq(round.roundId, 1);
         assertEq(round.currentHolder, buyer);
-        assertEq(round.remainingEmission, 100_000 ether);
-        assertEq(round.holderMaxReward, 10_000 ether);
-        assertEq(round.nextPrice, 0.011 ether);
+        assertEq(round.remainingEmission, config.protocol.roundEmissionBudget);
+        assertEq(round.holderMaxReward, config.protocol.roundEmissionBudget * config.protocol.emissionStepBps / 10_000);
+        assertEq(
+            round.nextPrice,
+            config.protocol.startingPrice + config.protocol.startingPrice * config.protocol.priceIncreaseBps / 10_000
+        );
     }
 
     function test_TimelockIsOnlyPathToAdministrativeMutation() public {
@@ -126,6 +141,24 @@ contract DeterministicDeploymentTest is Test {
         assertEq(IGovernance(deployment.diamond).guardian(), replacementGuardian);
     }
 
+    function test_TimelockCanAdministerPoolManager() public {
+        address controller = makeAddr("protocolFeeController");
+        IPoolManagerAuthority poolManager = IPoolManagerAuthority(deployment.poolManager);
+
+        vm.expectRevert();
+        poolManager.setProtocolFeeController(controller);
+
+        bytes memory data = abi.encodeCall(IPoolManagerAuthority.setProtocolFeeController, (controller));
+        bytes32 salt = keccak256("set protocol fee controller");
+        TimelockController timelock = TimelockController(payable(deployment.timelock));
+        vm.prank(config.proposer);
+        timelock.schedule(deployment.poolManager, 0, data, bytes32(0), salt, config.timelockDelay);
+        vm.warp(block.timestamp + config.timelockDelay);
+        timelock.execute(deployment.poolManager, 0, data, bytes32(0), salt);
+
+        assertEq(poolManager.protocolFeeController(), controller);
+    }
+
     function test_LocalDependenciesLaunchLockedTwoSidedMarket() public {
         GenesisConfig memory launchConfig = config;
         launchConfig.nativeSeed = 0.001 ether;
@@ -137,7 +170,7 @@ contract DeterministicDeploymentTest is Test {
 
         vm.deal(buyer, 1 ether);
         vm.prank(buyer);
-        game.buyPotato{value: launchConfig.startingPrice}();
+        game.buyPotato{value: launchConfig.protocol.startingPrice}();
         vm.warp(block.timestamp + 120);
         game.materializeMaturedEmission();
         vm.prank(buyer);
@@ -146,7 +179,7 @@ contract DeterministicDeploymentTest is Test {
         settlement.settleRound();
 
         vm.prank(buyer);
-        game.buyPotato{value: launchConfig.startingPrice}();
+        game.buyPotato{value: launchConfig.protocol.startingPrice}();
         vm.warp(game.getRound(2).deadline);
         settlement.settleRound();
 
