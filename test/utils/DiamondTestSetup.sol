@@ -23,7 +23,7 @@ import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
-import {FacetCut, FacetCutAction} from "../../src/shared/Types.sol";
+import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 abstract contract DiamondTestSetup is Test {
     address internal authority = makeAddr("authority");
@@ -50,7 +50,7 @@ abstract contract DiamondTestSetup is Test {
         vm.prank(authority);
         IDiamondCut(address(diamond))
             .diamondCut(
-                noCuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (0.01 ether, 1_000, treasury))
+                noCuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (_defaultConfig(), treasury))
             );
         vm.prank(authority);
         IGovernance(address(diamond)).setGuardian(guardian);
@@ -61,6 +61,28 @@ abstract contract DiamondTestSetup is Test {
         cuts[0] = FacetCut(facet, FacetCutAction.Add, selectors);
         vm.prank(authority);
         IDiamondCut(address(diamond)).diamondCut(cuts, address(0), "");
+    }
+
+    function _defaultConfig() internal pure returns (ProtocolConfig memory config) {
+        config = ProtocolConfig({
+            startingPrice: 0.01 ether,
+            priceIncreaseBps: 1_000,
+            roundTimeout: 1 hours,
+            roundEmissionBudget: 100_000 ether,
+            emissionStepBps: 1_000,
+            emissionVestingDuration: 120 seconds,
+            winnerBps: 2_500,
+            recoveryBps: 5_000,
+            treasuryBps: 2_500,
+            recoveryBurnBps: 9_000,
+            recoveryTreasuryBps: 1_000
+        });
+    }
+
+    function _configWithPrice(uint256 price, uint16 increaseBps) internal pure returns (ProtocolConfig memory config) {
+        config = _defaultConfig();
+        config.startingPrice = price;
+        config.priceIncreaseBps = increaseBps;
     }
 
     function _loupeSelectors() internal pure returns (bytes4[] memory selectors) {

@@ -30,7 +30,7 @@ contract SettlementFacet is ISettlement {
         if (totalCommitted == 0) {
             carry = round.recoveryPool;
         } else {
-            (burned, treasuryPotato) = LibMath.splitRecovery(totalCommitted);
+            (burned, treasuryPotato) = LibMath.splitRecovery(totalCommitted, round.config.recoveryTreasuryBps);
             IPotatoToken(address(this)).protocolBurn(address(this), burned);
             LibProtocolStorage.treasury().potatoInventory += treasuryPotato;
         }

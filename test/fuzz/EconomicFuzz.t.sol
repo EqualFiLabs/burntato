@@ -29,7 +29,7 @@ contract EconomicFuzzTest is DiamondTestSetup {
         uint16 increaseBps = uint16(bound(uint256(rawBps), 1, 10_000));
         uint256 depth = bound(uint256(rawDepth), 1, 24);
         vm.prank(authority);
-        governance.setProtocolConfig(start, increaseBps);
+        governance.setProtocolConfig(_configWithPrice(start, increaseBps));
 
         uint256 expected = start;
         for (uint256 i; i < depth; ++i) {
@@ -71,12 +71,12 @@ contract EconomicFuzzTest is DiamondTestSetup {
         uint256 maximum = uint256(rawMaximum);
         uint256 duration = uint256(rawDuration);
         uint256 capped = duration > 120 ? 120 : duration;
-        assertEq(LibMath.linearEarned(maximum, duration), maximum * capped / 120);
+        assertEq(LibMath.linearEarned(maximum, duration, 120), maximum * capped / 120);
     }
 
     function testFuzz_RecoverySplitBurnsExactRemainder(uint128 rawAmount) public pure {
         uint256 amount = uint256(rawAmount);
-        (uint256 burned, uint256 treasuryPotato) = LibMath.splitRecovery(amount);
+        (uint256 burned, uint256 treasuryPotato) = LibMath.splitRecovery(amount, 1_000);
         assertEq(treasuryPotato, amount * 1_000 / 10_000);
         assertEq(burned + treasuryPotato, amount);
     }

@@ -10,7 +10,7 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 
 contract IntegratedLifecycleTest is DiamondTestSetup {
     address internal alice = makeAddr("alice");
@@ -138,8 +138,18 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(preMutationRoundTwo.config.priceIncreaseBps, 1_000);
         assertEq(recovery.totalRecoveryCommitment(2), 0);
 
+        ProtocolConfig memory updated = _configWithPrice(0.02 ether, 2_000);
+        updated.roundTimeout = 2 hours;
+        updated.roundEmissionBudget = 250_000 ether;
+        updated.emissionStepBps = 2_000;
+        updated.emissionVestingDuration = 240;
+        updated.winnerBps = 1_000;
+        updated.recoveryBps = 2_000;
+        updated.treasuryBps = 7_000;
+        updated.recoveryBurnBps = 8_000;
+        updated.recoveryTreasuryBps = 2_000;
         vm.prank(authority);
-        governance.setProtocolConfig(0.02 ether, 2_000);
+        governance.setProtocolConfig(updated);
 
         _advance(120);
         game.materializeMaturedEmission();
@@ -149,6 +159,15 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         Round memory roundTwo = game.getRound(2);
         assertEq(roundTwo.config.startingPrice, 0.01 ether);
         assertEq(roundTwo.config.priceIncreaseBps, 1_000);
+        assertEq(roundTwo.config.roundTimeout, 1 hours);
+        assertEq(roundTwo.config.roundEmissionBudget, 100_000 ether);
+        assertEq(roundTwo.config.emissionStepBps, 1_000);
+        assertEq(roundTwo.config.emissionVestingDuration, 120);
+        assertEq(roundTwo.config.winnerBps, 2_500);
+        assertEq(roundTwo.config.recoveryBps, 5_000);
+        assertEq(roundTwo.config.treasuryBps, 2_500);
+        assertEq(roundTwo.config.recoveryBurnBps, 9_000);
+        assertEq(roundTwo.config.recoveryTreasuryBps, 1_000);
 
         _buy(bob);
         _advance(120);
@@ -158,6 +177,15 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         Round memory roundThree = game.getRound(3);
         assertEq(roundThree.config.startingPrice, 0.02 ether);
         assertEq(roundThree.config.priceIncreaseBps, 2_000);
+        assertEq(roundThree.config.roundTimeout, 2 hours);
+        assertEq(roundThree.config.roundEmissionBudget, 250_000 ether);
+        assertEq(roundThree.config.emissionStepBps, 2_000);
+        assertEq(roundThree.config.emissionVestingDuration, 240);
+        assertEq(roundThree.config.winnerBps, 1_000);
+        assertEq(roundThree.config.recoveryBps, 2_000);
+        assertEq(roundThree.config.treasuryBps, 7_000);
+        assertEq(roundThree.config.recoveryBurnBps, 8_000);
+        assertEq(roundThree.config.recoveryTreasuryBps, 2_000);
     }
 
     function test_PauseBlocksOnlyNewRiskAndLeavesResolutionPathsLive() public {
@@ -207,7 +235,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         vm.prank(alice);
         assertEq(claims.claimRecovery(2, alice), 0.01 ether);
         vm.prank(authority);
-        governance.setProtocolConfig(0.02 ether, 2_000);
+        governance.setProtocolConfig(_configWithPrice(0.02 ether, 2_000));
         vm.prank(guardian);
         governance.setPauseState(true, true);
         vm.prank(authority);

@@ -9,7 +9,7 @@ import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 contract ProtocolHandler is Test {
@@ -164,8 +164,11 @@ contract ProtocolHandler is Test {
         address actor = actors[actorSeed % actors.length];
         uint256 price = bound(uint256(rawPrice), 1, 1_000 ether);
         uint16 bps = uint16(bound(uint256(rawBps), 1, 10_000));
+        ProtocolConfig memory config = governance.protocolConfig();
+        config.startingPrice = price;
+        config.priceIncreaseBps = bps;
         vm.prank(actor);
-        try governance.setProtocolConfig(price, bps) {
+        try governance.setProtocolConfig(config) {
             authorityBypass = true;
         } catch {}
     }

@@ -14,7 +14,7 @@ contract RecoveryFacet is IRecovery {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         if (gs.currentRoundId == 0) revert Errors.InvalidRound(0);
         uint256 targetRoundId = gs.currentRoundId + 1;
-        if (gs.rounds[targetRoundId].remainingEmission != 0) revert Errors.CommitmentClosed(targetRoundId);
+        if (gs.rounds[targetRoundId].activated) revert Errors.CommitmentClosed(targetRoundId);
 
         LibGame.snapshotFutureRound(targetRoundId);
         IPotatoToken(address(this)).protocolTransfer(msg.sender, address(this), amount);

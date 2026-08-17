@@ -6,7 +6,7 @@ import {Test} from "forge-std/Test.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
-import {FacetCut, FacetCutAction} from "../../src/shared/Types.sol";
+import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 contract ReplacementGameFacet {
@@ -48,10 +48,13 @@ contract GovernanceHandler is Test {
 
     function mutateConfig(uint128 rawPrice, uint16 rawBps) external {
         uint256 price = bound(uint256(rawPrice), 1, 1_000 ether);
-        uint16 bps = uint16(bound(uint256(rawBps), 1, 10_000));
+        uint16 bps = uint16(bound(uint256(rawBps), 0, 10_000));
+        ProtocolConfig memory config = governance.protocolConfig();
+        config.startingPrice = price;
+        config.priceIncreaseBps = bps;
         bool wasFinalized = governance.protocolFinalized();
         vm.prank(authority);
-        try governance.setProtocolConfig(price, bps) {}
+        try governance.setProtocolConfig(config) {}
         catch {
             if (wasFinalized) administrationBlockedAfterFinalization = true;
         }

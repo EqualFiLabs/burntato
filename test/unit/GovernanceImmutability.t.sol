@@ -11,7 +11,7 @@ import {FoundationInit} from "../../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {FacetCut, FacetCutAction} from "../../src/shared/Types.sol";
+import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 contract ReplacementAuthorityFacet {
     function authority() external pure returns (address) {
@@ -49,7 +49,9 @@ contract GovernanceAdministrationTest is Test {
         vm.prank(bootstrap);
         IDiamondCut(address(diamond))
             .diamondCut(
-                cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (0.01 ether, 1_000, treasury))
+                cuts,
+                address(initializer),
+                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury))
             );
 
         vm.startPrank(bootstrap);
@@ -60,10 +62,53 @@ contract GovernanceAdministrationTest is Test {
 
     function test_TimelockIsSoleConfigurationAuthority() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, address(this)));
-        IGovernance(address(diamond)).setProtocolConfig(0.02 ether, 2_000);
+        IGovernance(address(diamond)).setProtocolConfig(_config(0.02 ether, 2_000));
 
-        _scheduleAndExecute(abi.encodeCall(IGovernance.setProtocolConfig, (0.02 ether, 2_000)));
+        _scheduleAndExecute(abi.encodeCall(IGovernance.setProtocolConfig, (_config(0.02 ether, 2_000))));
         assertEq(IGovernance(address(diamond)).authority(), address(timelock));
+    }
+
+    function test_ProtocolConfigurationAcceptsZeroRatesAndEmissionBudget() public {
+        ProtocolConfig memory config = _config(0.02 ether, 0);
+        config.roundEmissionBudget = 0;
+        config.emissionStepBps = 0;
+        config.winnerBps = 0;
+        config.recoveryBps = 0;
+        config.treasuryBps = 10_000;
+        config.recoveryBurnBps = 0;
+        config.recoveryTreasuryBps = 10_000;
+
+        vm.prank(address(timelock));
+        IGovernance(address(diamond)).setProtocolConfig(config);
+        ProtocolConfig memory actual = IGovernance(address(diamond)).protocolConfig();
+        assertEq(actual.startingPrice, config.startingPrice);
+        assertEq(actual.priceIncreaseBps, 0);
+        assertEq(actual.roundEmissionBudget, 0);
+        assertEq(actual.emissionStepBps, 0);
+        assertEq(actual.treasuryBps, 10_000);
+        assertEq(actual.recoveryTreasuryBps, 10_000);
+    }
+
+    function test_ProtocolConfigurationRejectsInvalidDomains() public {
+        ProtocolConfig memory config = _config(0.02 ether, 1_000);
+        config.roundTimeout = 0;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.emissionVestingDuration = 0;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.priceIncreaseBps = 10_001;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.winnerBps = 2_499;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.recoveryTreasuryBps = 999;
+        _expectInvalidConfig(config);
     }
 
     function test_GuardianCanPauseButCannotAdminister() public {
@@ -138,7 +183,7 @@ contract GovernanceAdministrationTest is Test {
         address nextGuardian = makeAddr("nextGuardian");
         address nextTreasury = makeAddr("nextTreasury");
         vm.startPrank(address(timelock));
-        governance.setProtocolConfig(0.02 ether, 2_000);
+        governance.setProtocolConfig(_config(0.02 ether, 2_000));
         governance.setTreasuryRecipient(nextTreasury);
         governance.setGuardian(nextGuardian);
         governance.setPauseState(false, false);
@@ -164,6 +209,12 @@ contract GovernanceAdministrationTest is Test {
         timelock.execute(address(diamond), 0, data, bytes32(0), salt);
     }
 
+    function _expectInvalidConfig(ProtocolConfig memory config) internal {
+        vm.prank(address(timelock));
+        vm.expectRevert(Errors.InvalidProtocolConfig.selector);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+    }
+
     function _deployBootstrapGovernance() internal returns (BurntatoDiamond candidate) {
         DiamondCutFacet candidateCut = new DiamondCutFacet();
         candidate = new BurntatoDiamond(bootstrap, address(candidateCut));
@@ -174,8 +225,26 @@ contract GovernanceAdministrationTest is Test {
         vm.prank(bootstrap);
         IDiamondCut(address(candidate))
             .diamondCut(
-                cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (0.01 ether, 1_000, treasury))
+                cuts,
+                address(initializer),
+                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury))
             );
+    }
+
+    function _config(uint256 price, uint16 increaseBps) internal pure returns (ProtocolConfig memory config) {
+        config = ProtocolConfig({
+            startingPrice: price,
+            priceIncreaseBps: increaseBps,
+            roundTimeout: 1 hours,
+            roundEmissionBudget: 100_000 ether,
+            emissionStepBps: 1_000,
+            emissionVestingDuration: 120 seconds,
+            winnerBps: 2_500,
+            recoveryBps: 5_000,
+            treasuryBps: 2_500,
+            recoveryBurnBps: 9_000,
+            recoveryTreasuryBps: 1_000
+        });
     }
 
     function _governanceSelectors() internal pure returns (bytes4[] memory selectors) {

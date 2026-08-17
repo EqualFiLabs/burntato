@@ -25,6 +25,7 @@ library Errors {
     error AlreadyLaunched();
     error ExactOutputNotAllowed();
     error InvalidMarketConfiguration();
+    error InvalidProtocolConfig();
     error InvalidTimelock(address candidate);
     error MarketNotConfigured();
     error MarketNotLaunching();

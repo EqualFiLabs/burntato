@@ -3,9 +3,9 @@ pragma solidity 0.8.26;
 
 import {IGovernance} from "../interfaces/IGovernance.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {LibConfig} from "../libraries/LibConfig.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
-import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 import {ProtocolConfig} from "../shared/Types.sol";
 
@@ -65,12 +65,10 @@ contract GovernanceFacet is IGovernance {
         emit PauseStateUpdated(pausePurchases, pauseCommitments);
     }
 
-    function setProtocolConfig(uint256 startingPrice, uint16 priceIncreaseBps) external onlyAuthority {
-        if (startingPrice == 0) revert Errors.InvalidAddress();
-        if (priceIncreaseBps == 0 || priceIncreaseBps > Constants.BPS) revert Errors.InvalidBps();
-        LibProtocolStorage.game().config.startingPrice = startingPrice;
-        LibProtocolStorage.game().config.priceIncreaseBps = priceIncreaseBps;
-        emit ProtocolConfigUpdated(startingPrice, priceIncreaseBps);
+    function setProtocolConfig(ProtocolConfig calldata config) external onlyAuthority {
+        LibConfig.validate(config);
+        LibProtocolStorage.game().config = config;
+        emit ProtocolConfigUpdated(config);
     }
 
     function setTreasuryRecipient(address newRecipient) external onlyAuthority {

@@ -5,7 +5,6 @@ import {IGame} from "../interfaces/IGame.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
-import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
@@ -19,18 +18,18 @@ contract GameFacet is IGame {
 
         if (round.currentHolder != address(0)) LibGame.finalizeEmission(round);
 
-        uint256 winnerShare = LibMath.mulBpsDown(msg.value, Constants.WINNER_BPS);
-        uint256 recoveryShare = LibMath.mulBpsDown(msg.value, Constants.RECOVERY_BPS);
+        uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
+        uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
         uint256 treasuryShare = msg.value - winnerShare - recoveryShare;
         round.winnerPool += winnerShare;
         round.recoveryPool += recoveryShare;
         LibProtocolStorage.treasury().purchaseEth += treasuryShare;
 
         round.currentHolder = msg.sender;
-        round.holderSince = uint64(block.timestamp);
-        round.deadline = uint64(block.timestamp + Constants.ROUND_TIMEOUT);
+        round.holderSince = block.timestamp;
+        round.deadline = block.timestamp + round.config.roundTimeout;
         round.purchaseIndex += 1;
-        round.holderMaxReward = LibMath.mulBpsDown(round.remainingEmission, Constants.EMISSION_STEP_BPS);
+        round.holderMaxReward = LibMath.mulBpsDown(round.remainingEmission, round.config.emissionStepBps);
         round.holderEarned = 0;
         round.holderEmissionFinalized = false;
         round.nextPrice = msg.value + LibMath.mulBpsUp(msg.value, round.config.priceIncreaseBps);
@@ -45,7 +44,7 @@ contract GameFacet is IGame {
         Round storage round = gs.rounds[gs.currentRoundId];
         if (round.currentHolder == address(0)) revert Errors.NoCurrentHolder();
         if (round.holderEmissionFinalized) revert Errors.AlreadyFinalized();
-        if (block.timestamp - round.holderSince < Constants.EMISSION_VESTING_DURATION) {
+        if (block.timestamp - round.holderSince < round.config.emissionVestingDuration) {
             revert Errors.VestingIncomplete();
         }
         earned = LibGame.finalizeEmission(round);
@@ -64,7 +63,9 @@ contract GameFacet is IGame {
         Round storage round = gs.rounds[gs.currentRoundId];
         if (round.currentHolder == address(0)) return 0;
         if (round.holderEmissionFinalized) return round.holderEarned;
-        return LibMath.linearEarned(round.holderMaxReward, block.timestamp - round.holderSince);
+        return LibMath.linearEarned(
+            round.holderMaxReward, block.timestamp - round.holderSince, round.config.emissionVestingDuration
+        );
     }
 
     function _currentOrStartRound(LibProtocolStorage.GameStorage storage gs) private returns (Round storage round) {

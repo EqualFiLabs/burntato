@@ -21,19 +21,37 @@ struct Facet {
 struct ProtocolConfig {
     uint256 startingPrice;
     uint16 priceIncreaseBps;
+    uint256 roundTimeout;
+    uint256 roundEmissionBudget;
+    uint16 emissionStepBps;
+    uint256 emissionVestingDuration;
+    uint16 winnerBps;
+    uint16 recoveryBps;
+    uint16 treasuryBps;
+    uint16 recoveryBurnBps;
+    uint16 recoveryTreasuryBps;
 }
 
 struct RoundConfig {
     uint256 startingPrice;
     uint16 priceIncreaseBps;
+    uint256 roundTimeout;
+    uint256 roundEmissionBudget;
+    uint16 emissionStepBps;
+    uint256 emissionVestingDuration;
+    uint16 winnerBps;
+    uint16 recoveryBps;
+    uint16 treasuryBps;
+    uint16 recoveryBurnBps;
+    uint16 recoveryTreasuryBps;
 }
 
 struct Round {
     uint256 roundId;
     RoundConfig config;
     address currentHolder;
-    uint64 holderSince;
-    uint64 deadline;
+    uint256 holderSince;
+    uint256 deadline;
     uint64 purchaseIndex;
     uint256 nextPrice;
     uint256 holderMaxReward;
@@ -45,5 +63,6 @@ struct Round {
     uint256 recoveryCarryIn;
     uint256 totalCommitted;
     bool holderEmissionFinalized;
+    bool activated;
     bool settled;
 }

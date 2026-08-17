@@ -13,14 +13,21 @@ library LibMath {
         return Math.mulDiv(amount, bps, Constants.BPS, Math.Rounding.Ceil);
     }
 
-    function linearEarned(uint256 maxReward, uint256 heldSeconds) internal pure returns (uint256) {
-        uint256 capped =
-            heldSeconds > Constants.EMISSION_VESTING_DURATION ? Constants.EMISSION_VESTING_DURATION : heldSeconds;
-        return Math.mulDiv(maxReward, capped, Constants.EMISSION_VESTING_DURATION);
+    function linearEarned(uint256 maxReward, uint256 heldSeconds, uint256 vestingDuration)
+        internal
+        pure
+        returns (uint256)
+    {
+        uint256 capped = heldSeconds > vestingDuration ? vestingDuration : heldSeconds;
+        return Math.mulDiv(maxReward, capped, vestingDuration);
     }
 
-    function splitRecovery(uint256 amount) internal pure returns (uint256 burned, uint256 treasuryPotato) {
-        treasuryPotato = mulBpsDown(amount, Constants.RECOVERY_TREASURY_BPS);
+    function splitRecovery(uint256 amount, uint256 treasuryBps)
+        internal
+        pure
+        returns (uint256 burned, uint256 treasuryPotato)
+    {
+        treasuryPotato = mulBpsDown(amount, treasuryBps);
         burned = amount - treasuryPotato;
     }
 }

@@ -93,6 +93,15 @@ contract BurntatoDeploymentVerifier {
         ProtocolConfig memory protocol = governance.protocolConfig();
         _check(protocol.startingPrice == config.startingPrice, "STARTING_PRICE");
         _check(protocol.priceIncreaseBps == config.priceIncreaseBps, "PRICE_INCREASE_BPS");
+        _check(protocol.roundTimeout == config.roundTimeout, "ROUND_TIMEOUT");
+        _check(protocol.roundEmissionBudget == config.roundEmissionBudget, "ROUND_EMISSION_BUDGET");
+        _check(protocol.emissionStepBps == config.emissionStepBps, "EMISSION_STEP_BPS");
+        _check(protocol.emissionVestingDuration == config.emissionVestingDuration, "EMISSION_VESTING_DURATION");
+        _check(protocol.winnerBps == config.winnerBps, "WINNER_BPS");
+        _check(protocol.recoveryBps == config.recoveryBps, "RECOVERY_BPS");
+        _check(protocol.treasuryBps == config.treasuryBps, "TREASURY_BPS");
+        _check(protocol.recoveryBurnBps == config.recoveryBurnBps, "RECOVERY_BURN_BPS");
+        _check(protocol.recoveryTreasuryBps == config.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
         _check(claims.treasuryEthAvailable() == 0, "TREASURY_ETH_AVAILABLE");
         _check(claims.treasuryPotatoAvailable() == 0, "TREASURY_POTATO_AVAILABLE");
@@ -152,7 +161,14 @@ contract BurntatoDeploymentVerifier {
     function _verifyConfigDomain(GenesisConfig memory config) private pure {
         _check(config.timelockDelay >= Constants.MIN_TIMELOCK_DELAY, "TIMELOCK_MINIMUM_DELAY");
         _check(config.startingPrice != 0, "STARTING_PRICE_DOMAIN");
-        _check(config.priceIncreaseBps != 0 && config.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
+        _check(config.roundTimeout != 0 && config.emissionVestingDuration != 0, "TIME_DOMAIN");
+        _check(config.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
+        _check(config.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
+        _check(
+            uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps == Constants.BPS,
+            "PURCHASE_SPLIT_DOMAIN"
+        );
+        _check(uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN");
         _check(
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
             "TICK_SPACING_DOMAIN"

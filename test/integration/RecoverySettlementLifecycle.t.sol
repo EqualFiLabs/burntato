@@ -10,7 +10,7 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 
 contract RecoverySettlementLifecycleTest is DiamondTestSetup {
     address internal alice = makeAddr("alice");
@@ -80,6 +80,23 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(claims.treasuryPotatoAvailable(), 0);
     }
 
+    function test_ConfiguredRecoverySplitCanRouteAllCommittedPotatoToTreasury() public {
+        ProtocolConfig memory config = _defaultConfig();
+        config.recoveryBurnBps = 0;
+        config.recoveryTreasuryBps = 10_000;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
+        _prepareRoundTwoCommitment();
+        _expireAndSettle();
+        _buy(bob, 0.01 ether);
+        _expireAndSettle();
+
+        assertEq(game.getRound(2).totalCommitted, 10_000 ether);
+        assertEq(claims.treasuryPotatoAvailable(), 10_000 ether);
+        assertEq(potato.totalSupply(), 20_000 ether);
+    }
+
     function test_CommitmentIsIrrevocableAndClosesAtRoundStart() public {
         _prepareRoundTwoCommitment();
         assertEq(recovery.recoveryCommitment(2, alice), 10_000 ether);
@@ -136,7 +153,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
     function test_RecoveryClaimUsesFullPrecisionForLargeValues() public {
         uint256 largePrice = 1 << 200;
         vm.prank(authority);
-        IGovernance(address(diamond)).setProtocolConfig(largePrice, 1_000);
+        IGovernance(address(diamond)).setProtocolConfig(_configWithPrice(largePrice, 1_000));
         vm.deal(alice, largePrice);
         vm.deal(bob, largePrice);
 

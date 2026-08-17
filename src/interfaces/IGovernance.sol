@@ -7,7 +7,7 @@ interface IGovernance {
     event AuthorityTransferred(address indexed previousAuthority, address indexed newAuthority);
     event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
     event PauseStateUpdated(bool purchasesPaused, bool commitmentsPaused);
-    event ProtocolConfigUpdated(uint256 startingPrice, uint16 priceIncreaseBps);
+    event ProtocolConfigUpdated(ProtocolConfig config);
     event TreasuryRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event ProtocolFinalized();
 
@@ -20,7 +20,7 @@ interface IGovernance {
     function setAuthority(address newAuthority) external;
     function setGuardian(address newGuardian) external;
     function setPauseState(bool pausePurchases, bool pauseCommitments) external;
-    function setProtocolConfig(uint256 startingPrice, uint16 priceIncreaseBps) external;
+    function setProtocolConfig(ProtocolConfig calldata config) external;
     function setTreasuryRecipient(address newRecipient) external;
     function finalizeProtocol() external;
 }
