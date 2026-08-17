@@ -26,22 +26,23 @@ library BurntatoSelectors {
     }
 
     function governance() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](15);
+        selectors = new bytes4[](16);
         selectors[0] = IGovernance.authority.selector;
-        selectors[1] = IGovernance.guardian.selector;
-        selectors[2] = IGovernance.purchasesPaused.selector;
-        selectors[3] = IGovernance.commitmentsPaused.selector;
-        selectors[4] = IGovernance.protocolFinalized.selector;
-        selectors[5] = IGovernance.parameterFrozen.selector;
-        selectors[6] = IGovernance.selectorFrozen.selector;
-        selectors[7] = IGovernance.setAuthority.selector;
-        selectors[8] = IGovernance.setGuardian.selector;
-        selectors[9] = IGovernance.setPauseState.selector;
-        selectors[10] = IGovernance.setProtocolConfig.selector;
-        selectors[11] = IGovernance.setTreasuryRecipient.selector;
-        selectors[12] = IGovernance.freezeParameter.selector;
-        selectors[13] = IGovernance.freezeSelectors.selector;
-        selectors[14] = IGovernance.finalizeProtocol.selector;
+        selectors[1] = IGovernance.authorityLocked.selector;
+        selectors[2] = IGovernance.guardian.selector;
+        selectors[3] = IGovernance.purchasesPaused.selector;
+        selectors[4] = IGovernance.commitmentsPaused.selector;
+        selectors[5] = IGovernance.protocolFinalized.selector;
+        selectors[6] = IGovernance.parameterFrozen.selector;
+        selectors[7] = IGovernance.selectorFrozen.selector;
+        selectors[8] = IGovernance.setAuthority.selector;
+        selectors[9] = IGovernance.setGuardian.selector;
+        selectors[10] = IGovernance.setPauseState.selector;
+        selectors[11] = IGovernance.setProtocolConfig.selector;
+        selectors[12] = IGovernance.setTreasuryRecipient.selector;
+        selectors[13] = IGovernance.freezeParameter.selector;
+        selectors[14] = IGovernance.freezeSelectors.selector;
+        selectors[15] = IGovernance.finalizeProtocol.selector;
     }
 
     function market() internal pure returns (bytes4[] memory selectors) {

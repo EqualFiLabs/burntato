@@ -16,6 +16,11 @@ import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Round} from "../../src/shared/Types.sol";
 
+interface IPoolManagerAuthority {
+    function owner() external view returns (address);
+    function protocolFeeController() external view returns (address);
+}
+
 interface IPositionOwner {
     function ownerOf(uint256 tokenId) external view returns (address);
 }
@@ -37,6 +42,17 @@ contract DeterministicDeploymentTest is Test {
 
     function test_VerifierConfirmsCompleteGenesisDeployment() public view {
         assertTrue(verifier.verify(config, deployment));
+        assertTrue(IGovernance(deployment.diamond).authorityLocked());
+        assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), address(0));
+        assertEq(IPoolManagerAuthority(deployment.poolManager).protocolFeeController(), address(0));
+    }
+
+    function test_DeploymentRejectsDelayBelowProtocolMinimum() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.timelockDelay = 1 days - 1;
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
     }
 
     function test_GenesisPurchaseSnapshotsFixedEmissionBudget() public {

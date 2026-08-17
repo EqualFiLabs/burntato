@@ -79,6 +79,42 @@ contract GovernanceImmutabilityTest is Test {
         IGovernance(address(diamond)).setTreasuryRecipient(guardian);
     }
 
+    function test_GuardianCannotUnpauseButTimelockCan() public {
+        vm.prank(guardian);
+        IGovernance(address(diamond)).setPauseState(true, true);
+
+        vm.prank(guardian);
+        vm.expectRevert(abi.encodeWithSelector(Errors.UnpauseRequiresAuthority.selector, guardian));
+        IGovernance(address(diamond)).setPauseState(false, false);
+
+        _scheduleAndExecute(abi.encodeCall(IGovernance.setPauseState, (false, false)));
+        assertFalse(IGovernance(address(diamond)).purchasesPaused());
+        assertFalse(IGovernance(address(diamond)).commitmentsPaused());
+    }
+
+    function test_AuthorityHandoffIsLockedToInitialTimelock() public {
+        assertTrue(IGovernance(address(diamond)).authorityLocked());
+
+        TimelockController replacement = new TimelockController(DELAY, new address[](0), new address[](0), address(0));
+        vm.prank(address(timelock));
+        vm.expectRevert(Errors.AuthorityLocked.selector);
+        IGovernance(address(diamond)).setAuthority(address(replacement));
+    }
+
+    function test_AuthorityHandoffRejectsEOAAndShortDelay() public {
+        BurntatoDiamond candidate = _deployBootstrapGovernance();
+
+        vm.prank(bootstrap);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NoCode.selector, proposer));
+        IGovernance(address(candidate)).setAuthority(proposer);
+
+        TimelockController shortDelay =
+            new TimelockController(DELAY - 1, new address[](0), new address[](0), address(0));
+        vm.prank(bootstrap);
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidTimelock.selector, address(shortDelay)));
+        IGovernance(address(candidate)).setAuthority(address(shortDelay));
+    }
+
     function test_ParameterFreezeIsIrreversible() public {
         _scheduleAndExecute(abi.encodeCall(IGovernance.freezeParameter, (PROTOCOL_CONFIG_KEY)));
         assertTrue(IGovernance(address(diamond)).parameterFrozen(PROTOCOL_CONFIG_KEY));
@@ -124,22 +160,37 @@ contract GovernanceImmutabilityTest is Test {
         timelock.execute(address(diamond), 0, data, bytes32(0), salt);
     }
 
+    function _deployBootstrapGovernance() internal returns (BurntatoDiamond candidate) {
+        DiamondCutFacet candidateCut = new DiamondCutFacet();
+        candidate = new BurntatoDiamond(bootstrap, address(candidateCut));
+        GovernanceFacet candidateGovernance = new GovernanceFacet();
+        FoundationInit initializer = new FoundationInit();
+        FacetCut[] memory cuts = new FacetCut[](1);
+        cuts[0] = FacetCut(address(candidateGovernance), FacetCutAction.Add, _governanceSelectors());
+        vm.prank(bootstrap);
+        IDiamondCut(address(candidate))
+            .diamondCut(
+                cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (0.01 ether, 1_000, treasury))
+            );
+    }
+
     function _governanceSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](15);
+        selectors = new bytes4[](16);
         selectors[0] = IGovernance.authority.selector;
-        selectors[1] = IGovernance.guardian.selector;
-        selectors[2] = IGovernance.purchasesPaused.selector;
-        selectors[3] = IGovernance.commitmentsPaused.selector;
-        selectors[4] = IGovernance.protocolFinalized.selector;
-        selectors[5] = IGovernance.parameterFrozen.selector;
-        selectors[6] = IGovernance.selectorFrozen.selector;
-        selectors[7] = IGovernance.setAuthority.selector;
-        selectors[8] = IGovernance.setGuardian.selector;
-        selectors[9] = IGovernance.setPauseState.selector;
-        selectors[10] = IGovernance.setProtocolConfig.selector;
-        selectors[11] = IGovernance.setTreasuryRecipient.selector;
-        selectors[12] = IGovernance.freezeParameter.selector;
-        selectors[13] = IGovernance.freezeSelectors.selector;
-        selectors[14] = IGovernance.finalizeProtocol.selector;
+        selectors[1] = IGovernance.authorityLocked.selector;
+        selectors[2] = IGovernance.guardian.selector;
+        selectors[3] = IGovernance.purchasesPaused.selector;
+        selectors[4] = IGovernance.commitmentsPaused.selector;
+        selectors[5] = IGovernance.protocolFinalized.selector;
+        selectors[6] = IGovernance.parameterFrozen.selector;
+        selectors[7] = IGovernance.selectorFrozen.selector;
+        selectors[8] = IGovernance.setAuthority.selector;
+        selectors[9] = IGovernance.setGuardian.selector;
+        selectors[10] = IGovernance.setPauseState.selector;
+        selectors[11] = IGovernance.setProtocolConfig.selector;
+        selectors[12] = IGovernance.setTreasuryRecipient.selector;
+        selectors[13] = IGovernance.freezeParameter.selector;
+        selectors[14] = IGovernance.freezeSelectors.selector;
+        selectors[15] = IGovernance.finalizeProtocol.selector;
     }
 }

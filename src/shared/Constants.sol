@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 library Constants {
     uint256 internal constant BPS = 10_000;
     uint256 internal constant ROUND_TIMEOUT = 1 hours;
+    uint256 internal constant MIN_TIMELOCK_DELAY = 1 days;
 
     uint8 internal constant POTATO_DECIMALS = 18;
     uint256 internal constant POTATO_SCALE = 1e18;

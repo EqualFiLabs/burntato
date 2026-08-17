@@ -16,11 +16,13 @@ import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {Round} from "../src/shared/Types.sol";
+import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
 
 interface IOwnedPoolManager {
     function owner() external view returns (address);
+    function protocolFeeController() external view returns (address);
 }
 
 contract BurntatoDeploymentVerifier {
@@ -62,8 +64,14 @@ contract BurntatoDeploymentVerifier {
         IGovernance governance = IGovernance(deployment.diamond);
         TimelockController timelock = TimelockController(payable(deployment.timelock));
         _check(governance.authority() == deployment.timelock, "DIAMOND_AUTHORITY");
-        _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
+        _check(governance.authorityLocked(), "DIAMOND_AUTHORITY_LOCKED");
+        _check(IOwnedPoolManager(deployment.poolManager).owner() == address(0), "POOL_MANAGER_OWNER_DISABLED");
+        _check(
+            IOwnedPoolManager(deployment.poolManager).protocolFeeController() == address(0),
+            "POOL_PROTOCOL_FEE_DISABLED"
+        );
         _check(timelock.getMinDelay() == config.timelockDelay, "TIMELOCK_DELAY");
+        _check(timelock.getMinDelay() >= Constants.MIN_TIMELOCK_DELAY, "TIMELOCK_MINIMUM_DELAY");
         _check(timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), deployment.timelock), "TIMELOCK_SELF_ADMIN");
         _check(timelock.hasRole(timelock.PROPOSER_ROLE(), config.proposer), "PROPOSER_ROLE");
         _check(timelock.hasRole(timelock.CANCELLER_ROLE(), config.proposer), "CANCELLER_ROLE");

@@ -25,6 +25,7 @@ library Errors {
     error AlreadyLaunched();
     error ExactOutputNotAllowed();
     error InvalidMarketConfiguration();
+    error InvalidTimelock(address candidate);
     error MarketNotConfigured();
     error MarketNotLaunching();
     error MarketNotReady();
@@ -47,6 +48,8 @@ library Errors {
     error SelectorFrozen(bytes4 selector);
     error SelectorUnchanged(bytes4 selector);
     error TransferRestricted(address from, address to);
+    error AuthorityLocked();
+    error UnpauseRequiresAuthority(address caller);
     error TokenOperationFailed();
     error UnauthorizedWinner(address caller);
     error VestingIncomplete();

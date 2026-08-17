@@ -12,6 +12,7 @@ interface IGovernance {
     event ProtocolFinalized();
 
     function authority() external view returns (address);
+    function authorityLocked() external view returns (bool);
     function guardian() external view returns (address);
     function purchasesPaused() external view returns (bool);
     function commitmentsPaused() external view returns (bool);

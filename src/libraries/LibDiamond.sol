@@ -25,6 +25,7 @@ library LibDiamond {
         address authority;
         mapping(bytes4 => bool) frozenSelector;
         bool cutsDisabled;
+        bool authorityLocked;
     }
 
     function diamondStorage() internal pure returns (DiamondStorage storage s) {
@@ -41,6 +42,14 @@ library LibDiamond {
 
     function authority() internal view returns (address) {
         return diamondStorage().authority;
+    }
+
+    function transferAuthorityAndLock(address authority_) internal {
+        DiamondStorage storage ds = diamondStorage();
+        if (ds.authorityLocked) revert Errors.AuthorityLocked();
+        if (authority_ == address(0)) revert Errors.InvalidAddress();
+        ds.authority = authority_;
+        ds.authorityLocked = true;
     }
 
     function enforceAuthority() internal view {

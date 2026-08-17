@@ -31,6 +31,7 @@ import {IDiamondCut} from "../src/interfaces/IDiamondCut.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {FacetCut, FacetCutAction} from "../src/shared/Types.sol";
+import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
 import {BurntatoHookDeployer} from "./helpers/BurntatoHookDeployer.sol";
 import {LocalPermit2} from "./helpers/LocalPermit2.sol";
@@ -65,7 +66,7 @@ contract DeployBurntato is Script {
         executors[0] = address(0);
         deployment.timelock = address(new TimelockController(config.timelockDelay, proposers, executors, address(0)));
 
-        deployment.poolManager = address(new PoolManager(deployment.timelock));
+        deployment.poolManager = address(new PoolManager(address(0)));
         deployment.permit2 = address(new LocalPermit2());
         deployment.weth9 = address(new LocalWETH9());
         deployment.positionDescriptor = address(
@@ -206,8 +207,9 @@ contract DeployBurntato is Script {
         if (
             bootstrapAuthority == address(0) || config.deployer == address(0) || config.proposer == address(0)
                 || config.guardian == address(0) || config.treasuryRecipient == address(0)
-                || config.proposer == bootstrapAuthority || config.startingPrice == 0 || config.priceIncreaseBps == 0
-                || config.priceIncreaseBps > 10_000 || config.tickSpacing <= 0 || config.tickLower >= config.initialTick
+                || config.proposer == bootstrapAuthority || config.timelockDelay < Constants.MIN_TIMELOCK_DELAY
+                || config.startingPrice == 0 || config.priceIncreaseBps == 0 || config.priceIncreaseBps > 10_000
+                || config.tickSpacing <= 0 || config.tickLower >= config.initialTick
                 || config.initialTick >= config.tickUpper || config.tickLower % config.tickSpacing != 0
                 || config.tickUpper % config.tickSpacing != 0 || config.nativeSeed == 0 || config.potatoSeed == 0
         ) revert InvalidGenesisConfiguration();

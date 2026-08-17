@@ -7,6 +7,10 @@ import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 
+interface ITimelockDelay {
+    function getMinDelay() external view returns (uint256);
+}
+
 contract GovernanceFacet is IGovernance {
     bytes32 public constant PROTOCOL_CONFIG_KEY = keccak256("burntato.parameter.protocol-config");
     bytes32 public constant TREASURY_RECIPIENT_KEY = keccak256("burntato.parameter.treasury-recipient");
@@ -24,6 +28,10 @@ contract GovernanceFacet is IGovernance {
 
     function authority() external view returns (address) {
         return LibDiamond.authority();
+    }
+
+    function authorityLocked() external view returns (bool) {
+        return LibDiamond.diamondStorage().authorityLocked;
     }
 
     function guardian() external view returns (address) {
@@ -51,8 +59,14 @@ contract GovernanceFacet is IGovernance {
     }
 
     function setAuthority(address newAuthority) external onlyAuthority beforeFinalization {
+        if (newAuthority.code.length == 0) revert Errors.NoCode(newAuthority);
+        try ITimelockDelay(newAuthority).getMinDelay() returns (uint256 delay) {
+            if (delay < Constants.MIN_TIMELOCK_DELAY) revert Errors.InvalidTimelock(newAuthority);
+        } catch {
+            revert Errors.InvalidTimelock(newAuthority);
+        }
         address previous = LibDiamond.authority();
-        LibDiamond.setAuthority(newAuthority);
+        LibDiamond.transferAuthorityAndLock(newAuthority);
         emit AuthorityTransferred(previous, newAuthority);
     }
 
@@ -67,7 +81,12 @@ contract GovernanceFacet is IGovernance {
 
     function setPauseState(bool pausePurchases, bool pauseCommitments) external beforeFinalization {
         LibProtocolStorage.GovernanceStorage storage gs = LibProtocolStorage.governance();
-        if (msg.sender != gs.guardian) revert Errors.NotGuardian(msg.sender);
+        if (msg.sender != LibDiamond.authority()) {
+            if (msg.sender != gs.guardian) revert Errors.NotGuardian(msg.sender);
+            if ((gs.purchasesPaused && !pausePurchases) || (gs.commitmentsPaused && !pauseCommitments)) {
+                revert Errors.UnpauseRequiresAuthority(msg.sender);
+            }
+        }
         gs.purchasesPaused = pausePurchases;
         gs.commitmentsPaused = pauseCommitments;
         emit PauseStateUpdated(pausePurchases, pauseCommitments);
