@@ -83,11 +83,6 @@ contract PotatoTokenFacet is ERC20 {
         if (from == address(0) || to == address(0)) return;
 
         LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
-        if (ts.distributors[from] || ts.distributors[to]) return;
-
-        address authority = LibDiamond.authority();
-        if (from == authority || to == authority) return;
-
         bytes32 movement = keccak256(abi.encode(from, to, amount));
         if (_protocolMovement() == movement) {
             _setProtocolMovement(bytes32(0));
@@ -102,6 +97,11 @@ contract PotatoTokenFacet is ERC20 {
             emit PoolManagerAllowanceSpent(from, to, amount);
             return;
         }
+
+        if (ts.distributors[from] || ts.distributors[to]) return;
+
+        address authority = LibDiamond.authority();
+        if (from == authority || to == authority) return;
 
         revert Errors.TransferRestricted(from, to);
     }
