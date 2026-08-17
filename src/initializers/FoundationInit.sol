@@ -1,19 +1,20 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
+import {LibConfig} from "../libraries/LibConfig.sol";
 import {Errors} from "../shared/Errors.sol";
-import {Constants} from "../shared/Constants.sol";
+import {LibRecipients} from "../libraries/LibRecipients.sol";
+import {ProtocolConfig} from "../shared/Types.sol";
 
 contract FoundationInit {
-    function initialize(uint256 startingPrice, uint16 priceIncreaseBps, address treasury) external {
+    function initialize(ProtocolConfig calldata config, address treasury) external {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         if (gs.initialized) revert Errors.AlreadyInitialized();
-        if (startingPrice == 0 || treasury == address(0)) revert Errors.InvalidAddress();
-        if (priceIncreaseBps == 0 || priceIncreaseBps > Constants.BPS) revert Errors.InvalidBps();
+        LibRecipients.enforceExternal(treasury);
+        LibConfig.validate(config);
         gs.initialized = true;
-        gs.config.startingPrice = startingPrice;
-        gs.config.priceIncreaseBps = priceIncreaseBps;
+        gs.config = config;
         LibProtocolStorage.treasury().recipient = treasury;
     }
 }

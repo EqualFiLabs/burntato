@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
 import {FacetCut, FacetCutAction} from "../shared/Types.sol";
@@ -23,7 +23,6 @@ library LibDiamond {
         mapping(address => FacetData) facetData;
         address[] facetAddresses;
         address authority;
-        mapping(bytes4 => bool) frozenSelector;
         bool cutsDisabled;
     }
 
@@ -36,6 +35,14 @@ library LibDiamond {
 
     function setAuthority(address authority_) internal {
         if (authority_ == address(0)) revert Errors.InvalidAddress();
+        diamondStorage().authority = authority_;
+    }
+
+    function authority() internal view returns (address) {
+        return diamondStorage().authority;
+    }
+
+    function transferAuthority(address authority_) internal {
         diamondStorage().authority = authority_;
     }
 
@@ -90,7 +97,6 @@ library LibDiamond {
         }
         for (uint256 i; i < selectors.length; ++i) {
             bytes4 selector = selectors[i];
-            if (ds.frozenSelector[selector]) revert Errors.SelectorFrozen(selector);
             address oldFacet = ds.selectorData[selector].facet;
             if (oldFacet == address(0)) revert Errors.SelectorDoesNotExist(selector);
             if (oldFacet == facet) revert Errors.SelectorUnchanged(selector);
@@ -104,7 +110,6 @@ library LibDiamond {
         if (facet != address(0)) revert Errors.InvalidAddress();
         for (uint256 i; i < selectors.length; ++i) {
             bytes4 selector = selectors[i];
-            if (ds.frozenSelector[selector]) revert Errors.SelectorFrozen(selector);
             address oldFacet = ds.selectorData[selector].facet;
             if (oldFacet == address(0)) revert Errors.SelectorDoesNotExist(selector);
             _removeSelector(ds, oldFacet, selector);

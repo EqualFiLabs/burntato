@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
@@ -11,7 +11,7 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {LibProtocolStorage} from "../../src/libraries/LibProtocolStorage.sol";
 import {LibMath} from "../../src/libraries/LibMath.sol";
-import {FacetCut, FacetCutAction} from "../../src/shared/Types.sol";
+import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 contract StorageFacetV1 {
     function setCurrentRoundId(uint256 value) external {
@@ -39,11 +39,11 @@ contract MathHarness {
     }
 
     function linearEarned(uint256 maxReward, uint256 heldSeconds) external pure returns (uint256) {
-        return LibMath.linearEarned(maxReward, heldSeconds);
+        return LibMath.linearEarned(maxReward, heldSeconds, 120);
     }
 
     function splitRecovery(uint256 amount) external pure returns (uint256, uint256) {
-        return LibMath.splitRecovery(amount);
+        return LibMath.splitRecovery(amount, 1_000);
     }
 }
 
@@ -81,9 +81,24 @@ contract DiamondFoundationTest is Test {
 
         vm.prank(authority);
         IDiamondCut(address(diamond))
-            .diamondCut(
-                cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (0.01 ether, 1_000, treasury))
-            );
+            .diamondCut(cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (_config(), treasury)));
+    }
+
+    function _config() private pure returns (ProtocolConfig memory config) {
+        config = ProtocolConfig({
+            startingPrice: 0.01 ether,
+            priceIncreaseBps: 1_000,
+            roundTimeout: 1 hours,
+            roundEmissionBudget: 100_000 ether,
+            emissionStepBps: 1_000,
+            emissionVestingDuration: 120 seconds,
+            winnerBps: 2_500,
+            recoveryBps: 4_000,
+            treasuryBps: 2_500,
+            buybackBps: 1_000,
+            recoveryBurnBps: 9_000,
+            recoveryTreasuryBps: 1_000
+        });
     }
 
     function test_RoutesAndEnumeratesInstalledSelectors() public view {

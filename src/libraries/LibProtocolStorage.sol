@@ -1,7 +1,7 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {ProtocolConfig, Round} from "../shared/Types.sol";
+import {BuybackConfig, ProtocolConfig, Round} from "../shared/Types.sol";
 
 library LibProtocolStorage {
     bytes32 internal constant GAME_SLOT = keccak256("burntato.storage.game.v1");
@@ -10,6 +10,7 @@ library LibProtocolStorage {
     bytes32 internal constant TREASURY_SLOT = keccak256("burntato.storage.treasury.v1");
     bytes32 internal constant GOVERNANCE_SLOT = keccak256("burntato.storage.governance.v1");
     bytes32 internal constant MARKET_SLOT = keccak256("burntato.storage.market.v1");
+    bytes32 internal constant BUYBACK_SLOT = keccak256("burntato.storage.buyback.v1");
     bytes32 internal constant REENTRANCY_SLOT = keccak256("burntato.storage.reentrancy.v1");
 
     bytes32 internal constant POOL_MANAGER_ALLOWANCE_SLOT = keccak256("burntato.transient.pool-manager-allowance.v1");
@@ -21,26 +22,25 @@ library LibProtocolStorage {
         ProtocolConfig config;
         uint256 currentRoundId;
         mapping(uint256 => Round) rounds;
+        mapping(uint256 => bool) winnerClaimed;
     }
 
     struct TokenStorage {
-        uint256 totalSupply;
-        mapping(address => uint256) balanceOf;
-        mapping(address => mapping(address => uint256)) allowance;
         address canonicalHook;
         address poolManager;
+        mapping(address => bool) distributors;
     }
 
     struct RecoveryStorage {
         mapping(uint256 => mapping(address => uint256)) commitments;
         mapping(uint256 => uint256) totalCommitments;
         mapping(uint256 => mapping(address => bool)) claimed;
+        mapping(uint256 => uint256) recoveryPaid;
     }
 
     struct TreasuryStorage {
         address recipient;
         uint256 purchaseEth;
-        uint256 hookEth;
         uint256 potatoInventory;
         uint256 reservedEth;
         uint256 reservedPotato;
@@ -50,21 +50,32 @@ library LibProtocolStorage {
         address guardian;
         bool purchasesPaused;
         bool commitmentsPaused;
-        bool finalized;
-        mapping(bytes32 => bool) frozenParameters;
     }
 
     struct MarketStorage {
         address hook;
         address poolManager;
+        address positionManager;
+        address permit2;
         bytes32 poolId;
         uint256 nativeSeed;
         uint256 potatoSeed;
+        uint160 sqrtPriceX96;
+        int24 tickLower;
+        int24 tickUpper;
+        int24 tickSpacing;
+        bool configured;
         bool launched;
     }
 
     struct ReentrancyStorage {
         uint256 status;
+    }
+
+    struct BuybackStorage {
+        uint256 reserveEth;
+        BuybackConfig config;
+        uint256 lastBuybackBlock;
     }
 
     function game() internal pure returns (GameStorage storage s) {
@@ -111,6 +122,13 @@ library LibProtocolStorage {
 
     function reentrancy() internal pure returns (ReentrancyStorage storage s) {
         bytes32 slot = REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            s.slot := slot
+        }
+    }
+
+    function buyback() internal pure returns (BuybackStorage storage s) {
+        bytes32 slot = BUYBACK_SLOT;
         assembly ("memory-safe") {
             s.slot := slot
         }
