@@ -35,6 +35,11 @@ contract MarketFacet is IMarket {
             ICanonicalHookConfig(config.hook).treasury() != address(this)
                 || address(ICanonicalHookConfig(config.hook).poolManager()) != config.poolManager
         ) revert Errors.InvalidMarketConfiguration();
+        address treasuryRecipient = LibProtocolStorage.treasury().recipient;
+        if (
+            treasuryRecipient == config.hook || treasuryRecipient == config.poolManager
+                || treasuryRecipient == config.positionManager || treasuryRecipient == config.permit2
+        ) revert Errors.InvalidMarketConfiguration();
 
         ms.hook = config.hook;
         ms.poolManager = config.poolManager;
