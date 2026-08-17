@@ -131,10 +131,9 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         _validateKey(key);
         if (sender == address(this)) return (BaseHook.afterSwap.selector, 0);
         if (sender == token) {
-            if (params.zeroForOne) {
-                int128 potatoOut = delta.amount1();
-                if (potatoOut > 0) IPotatoToken(token).authorizePoolManagerTransfer(uint256(uint128(potatoOut)));
-            }
+            if (!params.zeroForOne || params.amountSpecified >= 0) revert Errors.InvalidMarketConfiguration();
+            int128 potatoOut = delta.amount1();
+            if (potatoOut > 0) IPotatoToken(token).authorizePoolManagerTransfer(uint256(uint128(potatoOut)));
             return (BaseHook.afterSwap.selector, 0);
         }
         if (params.zeroForOne && !externalBuysEnabled) revert Errors.ExternalBuysDisabled();
