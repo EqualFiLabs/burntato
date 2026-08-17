@@ -1,0 +1,249 @@
+// SPDX-License-Identifier: MIT
+pragma solidity 0.8.26;
+
+import {Deployers} from "@uniswap/v4-core/test/utils/Deployers.sol";
+import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
+import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
+import {Vm} from "forge-std/Vm.sol";
+
+import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
+import {IClaims} from "../../src/interfaces/IClaims.sol";
+import {IGame} from "../../src/interfaces/IGame.sol";
+import {IMarket} from "../../src/interfaces/IMarket.sol";
+import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
+import {IRecovery} from "../../src/interfaces/IRecovery.sol";
+import {ISettlement} from "../../src/interfaces/ISettlement.sol";
+import {Errors} from "../../src/shared/Errors.sol";
+import {Round} from "../../src/shared/Types.sol";
+import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
+import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
+
+interface IERC721Owner {
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
+
+contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
+    address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
+    int24 internal constant TICK_SPACING = 60;
+    int24 internal constant INITIAL_TICK = 69_060;
+    uint256 internal constant NATIVE_SEED = 0.001 ether;
+    uint256 internal constant POTATO_SEED = 1 ether;
+
+    address internal alice = makeAddr("alice");
+    address internal bob = makeAddr("bob");
+    address internal keeper = makeAddr("keeper");
+
+    BurntatoSwapFeeHook internal hook;
+    IClaims internal claims;
+    IGame internal game;
+    IMarket internal market;
+    IPotatoToken internal potato;
+    IRecovery internal recovery;
+    ISettlement internal settlement;
+
+    function setUp() public {
+        deployFreshManagerAndRouters();
+        _deployPositionManager(IPoolManager(address(manager)));
+        _deployCore();
+
+        uint160 flags = uint160(
+            Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
+                | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
+        );
+        bytes memory constructorArgs = abi.encode(manager, address(diamond));
+        (address hookAddress, bytes32 salt) =
+            HookMiner.find(CREATE2_DEPLOYER, flags, type(BurntatoSwapFeeHook).creationCode, constructorArgs);
+        vm.prank(CREATE2_DEPLOYER);
+        hook = new BurntatoSwapFeeHook{salt: salt}(IPoolManager(address(manager)), address(diamond));
+        assertEq(address(hook), hookAddress);
+
+        claims = IClaims(address(diamond));
+        game = IGame(address(diamond));
+        market = IMarket(address(diamond));
+        potato = IPotatoToken(address(diamond));
+        recovery = IRecovery(address(diamond));
+        settlement = ISettlement(address(diamond));
+
+        vm.prank(authority);
+        market.configureMarket(
+            IMarket.MarketConfig({
+                hook: address(hook),
+                poolManager: address(manager),
+                positionManager: address(positionManager),
+                permit2: PERMIT2_ADDRESS,
+                sqrtPriceX96: TickMath.getSqrtPriceAtTick(INITIAL_TICK),
+                tickLower: TickMath.minUsableTick(TICK_SPACING),
+                tickUpper: TickMath.maxUsableTick(TICK_SPACING),
+                tickSpacing: TICK_SPACING,
+                nativeSeed: NATIVE_SEED,
+                potatoSeed: POTATO_SEED
+            })
+        );
+        key = market.canonicalPoolKey();
+
+        vm.deal(alice, 10 ether);
+        vm.deal(bob, 10 ether);
+        vm.deal(address(manager), 100 ether);
+    }
+
+    function test_RecoveryRevenuePermissionlesslyLaunchesLockedTwoSidedLiquidity() public {
+        _createTreasuryInventory();
+        assertTrue(market.marketReady());
+
+        vm.prank(keeper);
+        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+
+        (bytes32 storedPoolId,, bool launching, bool launched) = market.marketState();
+        assertEq(storedPoolId, poolId);
+        assertGt(liquidity, 0);
+        assertFalse(launching);
+        assertTrue(launched);
+        assertEq(IERC721Owner(address(positionManager)).ownerOf(1), market.lockedLpRecipient());
+        assertEq(market.lockedLpRecipient(), 0x000000000000000000000000000000000000dEaD);
+    }
+
+    function test_RealBuyAndSellRouteBothOnePercentFeesToTreasury() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        uint256 treasuryBefore = claims.treasuryEthAvailable();
+
+        vm.recordLogs();
+        uint256 bought = _buy(alice, 0.0001 ether);
+        Vm.Log[] memory buyLogs = vm.getRecordedLogs();
+        (uint256 buyRevenue, uint256 nativeBuyFee, uint256 potatoBuyFee) = _feeAccounting(buyLogs);
+        assertGt(bought, 0);
+        assertEq(nativeBuyFee, 0);
+        assertEq(potatoBuyFee, (bought + potatoBuyFee) * 100 / 10_000);
+        uint256 afterBuy = claims.treasuryEthAvailable();
+        assertEq(afterBuy - treasuryBefore, buyRevenue);
+        assertEq(address(hook).balance, 0);
+
+        vm.prank(alice);
+        potato.approve(address(swapRouter), type(uint256).max);
+        uint256 nativeBefore = alice.balance;
+        vm.recordLogs();
+        _sell(alice, bought / 2);
+        Vm.Log[] memory sellLogs = vm.getRecordedLogs();
+        (uint256 sellRevenue, uint256 nativeSellFee, uint256 potatoSellFee) = _feeAccounting(sellLogs);
+        uint256 nativeReceived = alice.balance - nativeBefore;
+        assertGt(nativeReceived, 0);
+        assertEq(potatoSellFee, 0);
+        assertEq(nativeSellFee, (nativeReceived + nativeSellFee) * 100 / 10_000);
+        assertEq(sellRevenue, nativeSellFee);
+        assertEq(claims.treasuryEthAvailable() - afterBuy, sellRevenue);
+        assertEq(address(hook).balance, 0);
+        assertEq(potato.transientPoolManagerAllowance(), 0);
+        assertEq(positionManager.nextTokenId(), 2);
+    }
+
+    function test_ConfiguredReservesCannotBeClaimedAndStillLaunchAfterExcessClaims() public {
+        _createTreasuryInventory();
+        assertEq(claims.treasuryEthAvailable(), 0.004 ether);
+        assertEq(claims.treasuryPotatoAvailable(), 999 ether);
+
+        claims.claimTreasury();
+        claims.claimTreasuryPotato();
+        assertTrue(market.marketReady());
+        market.launchMarket();
+        assertEq(claims.treasuryEthAvailable(), 0);
+        assertLt(claims.treasuryPotatoAvailable(), 0.003 ether);
+    }
+
+    function test_RejectsForeignInitializationExactOutputAndRepeatedLaunch() public {
+        PoolKey memory foreignKey = key;
+        foreignKey.tickSpacing = 10;
+        vm.expectRevert();
+        manager.initialize(foreignKey, TickMath.getSqrtPriceAtTick(INITIAL_TICK));
+
+        _createTreasuryInventory();
+        market.launchMarket();
+        vm.expectRevert(Errors.AlreadyLaunched.selector);
+        market.launchMarket();
+
+        vm.prank(alice);
+        vm.expectRevert();
+        swapRouter.swap{value: 0.0001 ether}(
+            key,
+            SwapParams({zeroForOne: true, amountSpecified: int256(1 ether), sqrtPriceLimitX96: MIN_PRICE_LIMIT}),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ZERO_BYTES
+        );
+    }
+
+    function test_TransientAuthorizationCannotBeReusedForDirectPoolMovement() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        uint256 bought = _buy(alice, 0.0001 ether);
+        assertEq(potato.transientPoolManagerAllowance(), 0);
+
+        vm.prank(alice);
+        potato.approve(address(this), bought);
+        vm.expectRevert(abi.encodeWithSelector(Errors.PoolManagerAllowanceExceeded.selector, 0, bought));
+        potato.transferFrom(alice, address(manager), bought);
+    }
+
+    function _createTreasuryInventory() internal {
+        vm.prank(alice);
+        game.buyPotato{value: 0.01 ether}();
+        vm.warp(block.timestamp + 120);
+        game.materializeMaturedEmission();
+        vm.prank(alice);
+        recovery.commitRecovery(10_000 ether);
+        _expireAndSettle();
+
+        vm.prank(bob);
+        game.buyPotato{value: 0.01 ether}();
+        _expireAndSettle();
+        assertEq(potato.balanceOf(address(diamond)), 1_000 ether);
+    }
+
+    function _expireAndSettle() internal {
+        Round memory round = game.getRound(game.currentRoundId());
+        vm.warp(round.deadline);
+        settlement.settleRound();
+    }
+
+    function _buy(address buyer, uint256 nativeIn) internal returns (uint256 bought) {
+        uint256 beforeBalance = potato.balanceOf(buyer);
+        vm.prank(buyer);
+        swapRouter.swap{value: nativeIn}(
+            key,
+            SwapParams({zeroForOne: true, amountSpecified: -int256(nativeIn), sqrtPriceLimitX96: MIN_PRICE_LIMIT}),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ZERO_BYTES
+        );
+        bought = potato.balanceOf(buyer) - beforeBalance;
+    }
+
+    function _sell(address seller, uint256 amount) internal {
+        vm.prank(seller);
+        swapRouter.swap(
+            key,
+            SwapParams({zeroForOne: false, amountSpecified: -int256(amount), sqrtPriceLimitX96: MAX_PRICE_LIMIT}),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ZERO_BYTES
+        );
+    }
+
+    function _feeAccounting(Vm.Log[] memory logs)
+        internal
+        view
+        returns (uint256 revenue, uint256 nativeFee, uint256 potatoFee)
+    {
+        bytes32 feeTopic = keccak256("HookFee(bytes32,address,uint128,uint128)");
+        bytes32 revenueTopic = keccak256("HookRevenueRecorded(uint256)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == address(hook) && logs[i].topics[0] == feeTopic) {
+                (nativeFee, potatoFee) = abi.decode(logs[i].data, (uint128, uint128));
+            }
+            if (logs[i].emitter == address(diamond) && logs[i].topics[0] == revenueTopic) {
+                revenue += abi.decode(logs[i].data, (uint256));
+            }
+        }
+    }
+}

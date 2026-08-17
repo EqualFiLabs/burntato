@@ -9,6 +9,7 @@ import {DiamondCutFacet} from "../../src/facets/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../../src/facets/DiamondLoupeFacet.sol";
 import {GameFacet} from "../../src/facets/GameFacet.sol";
 import {GovernanceFacet} from "../../src/facets/GovernanceFacet.sol";
+import {MarketFacet} from "../../src/facets/MarketFacet.sol";
 import {PotatoTokenFacet} from "../../src/facets/PotatoTokenFacet.sol";
 import {RecoveryFacet} from "../../src/facets/RecoveryFacet.sol";
 import {SettlementFacet} from "../../src/facets/SettlementFacet.sol";
@@ -18,6 +19,7 @@ import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
+import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
@@ -36,6 +38,7 @@ abstract contract DiamondTestSetup is Test {
 
         _install(address(new DiamondLoupeFacet()), _loupeSelectors());
         _install(address(new GovernanceFacet()), _governanceSelectors());
+        _install(address(new MarketFacet()), _marketSelectors());
         _install(address(new PotatoTokenFacet()), _tokenSelectors());
         _install(address(new GameFacet()), _gameSelectors());
         _install(address(new RecoveryFacet()), _recoverySelectors());
@@ -101,6 +104,19 @@ abstract contract DiamondTestSetup is Test {
         selectors[9] = IPotatoToken.burn.selector;
         selectors[10] = IPotatoToken.authorizePoolManagerTransfer.selector;
         selectors[11] = IPotatoToken.transientPoolManagerAllowance.selector;
+    }
+
+    function _marketSelectors() internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](9);
+        selectors[0] = IMarket.configureMarket.selector;
+        selectors[1] = IMarket.launchMarket.selector;
+        selectors[2] = IMarket.recordHookRevenue.selector;
+        selectors[3] = IMarket.marketConfig.selector;
+        selectors[4] = IMarket.canonicalPoolKey.selector;
+        selectors[5] = IMarket.marketState.selector;
+        selectors[6] = IMarket.marketLaunching.selector;
+        selectors[7] = IMarket.marketReady.selector;
+        selectors[8] = IMarket.lockedLpRecipient.selector;
     }
 
     function _gameSelectors() internal pure returns (bytes4[] memory selectors) {
