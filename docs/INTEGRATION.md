@@ -15,6 +15,7 @@ Important state reads include:
 - Treasury claimable ETH and POTATO views; and
 - `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
   `marketReady()`.
+- `IPotatoToken.isDistributor(account)` for the governed transfer allowlist.
 
 The canonical hook is a separate administered contract. Read `owner()`,
 `token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`, and
@@ -31,8 +32,10 @@ An ERC-20 approval or Permit does not make ordinary transfers valid. The
 transfer hook permits only:
 
 1. minting and burning;
-2. an exact protocol transfer authorized and consumed during a Diamond self-call;
-3. a transfer to or from the configured PoolManager covered by the exact
+2. transfers where either endpoint is an administered distributor;
+3. transfers where either endpoint is the current protocol authority;
+4. an exact protocol transfer authorized and consumed during a Diamond self-call;
+5. a transfer to or from the configured PoolManager covered by the exact
    transient allowance opened by the canonical hook.
 
 All other underlying POTATO movements revert. The transient PoolManager
@@ -40,6 +43,11 @@ allowance expires with the transaction and is observable through
 `transientPoolManagerAllowance()` for integration testing.
 Public transfers to or from `address(0)` also revert. `burn(amount)` is the
 supported voluntary destruction path and reduces `totalSupply()` exactly.
+The authority administers distributors through `setDistributor(account,
+allowed)`. The initial Treasury recipient is explicitly enabled at deployment.
+Changing the Treasury recipient does not implicitly enable the replacement or
+revoke the previous recipient; those transfer permissions remain explicit
+governance decisions and remain available after Diamond-cut finalization.
 
 This is the FWA.fun transfer-lock pattern adapted to collision-resistant Diamond
 transient slots and exact protocol escrow/claim movements:

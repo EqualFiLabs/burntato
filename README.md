@@ -14,11 +14,14 @@ defaults, not immutable constants. Each active or already-snapshotted target
 round keeps its terms while changes apply to future unsnapshotted rounds.
 
 POTATO uses the same Solady transfer-lock pattern proven by FWA.fun: minting,
-burning, exact protocol movements, and exact transaction-scoped canonical
-PoolManager movements are allowed; ordinary wallet transfers revert. Users can
-self-burn. The initial v4 LP is permanently sent to the dead address, its native
-LP fee is fixed at zero, and all hook fee ETH is sent directly to the hook's
-governed Treasury recipient.
+burning, transfers involving the current authority or an administered
+distributor, exact protocol movements, and exact transaction-scoped canonical
+PoolManager movements are allowed; ordinary wallet transfers revert. The
+initial Treasury recipient is a distributor, and later Treasury-recipient and
+distributor changes are administered independently. Users can self-burn. The
+initial v4 LP is permanently sent to the dead address, its native LP fee is
+fixed at zero, and all hook fee ETH is sent directly to the hook's governed
+Treasury recipient.
 
 Administration remains available through the configured authority. The
 guardian can add purchase or commitment pauses but cannot unpause. Protocol
