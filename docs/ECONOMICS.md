@@ -1,84 +1,135 @@
-# Burntato economics
+# Economics
 
-## Hot Potato rounds
+## Governed configuration and round snapshots
 
-The first successful `buyPotato()` starts Round 1. Each successful purchase must pay the exact current price, records the buyer as the Current Holder, starts a fresh one-hour deadline, increments the Purchase Index, and raises the next price using upward basis-point rounding.
-
-Every purchase is split exactly as follows:
-
-- 25% Winner Pool;
-- 50% Recovery Pool; and
-- 25% Treasury purchase ETH.
-
-The displaced holder receives no ETH from the purchase. The Current Holder at expiration remains the winner even if settlement is delayed. Anyone may call `settleRound()` after the deadline.
-
-Purchase Index remains useful for price progression and analytics. It does not advance POTATO emission.
-
-## Holder-time POTATO emission
-
-Each round starts with a new emission budget of `100_000 * 1e18` POTATO base units. This is a hard ceiling and asymptotic target, not an amount force-minted at settlement.
-
-When a purchase installs a new holder, Burntato snapshots:
+`ProtocolConfig` contains every configurable game percentage and timing value:
 
 ```text
-maxReward = floor(remainingEmission * 1,000 / 10,000)
-earned = floor(maxReward * min(heldSeconds, 120) / 120)
+startingPrice
+priceIncreaseBps
+roundTimeout
+roundEmissionBudget
+emissionStepBps
+emissionVestingDuration
+winnerBps / recoveryBps / treasuryBps
+recoveryBurnBps / recoveryTreasuryBps
 ```
 
-All multiplication occurs before division. A holder surviving 120 seconds earns the full snapshot; a 30-second holder earns one quarter. Only `earned` is deducted from `remainingEmission`. Any unearned part stays unissued in the same round budget and informs the next holder's snapshot.
+The three purchase shares must sum to 10,000 BPS and the two Recovery shares
+must sum to 10,000 BPS. Every individual BPS value is bounded by 10,000.
+Starting price, round timeout, and emission vesting duration must be nonzero.
+Zero price growth, zero emission step, and a zero round emission budget are
+valid configurations.
 
-The next purchase finalizes the outgoing opportunity. Once 120 seconds have elapsed, anyone may call `materializeMaturedEmission()` while the round is active. Settlement finalizes any unresolved last-holder opportunity. Each opportunity is finalized once and can never exceed its snapshotted maximum.
+Round N snapshots the complete configuration for Round N+1 when Round N
+activates. Later governance changes cannot rewrite the active round or the
+already-open target Recovery market. `Round.activated` is the lifecycle marker;
+the emission budget is not used as a sentinel.
 
-This preserves the intended geometric curve for full holds:
+The local genesis defaults are:
+
+| Setting | Default |
+| --- | ---: |
+| Starting price | 0.01 ETH |
+| Price increase | 10% |
+| Round timeout | 1 hour |
+| Round emission budget | 100,000 POTATO |
+| Emission opportunity | 10% of remaining budget |
+| Emission vesting duration | 120 seconds |
+| Winner / Recovery / Treasury purchase split | 25% / 50% / 25% |
+| Recovery burn / Treasury POTATO split | 90% / 10% |
+| Bilateral hook fee | 1% |
+
+## Purchases
+
+A successful purchase pays exactly `nextPrice`, finalizes the outgoing holder's
+emission, allocates ETH under the round snapshot, installs the new holder,
+resets the deadline, and calculates the next price:
+
+```text
+winnerShare   = floor(price * winnerBps / 10_000)
+recoveryShare = floor(price * recoveryBps / 10_000)
+treasuryShare = price - winnerShare - recoveryShare
+
+nextPrice = price + ceil(price * priceIncreaseBps / 10_000)
+deadline  = purchaseTimestamp + roundTimeout
+```
+
+The Treasury receives deterministic split dust so the three allocations always
+equal the purchase exactly. Purchase count and price progression do not consume
+POTATO emission.
+
+## Holder-time emission budget
+
+At round activation:
+
+```text
+remainingEmission = roundEmissionBudget
+emittedPotato      = 0
+```
+
+Each incoming holder receives one snapshotted opportunity:
+
+```text
+maxReward = floor(remainingEmission * emissionStepBps / 10_000)
+earned = floor(
+    maxReward * min(heldSeconds, emissionVestingDuration)
+    / emissionVestingDuration
+)
+```
+
+Multiplication occurs before division in POTATO base units. Only `earned` is
+deducted. An unearned portion remains unissued inside the same round budget and
+informs the next holder's opportunity. Same-timestamp cycling earns zero and
+does not advance the curve.
+
+The next successful purchase finalizes the outgoing opportunity. After full
+vesting, anyone may materialize it while the round is active. Settlement
+finalizes any unresolved final holder. The per-opportunity finalized flag
+prevents double minting and no holder can exceed their snapshotted maximum.
+
+At the default 10% step, fully vested opportunities reproduce:
 
 ```text
 100,000 -> 90,000 -> 81,000 -> 72,900 remaining
 ```
 
-Fast cycling still increases ETH volume and Hot Potato price, but same-timestamp cycling earns zero POTATO and does not consume the emission budget. Unused emission disappears at settlement. It is not minted, rolled over, sent to Treasury, Recovery, or the winner. The next round receives a fresh 100,000 POTATO budget.
+Unused budget is never force-minted, rolled forward, transferred to Recovery or
+Treasury, or awarded to the winner. Every round starts from its own configured
+budget. At the default, actual round emission is at most 100,000 POTATO.
 
-## Forward Recovery Market
+## Recovery
 
-POTATO may be committed only to `currentRoundId + 1`, before that target round begins. A commitment is irrevocable and moves liquid POTATO into Diamond escrow without changing total supply. Splitting a position across addresses or transactions does not change aggregate pro-rata ownership.
+POTATO commitments are forward-only to `currentRoundId + 1` and are irrevocable.
+The target terms have already been snapshotted before commitment opens. POTATO
+moves into Diamond escrow through an exact transaction-scoped protocol transfer.
 
-When the target round settles with total commitment `B`:
+At target-round settlement:
 
 ```text
-treasuryPotato = floor(B * 1,000 / 10,000)
-burnedPotato = B - treasuryPotato
+treasuryPotato = floor(totalCommitted * recoveryTreasuryBps / 10_000)
+burnedPotato   = totalCommitted - treasuryPotato
 ```
 
-The burn-as-remainder calculation ensures every committed base unit is consumed exactly once. Recovery ETH belongs pro rata to committed accounts and is claimed with `claimRecovery(roundId, recipient)`. If no POTATO was committed for a round, its Recovery ETH rolls into the next round. Unclaimed fractional Recovery dust remains accounted inside the Diamond.
-
-The winner claims with `claimWinner(roundId, recipient)`. Settlement itself makes no external ETH payout calls.
+The burn-as-remainder rule consumes every committed base unit exactly once.
+Recovery ETH is claimable pro rata. If the target round has zero commitments,
+its Recovery ETH rolls into the next round; unused POTATO emission never does.
 
 ## Treasury and canonical market
 
-Treasury accounting distinguishes purchase ETH, hook-fee ETH, and the 10% POTATO inventory created by Recovery settlement. Configured launch reserves cannot be claimed before pool launch; only unencumbered excess is available through the Treasury claim functions.
+Diamond Treasury accounting includes purchase ETH and Recovery-derived POTATO.
+Prelaunch seed reservations cannot be claimed. When both configured reserves are
+available, anyone may launch the exact canonical native ETH/POTATO v4 pool. The
+initial position NFT is sent permanently to the dead address and the native LP
+fee is fixed at zero.
 
-Once both configured reserves exist, anyone may call `launchMarket()`. The launch:
+The hook's governed `feeBps` applies bilaterally:
 
-- initializes the exact native ETH/POTATO `PoolKey` with zero native LP fee;
-- contributes the predetermined two-sided Treasury inventory;
-- refunds any unused native seed from PositionManager and debits only amounts actually deposited;
-- mints the only initial position directly to `0x000000000000000000000000000000000000dEaD`; and
-- permanently marks the market launched.
+- buys retain the configured fraction of gross POTATO output, sell it once to
+  ETH without recursively charging the internal conversion, and send all ETH
+  directly to `feeAddress`;
+- sells retain the configured fraction of gross ETH output and send it directly
+  to `feeAddress`.
 
-No post-launch liquidity addition is accepted through the canonical hook. The locked position cannot be recovered by governance.
-
-Exact-input buys pay 1% of gross POTATO output. The hook internally sells that POTATO fee to ETH without charging itself recursively. Exact-input sells pay 1% of gross ETH output. All realized fee ETH is recorded in canonical Treasury accounting; fees are not auto-compounded.
-
-## Fixed protocol constants
-
-| Constant | Value |
-| --- | ---: |
-| Round timeout | 1 hour |
-| Round emission budget | 100,000 POTATO |
-| Emission opportunity | 10% of remaining budget |
-| Emission vesting maximum | 120 seconds |
-| Winner / Recovery / Treasury purchase split | 25% / 50% / 25% |
-| Recovery burn / Treasury POTATO split | 90% / 10% |
-| POTATO decimals | 18 |
-| Native pool LP fee | 0% |
-| Bilateral hook fee | 1% |
-| Locked LP recipient | `0x000000000000000000000000000000000000dEaD` |
+Hook revenue never enters the Diamond, is not launch reserve accounting, and is
+not auto-compounded. The default fee is 1%, while 0% through 100% are valid.

@@ -1,144 +1,99 @@
-# Release qualification evidence
+# PR 11 release qualification evidence
 
 Date: August 17, 2026
 
-Qualified code candidate: `c57d4e5` (`fix(market): reject custody role collisions`)
+Qualified source candidate: `53adda1` on `fix/11-configurable-protocol`, stacked
+on PR 10 commit `379ea5f`.
 
-Environment: Foundry 1.5.1-stable, Solidity 0.8.26, Cancun EVM, local Linux host, Anvil chain ID 31337
+Environment: Foundry 1.5.1-stable, Solidity 0.8.26, Cancun EVM, local Linux
+host. No fork, testnet, remote CI, or production network was used.
 
-This evidence qualifies the nine-PR implementation candidate plus the requested full-system audit remediation. The audit was performed against exact PR-09 commit `d31f822e44bbd66887fda3c42eee5e919032bd70`; the commands below were rerun after remediation.
+## Candidate behavior
 
-## Test execution
+This candidate replaces terminal/frozen governance with retained
+administration, snapshots complete governed economics at round boundaries,
+uses Solady's FWA-style restricted ERC-20 pattern, sends canonical market fees
+directly to the hook's governed Treasury recipient, and leaves the hook and
+PoolManager owned by the configured timelock. `finalizeProtocol()` disables
+only future Diamond cuts.
 
-Foundry's cache selected only currently active artifact roots for a plain `forge test`, so release qualification used explicit test paths. Non-v4 roots were compiled with `--no-cache`; v4 roots were rebuilt after source changes and then executed from the resulting focused artifacts. Every repository test file was selected and reported.
+The ignored local specification package was updated but is intentionally not a
+versioned PR artifact.
+
+## Tests
+
+Qualification selected every owned test path explicitly and used the repository
+profiles: 1,000 fuzz runs and 256 invariant runs at depth 50.
 
 | Scope | Command | Result |
 | --- | --- | --- |
-| Diamond foundation | `forge test --no-cache --match-path test/unit/DiamondFoundation.t.sol -j 1 -vv` | 5 passed |
-| Governance and immutability | `forge test --match-path test/unit/GovernanceImmutability.t.sol -j 1 -vv` | 8 passed |
-| POTATO and game | `forge test --no-cache --match-path test/unit/PotatoGameLifecycle.t.sol -j 1 -vv` | 7 passed |
-| Recovery settlement | `forge test --no-cache --match-path test/integration/RecoverySettlementLifecycle.t.sol -j 1 -vv` | 8 passed |
-| Integrated lifecycle | `forge test --no-cache --match-path test/integration/IntegratedLifecycle.t.sol -j 1 -vv` | 10 passed |
-| Canonical market | `forge test --match-path test/integration/CanonicalMarketLifecycle.t.sol -j 1 -vv` | 9 passed after audit remediation |
-| Deterministic deployment | `forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1 -vv` | 8 passed after audit remediation |
-| Economic fuzz | `forge test --no-cache --match-path test/fuzz/EconomicFuzz.t.sol -j 1 -vv` | 4 properties × 1,000 runs |
-| Recovery fuzz | `forge test --no-cache --match-path test/fuzz/RecoveryDistributionFuzz.t.sol -j 1 -vv` | 1 property × 1,000 runs |
-| Protocol invariants | `FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --no-cache --match-path test/invariant/ProtocolInvariant.t.sol -j 1 -vv` | 5 invariants, 64,000 calls |
-| Governance invariants | `FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --no-cache --match-path test/invariant/GovernanceInvariant.t.sol -j 1 -vv` | 2 invariants, 25,600 calls |
-| Canonical market invariants | `FOUNDRY_INVARIANT_RUNS=64 FOUNDRY_INVARIANT_DEPTH=32 forge test --match-path test/invariant/CanonicalMarketInvariant.t.sol -j 1 -vv` | 2 invariants, 4,096 real-v4 calls after remediation |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 25 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 32 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 5 properties, 5,000 cases |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 8 properties, 102,400 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 10 passed |
 
-Aggregate executed coverage was 69 test/property/invariant methods, 5,000 fuzz cases, and 93,696 stateful invariant calls. The tests exercise real purchases, time advancement, emission materialization, forward commitments, settlements, claims, pauses, finalization, full-precision extreme-value Recovery claims, POTATO-bounded pool launch with native refunds, buys, sells, bilateral fees, restricted transfers, and locked LP ownership. Synthetic handler setup remains limited to the documented invariant harnesses.
+In aggregate, 67 deterministic tests, five fuzz properties, and eight stateful
+invariants passed with no failures or skips. The executed flows include:
 
-## Formatting, linting, and storage
+- default and nondefault round economics, zero-budget activation, full and
+  partial holder-time emission, same-timestamp cycling, geometric dust, and no
+  double minting;
+- forward Recovery commitment, configurable consumption, rollovers, settlement,
+  claims, and exact ETH/POTATO conservation;
+- Solady Permit, transfer rejection, voluntary self-burn, exact protocol
+  movements, and transient canonical PoolManager authorization;
+- real v4 launch, locked initial LP, buy and sell swaps, direct bilateral fee
+  delivery, 0% and 100% fee edges, fee rotation after Diamond finalization,
+  foreign-key rejection, and no Diamond hook revenue accounting;
+- repeated and zero authority transfer, guardian pause-only behavior, authority
+  unpause, configuration after finalization, and permanent Diamond-cut closure;
+  and
+- zero-delay and overlapping-proposer deployment, full genesis verification,
+  timelock-owned hook/PoolManager, and a real PoolManager administration call.
+
+## Formatting, linting, selectors, and storage
 
 - `forge fmt --check` passed.
-- `forge lint src script test --severity high med low -j 1` exited successfully. The actionable unchecked POTATO return warnings were remediated in `6755c22`.
-- Forge continues to report non-failing narrow-cast warnings in bounded Diamond array positions, v4 signed deltas, checked deployment helpers, and test generators. The audit confirmed the relevant bounds; the warnings remain visible rather than hidden with blanket suppressions.
-- `forge inspect <facet> storage-layout --json` reported zero ordinary storage entries for every Diamond facet. `BurntatoSwapFeeHook` reported its one intended standalone `deploymentBlock` entry. Diamond state otherwise resides in explicit namespaced libraries.
-- The deployment verifier confirmed 9 installed facets and 59 expected selectors with exact group routing.
+- `git diff --check` passed.
+- `forge lint src script test --severity high med low -j 1` compiled and exited
+  successfully. It reports visible bounded-cast warnings and unchecked-return
+  warnings in negative-path tests; these remain audit inputs rather than being
+  hidden by global suppressions.
+- `BurntatoSelectors` installs nine facets and 59 selectors. The deterministic
+  verifier checks exact facet group sizes and selector-to-facet routing.
+- `forge inspect <facet> storage-layout --json` reported zero ordinary storage
+  entries for all nine Diamond facets. Protocol state uses explicit namespaced
+  storage.
+- The standalone hook has three intended packed slot-zero fields:
+  `feeAddress`, `feeBps`, and `deploymentBlock`. Its owner uses Solady's
+  namespaced ownership slot; token, PoolManager, and tick spacing are immutable.
 
-## Static analysis
+## Dependency and security boundaries
 
-Command:
+Pinned revisions include:
 
-```bash
-FOUNDRY_EVM_VERSION=cancun aderyn . \
-  --src src \
-  --path-excludes lib,test,script \
-  --skip-build \
-  --skip-update-check \
-  --output /tmp/burntato-aderyn-pr10.md
-```
-
-The EVM override works around this installed Aderyn version failing to parse an `osaka` setting inside a pinned dependency. Aderyn analyzed 24 Burntato source files, 1,138 nSLOC, and 63 detectors.
-
-The initial report contained 5 high detector categories. The unchecked-return category was confirmed and fixed for Diamond approval and hook settlement transfer. The post-audit rerun contains the same 4 classified high detector categories and 5 low categories:
-
-| Detector | Classification |
-| --- | --- |
-| Unprotected initializer | Not applicable: `FoundationInit` has a namespaced one-shot guard and is delegatecalled only through authorized `diamondCut`; the hook callback is internal and PoolManager-gated. |
-| Yul `return` | Intentional EIP-2535 fallback behavior returning delegatecall data to the external caller. |
-| Native send not protected | Not applicable: Recovery verifies the caller's committed position; Treasury claims are permissionless but always pay the fixed Treasury recipient. Both use the shared reentrancy guard. |
-| Contract locks ETH | Not applicable to facets executed by delegatecall; Diamond ETH exits through claims and market launch. Hook fee ETH is forwarded to canonical Treasury accounting during settlement. Forced ETH outside protocol accounting is intentionally not sweepable. |
-| Unsafe ERC-20 operation | Exact Burntato POTATO and Permit2 integration, not arbitrary third-party tokens. POTATO boolean returns are now checked. |
-| Public hook permission method | Required by the inherited v4 hook interface. |
-| Event indexing suggestions | Informational indexing/gas tradeoff; canonical account, round, pool, and sender fields are already indexed. |
-| Large literal style | Informational; basis-point and POTATO constants intentionally use readable underscore notation. |
-| Unused custom errors | Analyzer limitation across qualified library error references; the reported errors are used by protocol libraries and tests. |
-
-The static report is a release input, not a substitute for the requested audit. Disposable analyzer reports remain outside version control.
-
-## Full audit and remediation
-
-The requested audit loaded the general, precision/math, ERC-20, AMM, Diamond/proxy, governance, assembly, and access-control checklists. Eight independent specialist passes were synthesized and deduplicated. The PR-09 candidate contained one High, seven Medium, and five Low findings.
-
-Confirmed executable findings were remediated in reviewable slices:
-
-| Commit | Remediation |
-| --- | --- |
-| `60d969b` | One-time minimum-delay authority handoff, containment-only guardian, timelock unpause, and disabled PoolManager fee authority |
-| `c90d22d` | Round N+1 configuration snapshot at Round N activation |
-| `237ea7f` | Full-precision Recovery claims and protocol-custody recipient rejection |
-| `88c9a2e` | Native launch-residue refund, actual-use accounting, tick-domain validation, and additive transient authorization |
-| `46c0452` | Checked environment narrowing and complete independent genesis verification |
-| `c57d4e5` | Treasury/system-custody role collision rejection during one-shot market configuration |
-
-One Medium architectural boundary is accepted rather than misrepresented as fixed: the FWA-style token hook governs underlying POTATO ERC-20 movement, but standard v4 ERC-6909 currency claims and third-party wrappers do not call POTATO and therefore cannot be transfer-restricted by POTATO. Canonical fee capture is guaranteed for the underlying canonical pool, not for every possible derivative representation. The integration guide and local ignored specifications state this boundary explicitly.
-
-Disposable specialist reports and the synthesized audit report remain outside version control. This was an internal checklist-driven source audit, not an independent third-party audit or deployed-chain assurance.
-
-## Clean local deployment
-
-Commands:
-
-```bash
-anvil --host 127.0.0.1 --port 8545 --chain-id 31337
-
-forge script script/DeployBurntato.s.sol:DeployBurntato \
-  --rpc-url http://127.0.0.1:8545 \
-  --broadcast \
-  --unlocked \
-  --sender 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 \
-  -vv
-```
-
-The final candidate completed 23 local onchain deployment/configuration transactions successfully. Independent verification returned `true` using `VerifyBurntato`.
-
-| Component | Local address |
-| --- | --- |
-| BurntatoDiamond | `0xa513E6E4b8f2a923D98304ec87F64353C4D5C853` |
-| TimelockController | `0x5FbDB2315678afecb367f032d93F642f64180aa3` |
-| PoolManager | `0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512` |
-| LocalPermit2 | `0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0` |
-| LocalWETH9 | `0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9` |
-| PositionDescriptor | `0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9` |
-| PositionManager | `0x5FC8d32690cc91D4c39d9d3abcBD16989F875707` |
-| CREATE2 hook deployer | `0x68B1D87F95878fE05B998F19b66F4baba5De1aed` |
-| BurntatoSwapFeeHook | `0x108A985C30E6933F4b54AD8588913C5A7321A444` |
-
-The hook's masked permission bits are `0x2444`: before-initialize, after-add-liquidity, after-swap, and after-swap-return-delta. The configured PoolKey uses native ETH as currency0, the Diamond as POTATO currency1, zero LP fee, spacing 60, and the exact hook above. The pool remains intentionally uninitialized until Treasury reserves exist.
-
-The deployment test separately earned launch inventory through real gameplay and Recovery settlement, launched the pool, and confirmed PositionManager token ID 1 belongs to `0x000000000000000000000000000000000000dEaD`.
-
-## Authority and initial state
-
-The verifier confirmed:
-
-- Diamond authority is irreversibly locked to the TimelockController, while PoolManager ownership and its protocol-fee controller are disabled;
-- the timelock self-holds admin, the intended account holds proposer/canceller, execution is open, and the deployer holds no role;
-- guardian and Treasury recipient match separate configured accounts;
-- purchases and commitments are unpaused and global finalization is false;
-- POTATO has 18 decimals, zero initial supply, and no public mint path;
-- the initial round identifier is zero until the first purchase;
-- market configuration is complete but not yet funded or launched; and
-- no launch reserve is claimable before it exists.
-
-## Dependency and proof boundaries
-
-Pinned revisions:
-
+- Solady `166f85b9576f311446b0f9b3082565bbe0c17af5`;
 - Uniswap v4 core `59d3ecf53afa9264a16bba0e38f4c5d2231f80bc`;
 - Uniswap v4 periphery `60cd93803ac2b7fa65fd6cd351fd5fd4cc8c9db5`;
+  and
 - FWA.fun precedent `1085bf6ee255d6d4d13c374a66110bb25229dc76`.
 
-This evidence proves local compilation, execution, static analysis, and fresh Anvil deployment. It does not prove a fork, testnet, mainnet, third-party Permit2 deployment, production genesis choice, remote CI result, or independent external audit. Local price and seed values are development defaults; production market parameters remain undecided.
+The token restriction governs underlying POTATO ERC-20 movement. Standard v4
+ERC-6909 currency claims and third-party wrappers are derivative assets and do
+not invoke POTATO's transfer hook. This candidate documents that boundary; it
+does not claim universal venue exclusivity for derivative exposure.
+
+Retained authority, hook ownership, and PoolManager ownership are intentional
+governance powers. Their safety depends on the configured timelock roles and
+delay. The protocol itself permits a zero delay and permits explicit ownership
+or authority relinquishment.
+
+## Proof boundary
+
+This evidence proves local compilation and execution of repository-owned tests
+against the stated candidate. It does not prove deployed-chain state, production
+genesis parameters, canonical chain dependency addresses, fork compatibility,
+remote CI, or an independent third-party audit. A full checklist-driven audit
+and any resulting remediation are performed only after this candidate is
+committed and are recorded in a subsequent evidence update.

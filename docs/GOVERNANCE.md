@@ -1,63 +1,79 @@
-# Burntato governance and immutability
+# Governance and administration
 
-## Timelock authority
+## Authority model
 
-After genesis configuration, the Diamond authority is an OpenZeppelin `TimelockController` with a protocol-enforced minimum delay of one day. Genesis permits exactly one bootstrap handoff to that timelock and then permanently locks the authority address. The deployer receives no Timelock admin, proposer, canceller, or protocol authority role. Execution is permissionless after an authorized proposal's delay expires.
+The Diamond recognizes one `authority` address. Deployment assigns it to an
+OpenZeppelin `TimelockController`, but the protocol does not hard-code a minimum
+delay or require the authority to have contract code. The current authority may
+transfer the role repeatedly to any address, including `address(0)` when
+governance intentionally relinquishes control.
 
-The Uniswap v4 PoolManager is deployed with both owner and protocol-fee controller disabled. No Burntato authority can later add a PoolManager protocol fee alongside the canonical 1% hook fee.
+While authority exists it can:
 
-Before global finalization, delayed governance may:
+- add, replace, or remove Diamond selectors until Diamond cuts are finalized;
+- atomically update the complete default `ProtocolConfig`;
+- update the Diamond Treasury recipient;
+- appoint or remove the guardian;
+- set or clear purchase and commitment pauses;
+- reconfigure canonical market infrastructure before launch;
+- administer the independently owned canonical hook and PoolManager; and
+- transfer any of those independent ownership roles under their native APIs.
 
-- add, replace, or remove unfrozen Diamond selectors;
-- update the default starting price and price-increase basis points for future unsnapshotted rounds;
-- update the Treasury recipient while that parameter remains unfrozen;
-- appoint or replace the guardian while that parameter remains unfrozen;
-- irreversibly freeze parameters or installed selectors; and
-- irreversibly finalize the protocol.
+Economic updates do not rewrite active obligations. Round N snapshots the full
+configuration for Round N+1 when Round N activates. An active round and an
+already-open target Recovery market therefore keep the terms participants saw;
+updates apply to future unsnapshotted rounds.
 
-The canonical market configuration is one-shot. Neither the timelock nor the guardian can redirect hook revenue after configuration, substitute a different PoolManager or hook, relaunch the pool, recover the locked position, mint POTATO, burn another account's POTATO, or create a permanent token-transfer exemption.
+## Guardian
 
-## Guardian boundary
+The guardian is containment-only. It may change either pause bit from `false`
+to `true`, but it cannot clear a pause. Only the Diamond authority can unpause.
+The guardian cannot change economics, recipients, market configuration,
+ownership, selectors, claims, settlement, emission materialization, or token
+movement rules. Authority may set the guardian to `address(0)`.
 
-The guardian may only change these two pause bits from false to true:
+Pauses stop only new Hot Potato purchases and/or new Recovery commitments.
+Settlement, claims, matured emission materialization, POTATO self-burning, and
+canonical trading remain live.
 
-- new Hot Potato purchases; and
-- new Recovery commitments.
+## Finalization
 
-The guardian cannot clear either pause. Only the timelocked authority can unpause. The guardian also cannot upgrade, configure economics, change recipients, move assets, settle rounds, block claims, block matured emission materialization, block canonical market settlement, mint or burn POTATO, or reverse a freeze. Global finalization removes the guardian and clears both pause bits.
+`finalizeProtocol()` is deliberately narrow. It permanently sets the Diamond's
+`cutsDisabled` flag. After it executes, `diamondCut` always reverts.
 
-## Progressive immutability
+Finalization does not:
 
-Parameter freezing permanently disables the named setter path. Selector freezing permanently prevents that installed selector from being replaced or removed through `diamondCut()`.
+- clear or change pause state;
+- remove or change the guardian;
+- freeze parameters or selectors individually;
+- disable protocol, Treasury, hook, PoolManager, or market administration;
+- transfer or renounce authority; or
+- change any economic or custody state.
 
-Selector freezing is narrower than freezing an entire storage domain: another unfrozen selector could still be added that reaches the same namespaced Diamond storage. Integrators should not interpret an isolated selector freeze as a proof that all related state is immutable.
+`protocolFinalized()` reports the Diamond-cut-disabled state. Parameter-freeze,
+selector-freeze, and one-time authority-lock APIs do not exist.
 
-Global `finalizeProtocol()` provides the stronger terminal guarantee. It:
+## Independently governed market components
 
-- disables every future Diamond cut;
-- disables remaining administrative configuration;
-- removes guardian authority;
-- clears protocol pause state; and
-- cannot be reversed.
+The timelock owns both the canonical `BurntatoSwapFeeHook` and the Uniswap v4
+PoolManager at genesis. Hook ownership controls `feeAddress` and `feeBps`.
+PoolManager ownership retains the native v4 administrative surface, including
+the protocol-fee controller. Diamond finalization does not affect either owner.
 
-Claims, permissionless settlement, matured emission materialization, POTATO self-burning, and canonical trading remain operational after finalization.
+The PoolKey and launch infrastructure may be corrected before launch. Once the
+pool launches, the PoolKey, PoolManager, hook, range, seeds, and locked LP are
+structurally fixed for that market. Post-launch fee recipient and hook fee
+administration remain available through hook ownership.
 
-## Operational inspection
+## Operational checks
 
-Use the Diamond loupe and governance views to inspect authority:
+For a deployment, verify:
 
-```text
-authority()
-authorityLocked()
-guardian()
-purchasesPaused()
-commitmentsPaused()
-protocolFinalized()
-protocolConfig()
-parameterFrozen(key)
-selectorFrozen(selector)
-facetAddress(selector)
-facetFunctionSelectors(facet)
-```
-
-For a deployed environment, also confirm that the timelock delay is at least one day, the timelock self-holds `DEFAULT_ADMIN_ROLE`, only the intended governance account has proposer/canceller roles, `EXECUTOR_ROLE` is open at `address(0)`, the deployer has no privileged role, and the PoolManager owner and protocol-fee controller are both zero.
+- `authority()` is the intended timelock or governance address;
+- the timelock delay and roles equal deployment configuration;
+- `guardian()` and both pause bits match intended operations state;
+- the hook and PoolManager owners are the intended timelock;
+- `feeAddress()` and `feeBps()` match Treasury policy;
+- `protocolFinalized()` is false unless Diamond cuts were intentionally ended;
+  and
+- after finalization, governance setters still work while `diamondCut` reverts.

@@ -1,37 +1,46 @@
 # Burntato
 
-Burntato is a fully onchain Hot Potato game built as an EIP-2535 Diamond. ETH accounting advances with purchases, while POTATO emission advances only with actual holder time. Forward Recovery commitments, restricted token movement, and a canonical Uniswap v4 pool turn settled game activity into permanently locked liquidity and Treasury trading revenue.
+Burntato is a fully onchain Hot Potato game built as an EIP-2535 Diamond. ETH
+accounting advances with purchases, while POTATO emission advances only with
+actual holder time. Forward Recovery commitments, restricted token movement,
+and a canonical Uniswap v4 market turn settled activity into permanently locked
+liquidity and direct Treasury trading revenue.
 
-## Protocol at a glance
+The deployed defaults are one-hour rounds, a 10% price step, a fresh 100,000
+POTATO emission budget, 10% holder opportunities vesting over 120 seconds, a
+25% Winner / 50% Recovery / 25% Treasury purchase split, a 90% burn / 10%
+Treasury Recovery split, and a 1% bilateral market fee. These are governed
+defaults, not immutable constants. Each active or already-snapshotted target
+round keeps its terms while changes apply to future unsnapshotted rounds.
 
-- A Hot Potato purchase resets a one-hour deadline, raises the next price by the snapshotted increase, and allocates ETH 25% to the winner, 50% to Recovery, and 25% to Treasury.
-- Every round starts with a fresh 100,000 POTATO emission budget. Each holder can earn at most 10% of the then-remaining budget, linearly over 120 seconds.
-- Only earned POTATO reduces the round budget. Rapid or atomic purchases still move price and ETH accounting but consume little or no emission.
-- POTATO committed before the target round starts receives that round's Recovery share pro rata. Settlement burns 90% of committed POTATO and credits 10% to Treasury inventory.
-- Ordinary wallet-to-wallet POTATO transfers revert. Users may self-burn or trade through the exact canonical hooked pool.
-- The canonical pool has zero native LP fee, a 1% bilateral hook fee, and permanently locked initial liquidity. All realized fee ETH belongs to Treasury.
+POTATO uses the same Solady transfer-lock pattern proven by FWA.fun: minting,
+burning, exact protocol movements, and exact transaction-scoped canonical
+PoolManager movements are allowed; ordinary wallet transfers revert. Users can
+self-burn. The initial v4 LP is permanently sent to the dead address, its native
+LP fee is fixed at zero, and all hook fee ETH is sent directly to the hook's
+governed Treasury recipient.
 
-## Repository map
+Administration remains available through the configured authority. The
+guardian can add purchase or commitment pauses but cannot unpause. Protocol
+finalization permanently disables only future Diamond cuts; it does not disable
+economic, Treasury, hook, PoolManager, pause, or authority administration.
+Explicitly transferring an authority or ownership role to the zero address is
+the mechanism for relinquishing that role.
 
-- [`src/`](src/) — Diamond, facets, shared storage, interfaces, and the canonical hook.
-- [`script/`](script/) — deterministic local deployment and independent verification.
+## Repository guide
+
+- [`src/`](src/) — Diamond facets, namespaced storage, Solady POTATO, and the
+  canonical v4 hook.
+- [`script/`](script/) — deterministic local deployment and verification.
 - [`test/`](test/) — unit, integration, fuzz, invariant, and deployment flows.
-- [`docs/ECONOMICS.md`](docs/ECONOMICS.md) — round, emission, Recovery, Treasury, and market mechanics.
-- [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — Diamond interfaces, events, token restrictions, and pool integration.
-- [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — timelock, guardian, freezing, and finalization.
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — local Anvil defaults, deployment commands, and verification.
-- [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md) — executed release checks and proof boundaries.
+- [`docs/ECONOMICS.md`](docs/ECONOMICS.md) — configurable game and Recovery
+  accounting.
+- [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — token and canonical market
+  integration.
+- [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — authority, guardian, market
+  administration, and finalization.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — local defaults, environment
+  configuration, deployment, and verification.
 
-## Focused development
-
-```bash
-forge test --match-path test/unit/PotatoGameLifecycle.t.sol -j 1
-forge test --match-path test/integration/CanonicalMarketLifecycle.t.sol -j 1
-forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1
-```
-
-The Uniswap v4 dependency graph is large. Prefer focused tests during development and reserve the complete suite for release qualification.
-
-## License
-
-Burntato is licensed under the [Business Source License 1.1](LICENSE). The Change Date is August 16, 2030, after which the Change License is MIT.
+The implementation is licensed under BUSL-1.1. FWA.fun is reference precedent,
+not part of Burntato; see the pinned links in the integration guide.

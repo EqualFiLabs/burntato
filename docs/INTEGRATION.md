@@ -1,71 +1,89 @@
-# Burntato integration guide
+# Integration guide
 
-## Canonical addresses
+## Diamond interfaces
 
-Gameplay, POTATO, Recovery, settlement, claims, Treasury accounting, governance, and loupe inspection all resolve through one `BurntatoDiamond` address. Facet implementation addresses are not user-facing integration targets.
+Integrators use the `BurntatoDiamond` address for gameplay, POTATO ERC-20 and
+Permit operations, Recovery, settlement, claims, market views, and governance.
+Use the EIP-2535 loupe to resolve the installed facet for each selector.
 
-The Uniswap v4 hook is a separate immutable-binding contract. Integrators should obtain the canonical hook and PoolKey from `marketConfig()` and `canonicalPoolKey()` rather than constructing alternatives.
+Important state reads include:
 
-## External Diamond surfaces
+- `IGame.currentRoundId()`, `getRound()`, and `currentEarnedEmission()`;
+- `IGovernance.protocolConfig()`, authority, guardian, pause, and finalization
+  views;
+- `IRecovery.recoveryCommitment()` and `totalRecoveryCommitment()`;
+- Treasury claimable ETH and POTATO views; and
+- `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
+  `marketReady()`.
 
-| Domain | Write methods | Primary views |
-| --- | --- | --- |
-| Game | `buyPotato()`, `materializeMaturedEmission()` | `currentRoundId()`, `getRound()`, `currentEarnedEmission()` |
-| POTATO | `approve()`, `transfer()`, `transferFrom()`, `burn()` | ERC-20 metadata, balances, allowances, transient PoolManager allowance |
-| Recovery | `commitRecovery()` | account and total commitment by target round |
-| Settlement | `settleRound()` | round state through `getRound()` |
-| Claims | winner, Recovery, Treasury ETH, and Treasury POTATO claims | Treasury recipient and unreserved availability |
-| Market | `launchMarket()` | configuration, canonical PoolKey, launch state, readiness, locked recipient |
-| Governance | timelocked configuration/freezing/finalization; guardian pause | authority, guardian, pause, freeze, and finalization state |
-| Diamond | `diamondCut()` | EIP-2535 facet and selector loupe methods |
+The canonical hook is a separate administered contract. Read `owner()`,
+`token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`, and
+`deploymentBlock()` from the hook itself.
 
-Canonical Solidity interfaces live in [`src/interfaces`](../src/interfaces/).
+## POTATO behavior
 
-## Round identifiers and reads
+POTATO is Solady ERC-20 plus EIP-2612 Permit behind the Diamond. `name`, `symbol`,
+`decimals`, balances, supply, approvals, `permit`, nonces, and domain separator
+follow the Solady implementation. The token exposes `burn(amount)` for voluntary
+self-burning.
 
-Before the first purchase, `currentRoundId()` is zero. The first purchase activates Round 1. Settlement increments the identifier and activates the next round immediately.
+An ERC-20 approval or Permit does not make ordinary transfers valid. The
+transfer hook permits only:
 
-`getRound(roundId)` returns the complete snapshotted round state: price parameters, holder and timing, Purchase Index, current emission opportunity, remaining/emitted POTATO, Winner and Recovery pools, carry-in, commitment denominator, and settlement flag. Indexers should consume `RoundStarted`, `PotatoPurchased`, `EmissionFinalized`, and `RoundSettled` in addition to reading current state.
+1. minting and burning;
+2. an exact protocol transfer authorized and consumed during a Diamond self-call;
+3. a transfer to or from the configured PoolManager covered by the exact
+   transient allowance opened by the canonical hook.
 
-Recovery commitments emitted during Round N target Round N+1. The `RecoveryCommitted.roundId` field is the target round, not the current source round.
+All other underlying POTATO movements revert. The transient PoolManager
+allowance expires with the transaction and is observable through
+`transientPoolManagerAllowance()` for integration testing.
 
-## Restricted POTATO behavior
+This is the FWA.fun transfer-lock pattern adapted to collision-resistant Diamond
+transient slots and exact protocol escrow/claim movements:
 
-POTATO exposes familiar ERC-20 approvals for router compatibility, but approvals do not authorize wallet-to-wallet transfers. Both `transfer()` and `transferFrom()` still pass through the movement restriction and revert unless the movement is an exact authorized canonical PoolManager settlement.
+- [FWA token transfer allowance and `_afterTokenTransfer`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L382-L425)
+- [FWA transfer-lock tests](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWAToken.t.sol#L185-L210)
+- [Pinned Solady revision](https://github.com/Vectorized/solady/tree/166f85b9576f311446b0f9b3082565bbe0c17af5)
 
-Supported user actions are:
+The restriction applies to underlying POTATO ERC-20 movement. Standard Uniswap
+v4 ERC-6909 currency claims and third-party wrappers are different assets whose
+transfers do not invoke POTATO. They can represent POTATO exposure, but they are
+not underlying POTATO balances and cannot be intercepted by its transfer hook.
 
-- receive POTATO from finalized holder-time emission;
-- approve and commit POTATO to the next Recovery Market;
-- approve a canonical router and trade through the exact hooked pool after launch; and
-- call `burn(amount)` to destroy the caller's own balance.
+## Canonical v4 pool and hook
 
-There is no public or administrative mint, arbitrary third-party burn, permanent PoolManager exemption, or reusable transfer bypass. The hook opens an amount-bounded transient allowance, and each underlying POTATO movement involving PoolManager consumes it in the same transaction.
+The PoolKey is native ETH as currency0, the Burntato Diamond as currency1, zero
+native LP fee, the configured tick spacing, and the exact hook. The hook binds
+immutably to that POTATO address, PoolManager, and tick spacing. It rejects
+foreign initialization, foreign PoolKeys, exact-output swaps, and unauthorized
+liquidity addition.
 
-This is an underlying ERC-20 restriction, not a universal restriction on derivative representations. The standard v4 PoolManager can issue transferable ERC-6909 currency claims without calling POTATO, and third parties can create wrappers or other representations of POTATO exposure. Those assets are not POTATO balances and their transfers cannot be intercepted by POTATO's transfer hook. Integrators must not interpret the FWA-style restriction as a guarantee that every possible derivative venue pays Burntato's fee.
+Market infrastructure and reserves can be corrected through `configureMarket`
+before launch. After launch, structural reconfiguration and a second launch
+revert. The initial position NFT is held by
+`0x000000000000000000000000000000000000dEaD`.
 
-## Canonical v4 market
+The hook follows FWA.fun's bilateral revenue-capture path:
 
-The canonical `PoolKey` is:
+- [FWA hook fee mechanics](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol#L205-L302)
+- [FWA initialization-squatting regression](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWATokenHookSquat.t.sol)
 
-```text
-currency0    = native ETH (address(0))
-currency1    = BurntatoDiamond / POTATO
-fee          = 0
-tickSpacing  = configured immutable launch spacing
-hooks        = configured BurntatoSwapFeeHook
-```
+Buy fees are taken in POTATO, internally converted once, and the realized ETH is
+sent directly to `feeAddress`. Sell fees are taken in ETH and sent directly to
+the same address. `HookFee` and `Trade` are hook events; `MarketConfigured` and
+`MarketLaunched` are Diamond events. There is no Diamond hook-revenue receiver
+or hook-fee claim.
 
-The initial implementation supports exact-input swaps only. Exact-output swaps, foreign keys, alternate hooks, repeated initialization, repeated launch, and post-launch liquidity additions revert. A different pool cannot move underlying POTATO ERC-20 balances because it cannot obtain the canonical transient transfer allowance. PoolManager-native ERC-6909 claims remain the explicit derivative boundary described above.
+Hook ownership may update `feeAddress` and `feeBps` before or after launch and
+before or after Diamond finalization. The fee is bounded to 10,000 BPS. Market
+frontends should read it from the hook instead of assuming the 1% genesis
+default.
 
-Hook events are `PoolLaunched`, `HookFee`, and `Trade`. Diamond market events are `MarketConfigured`, `MarketLaunched`, and `HookRevenueRecorded`. `MarketLaunched.poolId` is the canonical PoolId derived from the exact PoolKey.
+## Claims and recipients
 
-## FWA.fun precedent and Burntato deviations
-
-Burntato deliberately adapts the public TokenWorks FWA.fun relaunch implementation pinned at commit [`1085bf6ee255d6d4d13c374a66110bb25229dc76`](https://github.com/token-works/fwa-relaunch/tree/1085bf6ee255d6d4d13c374a66110bb25229dc76):
-
-- [`FWAToken.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol) — one-shot launch and transaction-scoped PoolManager movement.
-- [`FWATokenHook.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol) — canonical initialization gating and bilateral after-swap fee deltas.
-- [`FWAToken.t.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWAToken.t.sol) and [`FWATokenHookSquat.t.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWATokenHookSquat.t.sol) — transfer-lock, fee, one-shot launch, and initialization-squatting regressions.
-
-These are implementation precedents, not dependencies or authorities. Burntato differs by using namespaced Diamond and transient storage, fixed Treasury accounting instead of a mutable fee wallet, a two-sided Treasury seed, a permanently burned LP recipient, no fee auto-compounding, timelocked administration, and progressive immutability. FWA's same transfer-hook pattern shares the ERC-6909/wrapper boundary; Burntato documents it rather than claiming broader economic exclusivity than the ERC-20 hook can enforce.
+Winner and Recovery claims accept an explicit external recipient and are
+pull-based. Treasury ETH and POTATO claims always use the configured Diamond
+Treasury recipient. Protocol custody addresses are rejected as external claim
+recipients. Hook revenue bypasses these claims and arrives directly at the
+hook's configured Treasury wallet.
