@@ -1,1 +1,7 @@
 specs/
+.env
+broadcast/
+cache/
+out/
+deployments/
+artifacts/
