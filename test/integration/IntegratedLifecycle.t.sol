@@ -207,11 +207,11 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         vm.prank(alice);
         assertEq(claims.claimRecovery(2, alice), 0.01 ether);
         vm.prank(authority);
-        vm.expectRevert(Errors.AlreadyFinalized.selector);
         governance.setProtocolConfig(0.02 ether, 2_000);
         vm.prank(guardian);
-        vm.expectRevert(Errors.AlreadyFinalized.selector);
         governance.setPauseState(true, true);
+        vm.prank(authority);
+        governance.setPauseState(false, false);
     }
 
     function test_OneHundredFullHoldsFollowGeometricCurveAndLeaveAsymptoticDust() public {

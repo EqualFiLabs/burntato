@@ -26,24 +26,19 @@ library BurntatoSelectors {
     }
 
     function governance() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](17);
+        selectors = new bytes4[](12);
         selectors[0] = IGovernance.authority.selector;
-        selectors[1] = IGovernance.authorityLocked.selector;
-        selectors[2] = IGovernance.guardian.selector;
-        selectors[3] = IGovernance.purchasesPaused.selector;
-        selectors[4] = IGovernance.commitmentsPaused.selector;
-        selectors[5] = IGovernance.protocolFinalized.selector;
-        selectors[6] = IGovernance.protocolConfig.selector;
-        selectors[7] = IGovernance.parameterFrozen.selector;
-        selectors[8] = IGovernance.selectorFrozen.selector;
-        selectors[9] = IGovernance.setAuthority.selector;
-        selectors[10] = IGovernance.setGuardian.selector;
-        selectors[11] = IGovernance.setPauseState.selector;
-        selectors[12] = IGovernance.setProtocolConfig.selector;
-        selectors[13] = IGovernance.setTreasuryRecipient.selector;
-        selectors[14] = IGovernance.freezeParameter.selector;
-        selectors[15] = IGovernance.freezeSelectors.selector;
-        selectors[16] = IGovernance.finalizeProtocol.selector;
+        selectors[1] = IGovernance.guardian.selector;
+        selectors[2] = IGovernance.purchasesPaused.selector;
+        selectors[3] = IGovernance.commitmentsPaused.selector;
+        selectors[4] = IGovernance.protocolFinalized.selector;
+        selectors[5] = IGovernance.protocolConfig.selector;
+        selectors[6] = IGovernance.setAuthority.selector;
+        selectors[7] = IGovernance.setGuardian.selector;
+        selectors[8] = IGovernance.setPauseState.selector;
+        selectors[9] = IGovernance.setProtocolConfig.selector;
+        selectors[10] = IGovernance.setTreasuryRecipient.selector;
+        selectors[11] = IGovernance.finalizeProtocol.selector;
     }
 
     function market() internal pure returns (bytes4[] memory selectors) {

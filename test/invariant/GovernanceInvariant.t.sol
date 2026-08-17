@@ -14,18 +14,16 @@ contract ReplacementGameFacet {
 }
 
 contract GovernanceHandler is Test {
-    bytes32 internal constant CONFIG_KEY = keccak256("burntato.parameter.protocol-config");
-
     address internal immutable diamond;
     address internal immutable authority;
     address internal immutable originalGuardian;
     IGovernance internal immutable governance;
     ReplacementGameFacet internal immutable replacement;
 
-    bool public frozenMutationBypass;
-    bool public finalizationBypass;
+    bool public administrationBlockedAfterFinalization;
+    bool public cutSucceededAfterFinalization;
     bool public guardianAuthorityBypass;
-    bool public selectorFreezeBypass;
+    bool public guardianUnpauseBypass;
 
     constructor(address diamond_, address authority_, address guardian_) {
         diamond = diamond_;
@@ -35,39 +33,40 @@ contract GovernanceHandler is Test {
         replacement = new ReplacementGameFacet();
     }
 
-    function setPause(uint256 rawFlags) external {
+    function guardianPause() external {
         vm.prank(originalGuardian);
-        try governance.setPauseState((rawFlags & 1) != 0, (rawFlags & 2) != 0) {
-            if (governance.protocolFinalized()) finalizationBypass = true;
+        try governance.setPauseState(true, true) {} catch {}
+    }
+
+    function guardianAttemptUnpause() external {
+        bool wasPaused = governance.purchasesPaused() || governance.commitmentsPaused();
+        vm.prank(originalGuardian);
+        try governance.setPauseState(false, false) {
+            if (wasPaused) guardianUnpauseBypass = true;
         } catch {}
     }
 
     function mutateConfig(uint128 rawPrice, uint16 rawBps) external {
-        bool wasFrozen = governance.parameterFrozen(CONFIG_KEY);
-        bool wasFinalized = governance.protocolFinalized();
         uint256 price = bound(uint256(rawPrice), 1, 1_000 ether);
         uint16 bps = uint16(bound(uint256(rawBps), 1, 10_000));
+        bool wasFinalized = governance.protocolFinalized();
         vm.prank(authority);
-        try governance.setProtocolConfig(price, bps) {
-            if (wasFrozen) frozenMutationBypass = true;
-            if (wasFinalized) finalizationBypass = true;
-        } catch {}
+        try governance.setProtocolConfig(price, bps) {}
+        catch {
+            if (wasFinalized) administrationBlockedAfterFinalization = true;
+        }
     }
 
-    function freezeConfig() external {
+    function authorityUnpause() external {
+        bool wasFinalized = governance.protocolFinalized();
         vm.prank(authority);
-        try governance.freezeParameter(CONFIG_KEY) {} catch {}
-    }
-
-    function freezeGameSelector() external {
-        bytes4[] memory selectors = new bytes4[](1);
-        selectors[0] = IGame.buyPotato.selector;
-        vm.prank(authority);
-        try governance.freezeSelectors(selectors) {} catch {}
+        try governance.setPauseState(false, false) {}
+        catch {
+            if (wasFinalized) administrationBlockedAfterFinalization = true;
+        }
     }
 
     function attemptGameReplacement() external {
-        bool wasFrozen = governance.selectorFrozen(IGame.buyPotato.selector);
         bool wasFinalized = governance.protocolFinalized();
         bytes4[] memory selectors = new bytes4[](1);
         selectors[0] = IGame.buyPotato.selector;
@@ -75,8 +74,7 @@ contract GovernanceHandler is Test {
         cuts[0] = FacetCut(address(replacement), FacetCutAction.Replace, selectors);
         vm.prank(authority);
         try IDiamondCut(diamond).diamondCut(cuts, address(0), "") {
-            if (wasFrozen) selectorFreezeBypass = true;
-            if (wasFinalized) finalizationBypass = true;
+            if (wasFinalized) cutSucceededAfterFinalization = true;
         } catch {}
     }
 
@@ -104,18 +102,10 @@ contract GovernanceInvariantTest is DiamondTestSetup {
         targetContract(address(handler));
     }
 
-    function invariant_FrozenAndFinalizedAuthorityNeverRecovers() public view {
-        assertFalse(handler.frozenMutationBypass());
-        assertFalse(handler.selectorFreezeBypass());
-        assertFalse(handler.finalizationBypass());
+    function invariant_FinalizationOnlyDisablesCuts() public view {
+        assertFalse(handler.administrationBlockedAfterFinalization());
+        assertFalse(handler.cutSucceededAfterFinalization());
         assertFalse(handler.guardianAuthorityBypass());
-    }
-
-    function invariant_FinalizationAlwaysClearsEmergencyAuthority() public view {
-        IGovernance governance = IGovernance(address(diamond));
-        if (!governance.protocolFinalized()) return;
-        assertEq(governance.guardian(), address(0));
-        assertFalse(governance.purchasesPaused());
-        assertFalse(governance.commitmentsPaused());
+        assertFalse(handler.guardianUnpauseBypass());
     }
 }

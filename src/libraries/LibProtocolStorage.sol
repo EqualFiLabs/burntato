@@ -52,8 +52,6 @@ library LibProtocolStorage {
         address guardian;
         bool purchasesPaused;
         bool commitmentsPaused;
-        bool finalized;
-        mapping(bytes32 => bool) frozenParameters;
     }
 
     struct MarketStorage {

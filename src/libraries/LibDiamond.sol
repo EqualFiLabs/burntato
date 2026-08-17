@@ -23,9 +23,7 @@ library LibDiamond {
         mapping(address => FacetData) facetData;
         address[] facetAddresses;
         address authority;
-        mapping(bytes4 => bool) frozenSelector;
         bool cutsDisabled;
-        bool authorityLocked;
     }
 
     function diamondStorage() internal pure returns (DiamondStorage storage s) {
@@ -44,12 +42,8 @@ library LibDiamond {
         return diamondStorage().authority;
     }
 
-    function transferAuthorityAndLock(address authority_) internal {
-        DiamondStorage storage ds = diamondStorage();
-        if (ds.authorityLocked) revert Errors.AuthorityLocked();
-        if (authority_ == address(0)) revert Errors.InvalidAddress();
-        ds.authority = authority_;
-        ds.authorityLocked = true;
+    function transferAuthority(address authority_) internal {
+        diamondStorage().authority = authority_;
     }
 
     function enforceAuthority() internal view {
@@ -103,7 +97,6 @@ library LibDiamond {
         }
         for (uint256 i; i < selectors.length; ++i) {
             bytes4 selector = selectors[i];
-            if (ds.frozenSelector[selector]) revert Errors.SelectorFrozen(selector);
             address oldFacet = ds.selectorData[selector].facet;
             if (oldFacet == address(0)) revert Errors.SelectorDoesNotExist(selector);
             if (oldFacet == facet) revert Errors.SelectorUnchanged(selector);
@@ -117,7 +110,6 @@ library LibDiamond {
         if (facet != address(0)) revert Errors.InvalidAddress();
         for (uint256 i; i < selectors.length; ++i) {
             bytes4 selector = selectors[i];
-            if (ds.frozenSelector[selector]) revert Errors.SelectorFrozen(selector);
             address oldFacet = ds.selectorData[selector].facet;
             if (oldFacet == address(0)) revert Errors.SelectorDoesNotExist(selector);
             _removeSelector(ds, oldFacet, selector);

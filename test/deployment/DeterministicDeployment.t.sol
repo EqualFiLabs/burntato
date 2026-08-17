@@ -53,7 +53,6 @@ contract DeterministicDeploymentTest is Test {
 
     function test_VerifierConfirmsCompleteGenesisDeployment() public view {
         assertTrue(verifier.verify(config, deployment));
-        assertTrue(IGovernance(deployment.diamond).authorityLocked());
         assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), address(0));
         assertEq(IPoolManagerAuthority(deployment.poolManager).protocolFeeController(), address(0));
     }

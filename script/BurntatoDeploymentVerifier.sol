@@ -65,7 +65,6 @@ contract BurntatoDeploymentVerifier {
         IGovernance governance = IGovernance(deployment.diamond);
         TimelockController timelock = TimelockController(payable(deployment.timelock));
         _check(governance.authority() == deployment.timelock, "DIAMOND_AUTHORITY");
-        _check(governance.authorityLocked(), "DIAMOND_AUTHORITY_LOCKED");
         _check(IOwnedPoolManager(deployment.poolManager).owner() == address(0), "POOL_MANAGER_OWNER_DISABLED");
         _check(
             IOwnedPoolManager(deployment.poolManager).protocolFeeController() == address(0),
