@@ -48,6 +48,12 @@ struct RoundConfig {
     uint16 recoveryTreasuryBps;
 }
 
+struct BuybackConfig {
+    uint256 maxSpend;
+    uint16 callerRewardBps;
+    uint256 delayBlocks;
+}
+
 struct Round {
     uint256 roundId;
     RoundConfig config;

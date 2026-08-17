@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {ProtocolConfig} from "../src/shared/Types.sol";
+import {BuybackConfig, ProtocolConfig} from "../src/shared/Types.sol";
 
 struct GenesisConfig {
     address deployer;
@@ -10,6 +10,7 @@ struct GenesisConfig {
     address treasuryRecipient;
     uint256 timelockDelay;
     ProtocolConfig protocol;
+    BuybackConfig buyback;
     uint16 hookFeeBps;
     int24 initialTick;
     int24 tickSpacing;
@@ -25,6 +26,7 @@ struct BurntatoDeployment {
     address diamondLoupeFacet;
     address governanceFacet;
     address marketFacet;
+    address buybackFacet;
     address potatoTokenFacet;
     address gameFacet;
     address recoveryFacet;

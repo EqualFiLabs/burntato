@@ -4,10 +4,12 @@ pragma solidity 0.8.26;
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 import {IGame} from "../../src/interfaces/IGame.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
+import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {LibMath} from "../../src/libraries/LibMath.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 
 contract EconomicFuzzTest is DiamondTestSetup {
     address internal alice = makeAddr("alice");
@@ -79,5 +81,26 @@ contract EconomicFuzzTest is DiamondTestSetup {
         (uint256 burned, uint256 treasuryPotato) = LibMath.splitRecovery(amount, 1_000);
         assertEq(treasuryPotato, amount * 1_000 / 10_000);
         assertEq(burned + treasuryPotato, amount);
+    }
+
+    function testFuzz_FourWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {
+        uint256 amount = bound(uint256(rawAmount), 1, 1_000 ether);
+        ProtocolConfig memory config = _defaultConfig();
+        config.startingPrice = amount;
+        config.priceIncreaseBps = 0;
+        vm.prank(authority);
+        governance.setProtocolConfig(config);
+
+        vm.deal(alice, amount);
+        vm.prank(alice);
+        game.buyPotato{value: amount}();
+
+        Round memory round = game.getRound(1);
+        uint256 treasuryShare = IClaims(address(diamond)).treasuryEthAvailable();
+        uint256 buybackShare = IBuyback(address(diamond)).buybackReserveEth();
+        assertEq(round.winnerPool, amount * 2_500 / 10_000);
+        assertEq(round.recoveryPool, amount * 4_000 / 10_000);
+        assertEq(buybackShare, amount * 1_000 / 10_000);
+        assertEq(round.winnerPool + round.recoveryPool + treasuryShare + buybackShare, amount);
     }
 }

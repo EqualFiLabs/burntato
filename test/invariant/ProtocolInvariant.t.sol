@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 
 import {IClaims} from "../../src/interfaces/IClaims.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
@@ -218,6 +219,12 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         if (current == 0) return;
         Round memory round = game.getRound(current);
         assertEq(round.emittedPotato + round.remainingEmission, 100_000 ether);
+    }
+
+    function invariant_BuybackReserveRemainsBackedAndPurchaseBounded() public view {
+        uint256 reserve = IBuyback(address(diamond)).buybackReserveEth();
+        assertLe(reserve, address(diamond).balance);
+        assertLe(reserve, handler.nativeIn());
     }
 
     function invariant_RecoveryNeverOverpaysAnyRound() public view {

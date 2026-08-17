@@ -25,6 +25,7 @@ contract VerifyBurntato is Script {
         deployment.diamondLoupeFacet = loupe.facetAddress(BurntatoSelectors.loupe()[0]);
         deployment.governanceFacet = loupe.facetAddress(BurntatoSelectors.governance()[0]);
         deployment.marketFacet = loupe.facetAddress(BurntatoSelectors.market()[0]);
+        deployment.buybackFacet = loupe.facetAddress(BurntatoSelectors.buyback()[0]);
         deployment.potatoTokenFacet = loupe.facetAddress(BurntatoSelectors.token()[0]);
         deployment.gameFacet = loupe.facetAddress(BurntatoSelectors.game()[0]);
         deployment.recoveryFacet = loupe.facetAddress(BurntatoSelectors.recovery()[0]);
@@ -66,6 +67,11 @@ contract VerifyBurntato is Script {
         config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
         );
+        config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
+        config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_BUYBACK_CALLER_REWARD_BPS", uint256(config.buyback.callerRewardBps))
+        );
+        config.buyback.delayBlocks = vm.envOr("BURNTATO_BUYBACK_DELAY_BLOCKS", config.buyback.delayBlocks);
         config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
         );

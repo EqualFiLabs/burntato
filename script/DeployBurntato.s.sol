@@ -17,6 +17,7 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 
 import {BurntatoDiamond} from "../src/BurntatoDiamond.sol";
 import {ClaimsFacet} from "../src/facets/ClaimsFacet.sol";
+import {BuybackFacet} from "../src/facets/BuybackFacet.sol";
 import {DiamondCutFacet} from "../src/facets/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../src/facets/DiamondLoupeFacet.sol";
 import {GameFacet} from "../src/facets/GameFacet.sol";
@@ -28,6 +29,7 @@ import {SettlementFacet} from "../src/facets/SettlementFacet.sol";
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
 import {FoundationInit} from "../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../src/interfaces/IDiamondCut.sol";
+import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
@@ -103,6 +105,7 @@ contract DeployBurntato is Script {
         deployment.diamondLoupeFacet = address(new DiamondLoupeFacet());
         deployment.governanceFacet = address(new GovernanceFacet());
         deployment.marketFacet = address(new MarketFacet());
+        deployment.buybackFacet = address(new BuybackFacet());
         deployment.potatoTokenFacet = address(new PotatoTokenFacet());
         deployment.gameFacet = address(new GameFacet());
         deployment.recoveryFacet = address(new RecoveryFacet());
@@ -149,6 +152,7 @@ contract DeployBurntato is Script {
     function _configureProtocol(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         IGovernance(deployment.diamond).setGuardian(config.guardian);
         IPotatoToken(deployment.diamond).setDistributor(config.treasuryRecipient, true);
+        IBuyback(deployment.diamond).setBuybackConfig(config.buyback);
         IMarket(deployment.diamond)
             .configureMarket(
                 IMarket.MarketConfig({
@@ -207,6 +211,11 @@ contract DeployBurntato is Script {
         config.protocol.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.protocol.recoveryTreasuryBps))
         );
+        config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
+        config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_BUYBACK_CALLER_REWARD_BPS", uint256(config.buyback.callerRewardBps))
+        );
+        config.buyback.delayBlocks = vm.envOr("BURNTATO_BUYBACK_DELAY_BLOCKS", config.buyback.delayBlocks);
         config.hookFeeBps =
             BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
         config.initialTick =
@@ -222,7 +231,7 @@ contract DeployBurntato is Script {
     }
 
     function _initialCut(BurntatoDeployment memory deployment) private pure returns (FacetCut[] memory cuts) {
-        cuts = new FacetCut[](8);
+        cuts = new FacetCut[](9);
         cuts[0] = FacetCut({
             facetAddress: deployment.diamondLoupeFacet,
             action: FacetCutAction.Add,
@@ -244,19 +253,24 @@ contract DeployBurntato is Script {
             functionSelectors: BurntatoSelectors.token()
         });
         cuts[4] = FacetCut({
-            facetAddress: deployment.gameFacet, action: FacetCutAction.Add, functionSelectors: BurntatoSelectors.game()
+            facetAddress: deployment.buybackFacet,
+            action: FacetCutAction.Add,
+            functionSelectors: BurntatoSelectors.buyback()
         });
         cuts[5] = FacetCut({
+            facetAddress: deployment.gameFacet, action: FacetCutAction.Add, functionSelectors: BurntatoSelectors.game()
+        });
+        cuts[6] = FacetCut({
             facetAddress: deployment.recoveryFacet,
             action: FacetCutAction.Add,
             functionSelectors: BurntatoSelectors.recovery()
         });
-        cuts[6] = FacetCut({
+        cuts[7] = FacetCut({
             facetAddress: deployment.settlementFacet,
             action: FacetCutAction.Add,
             functionSelectors: BurntatoSelectors.settlement()
         });
-        cuts[7] = FacetCut({
+        cuts[8] = FacetCut({
             facetAddress: deployment.claimsFacet,
             action: FacetCutAction.Add,
             functionSelectors: BurntatoSelectors.claims()
@@ -280,7 +294,7 @@ contract DeployBurntato is Script {
                 || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
                 || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
                 || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
-                || config.hookFeeBps > Constants.BPS
+                || config.hookFeeBps > Constants.BPS || config.buyback.callerRewardBps > Constants.BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
                     != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
@@ -306,6 +320,7 @@ contract DeployBurntato is Script {
         console2.log("DiamondLoupeFacet", deployment.diamondLoupeFacet);
         console2.log("GovernanceFacet", deployment.governanceFacet);
         console2.log("MarketFacet", deployment.marketFacet);
+        console2.log("BuybackFacet", deployment.buybackFacet);
         console2.log("PotatoTokenFacet", deployment.potatoTokenFacet);
         console2.log("GameFacet", deployment.gameFacet);
         console2.log("RecoveryFacet", deployment.recoveryFacet);

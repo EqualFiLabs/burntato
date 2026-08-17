@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {ProtocolConfig, Round} from "../shared/Types.sol";
+import {BuybackConfig, ProtocolConfig, Round} from "../shared/Types.sol";
 
 library LibProtocolStorage {
     bytes32 internal constant GAME_SLOT = keccak256("burntato.storage.game.v1");
@@ -74,6 +74,8 @@ library LibProtocolStorage {
 
     struct BuybackStorage {
         uint256 reserveEth;
+        BuybackConfig config;
+        uint256 lastBuybackBlock;
     }
 
     function game() internal pure returns (GameStorage storage s) {

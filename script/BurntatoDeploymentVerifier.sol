@@ -9,13 +9,14 @@ import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
+import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IClaims} from "../src/interfaces/IClaims.sol";
 import {IDiamondLoupe} from "../src/interfaces/IDiamondLoupe.sol";
 import {IGame} from "../src/interfaces/IGame.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
-import {ProtocolConfig, Round} from "../src/shared/Types.sol";
+import {BuybackConfig, ProtocolConfig, Round} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
@@ -48,11 +49,12 @@ contract BurntatoDeploymentVerifier {
 
     function _verifySelectors(BurntatoDeployment memory deployment) private view {
         IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
-        _check(loupe.facetAddresses().length == 9, "FACET_COUNT");
+        _check(loupe.facetAddresses().length == 10, "FACET_COUNT");
         _verifyGroup(loupe, deployment.diamondCutFacet, BurntatoSelectors.diamondCut());
         _verifyGroup(loupe, deployment.diamondLoupeFacet, BurntatoSelectors.loupe());
         _verifyGroup(loupe, deployment.governanceFacet, BurntatoSelectors.governance());
         _verifyGroup(loupe, deployment.marketFacet, BurntatoSelectors.market());
+        _verifyGroup(loupe, deployment.buybackFacet, BurntatoSelectors.buyback());
         _verifyGroup(loupe, deployment.potatoTokenFacet, BurntatoSelectors.token());
         _verifyGroup(loupe, deployment.gameFacet, BurntatoSelectors.game());
         _verifyGroup(loupe, deployment.recoveryFacet, BurntatoSelectors.recovery());
@@ -78,6 +80,7 @@ contract BurntatoDeploymentVerifier {
         IClaims claims = IClaims(deployment.diamond);
         IPotatoToken token = IPotatoToken(deployment.diamond);
         IGame game = IGame(deployment.diamond);
+        IBuyback buyback = IBuyback(deployment.diamond);
         _check(governance.guardian() == config.guardian, "GUARDIAN");
         _check(!governance.purchasesPaused(), "PURCHASES_UNPAUSED");
         _check(!governance.commitmentsPaused(), "COMMITMENTS_UNPAUSED");
@@ -104,6 +107,12 @@ contract BurntatoDeploymentVerifier {
         _check(token.decimals() == 18, "TOKEN_DECIMALS");
         _check(token.totalSupply() == 0, "TOKEN_SUPPLY");
         _check(token.isDistributor(config.treasuryRecipient), "TREASURY_DISTRIBUTOR");
+        BuybackConfig memory buybackConfig = buyback.buybackConfig();
+        _check(buybackConfig.maxSpend == config.buyback.maxSpend, "BUYBACK_MAX_SPEND");
+        _check(buybackConfig.callerRewardBps == config.buyback.callerRewardBps, "BUYBACK_REWARD_BPS");
+        _check(buybackConfig.delayBlocks == config.buyback.delayBlocks, "BUYBACK_DELAY_BLOCKS");
+        _check(buyback.buybackReserveEth() == 0, "BUYBACK_RESERVE");
+        _check(buyback.lastBuybackBlock() == 0, "BUYBACK_LAST_BLOCK");
         _check(game.currentRoundId() == 0, "ROUND_NOT_STARTED");
         Round memory emptyRound = game.getRound(0);
         _check(emptyRound.roundId == 0 && emptyRound.remainingEmission == 0, "EMPTY_GENESIS_ROUND");
@@ -177,6 +186,7 @@ contract BurntatoDeploymentVerifier {
             uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN"
         );
         _check(config.hookFeeBps <= Constants.BPS, "HOOK_FEE_DOMAIN");
+        _check(config.buyback.callerRewardBps <= Constants.BPS, "BUYBACK_REWARD_DOMAIN");
         _check(
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
             "TICK_SPACING_DOMAIN"

@@ -19,11 +19,14 @@ library Errors {
     error InvalidRound(uint256 roundId);
     error NativeTransferFailed();
     error AlreadyLaunched();
+    error BuybackUnavailable();
+    error BuybackTooSoon(uint256 nextBlock);
     error ExactOutputNotAllowed();
     error ExternalBuysDisabled();
     error InvalidMarketConfiguration();
     error InvalidProtocolConfig();
     error MarketNotConfigured();
+    error MarketNotLaunched();
     error MarketNotLaunching();
     error MarketNotReady();
     error PoolAlreadyInitialized();

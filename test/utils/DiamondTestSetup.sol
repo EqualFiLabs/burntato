@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
+import {BuybackFacet} from "../../src/facets/BuybackFacet.sol";
 import {ClaimsFacet} from "../../src/facets/ClaimsFacet.sol";
 import {DiamondCutFacet} from "../../src/facets/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../../src/facets/DiamondLoupeFacet.sol";
@@ -17,13 +18,14 @@ import {FoundationInit} from "../../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
-import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
+import {BuybackConfig, FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 abstract contract DiamondTestSetup is Test {
     address internal authority = makeAddr("authority");
@@ -39,6 +41,7 @@ abstract contract DiamondTestSetup is Test {
         _install(address(new DiamondLoupeFacet()), _loupeSelectors());
         _install(address(new GovernanceFacet()), _governanceSelectors());
         _install(address(new MarketFacet()), _marketSelectors());
+        _install(address(new BuybackFacet()), _buybackSelectors());
         _install(address(new PotatoTokenFacet()), _tokenSelectors());
         _install(address(new GameFacet()), _gameSelectors());
         _install(address(new RecoveryFacet()), _recoverySelectors());
@@ -56,6 +59,8 @@ abstract contract DiamondTestSetup is Test {
         IGovernance(address(diamond)).setGuardian(guardian);
         vm.prank(authority);
         IPotatoToken(address(diamond)).setDistributor(treasury, true);
+        vm.prank(authority);
+        IBuyback(address(diamond)).setBuybackConfig(_defaultBuybackConfig());
     }
 
     function _install(address facet, bytes4[] memory selectors) internal {
@@ -86,6 +91,10 @@ abstract contract DiamondTestSetup is Test {
         config = _defaultConfig();
         config.startingPrice = price;
         config.priceIncreaseBps = increaseBps;
+    }
+
+    function _defaultBuybackConfig() internal pure returns (BuybackConfig memory config) {
+        config = BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1});
     }
 
     function _loupeSelectors() internal pure returns (bytes4[] memory selectors) {
@@ -146,6 +155,16 @@ abstract contract DiamondTestSetup is Test {
         selectors[5] = IMarket.marketLaunching.selector;
         selectors[6] = IMarket.marketReady.selector;
         selectors[7] = IMarket.lockedLpRecipient.selector;
+    }
+
+    function _buybackSelectors() internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](6);
+        selectors[0] = IBuyback.setBuybackConfig.selector;
+        selectors[1] = IBuyback.buybackConfig.selector;
+        selectors[2] = IBuyback.buybackReserveEth.selector;
+        selectors[3] = IBuyback.lastBuybackBlock.selector;
+        selectors[4] = IBuyback.buyback.selector;
+        selectors[5] = IBuyback.unlockCallback.selector;
     }
 
     function _gameSelectors() internal pure returns (bytes4[] memory selectors) {

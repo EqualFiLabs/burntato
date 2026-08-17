@@ -15,6 +15,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
@@ -31,6 +32,7 @@ interface IERC721OwnerView {
 contract CanonicalMarketHandler is Test {
     IPotatoToken internal immutable potato;
     IClaims internal immutable claims;
+    IBuyback internal immutable buybacks;
     IPoolManager internal immutable manager;
     PoolSwapTest internal immutable swapRouter;
     BurntatoSwapFeeHook internal immutable hook;
@@ -43,6 +45,7 @@ contract CanonicalMarketHandler is Test {
     bool public foreignPoolBypass;
     bool public treasuryRevenueDecreased;
     bool public feeMismatch;
+    bool public buybackAccountingMismatch;
 
     constructor(
         address diamond,
@@ -54,6 +57,7 @@ contract CanonicalMarketHandler is Test {
     ) {
         potato = IPotatoToken(diamond);
         claims = IClaims(diamond);
+        buybacks = IBuyback(diamond);
         manager = manager_;
         swapRouter = swapRouter_;
         hook = hook_;
@@ -176,6 +180,19 @@ contract CanonicalMarketHandler is Test {
         } catch {}
     }
 
+    function executeBuyback() external {
+        uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 treasuryPotatoBefore = potato.balanceOf(feeAddress);
+        uint256 feeAddressBefore = feeAddress.balance;
+        try buybacks.buyback() returns (uint256 amountOut) {
+            uint256 reserveAfter = buybacks.buybackReserveEth();
+            if (
+                reserveAfter > reserveBefore || potato.balanceOf(feeAddress) - treasuryPotatoBefore != amountOut
+                    || feeAddress.balance != feeAddressBefore || potato.transientPoolManagerAllowance() != 0
+            ) buybackAccountingMismatch = true;
+        } catch {}
+    }
+
     function _feeAccounting(Vm.Log[] memory logs) internal view returns (uint256 nativeFee, uint256 potatoFee) {
         bytes32 feeTopic = keccak256("HookFee(bytes32,address,uint128,uint128)");
         for (uint256 i; i < logs.length; ++i) {
@@ -250,6 +267,7 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         assertGe(claims.treasuryEthAvailable(), treasuryFloor);
         assertFalse(handler.treasuryRevenueDecreased());
         assertFalse(handler.feeMismatch());
+        assertFalse(handler.buybackAccountingMismatch());
     }
 
     function invariant_UnsupportedSettlementPathsNeverOpen() public view {

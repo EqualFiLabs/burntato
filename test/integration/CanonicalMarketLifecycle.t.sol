@@ -12,6 +12,7 @@ import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
@@ -21,6 +22,7 @@ import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 import {Round} from "../../src/shared/Types.sol";
+import {BuybackConfig} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
 
@@ -52,6 +54,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     address internal keeper = makeAddr("keeper");
 
     BurntatoSwapFeeHook internal hook;
+    IBuyback internal buybacks;
     IClaims internal claims;
     IGame internal game;
     IMarket internal market;
@@ -79,6 +82,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(address(hook), hookAddress);
 
         claims = IClaims(address(diamond));
+        buybacks = IBuyback(address(diamond));
         game = IGame(address(diamond));
         market = IMarket(address(diamond));
         potato = IPotatoToken(address(diamond));
@@ -169,9 +173,11 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         _createTreasuryInventory();
         assertEq(claims.treasuryEthAvailable(), 0.001 ether);
         assertEq(claims.treasuryPotatoAvailable(), 999 ether);
+        assertEq(buybacks.buybackReserveEth(), 0.002 ether);
 
         claims.claimTreasury();
         claims.claimTreasuryPotato();
+        assertEq(buybacks.buybackReserveEth(), 0.002 ether);
         assertTrue(market.marketReady());
         market.launchMarket();
         assertGt(claims.treasuryEthAvailable(), 0);
@@ -406,6 +412,151 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertGt(_buy(bob, 0.0001 ether), 0);
     }
 
+    function test_PermissionlessBuybackWorksWhileExternalBuysStayClosedAndPaysCaller() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        assertFalse(hook.externalBuysEnabled());
+        assertEq(buybacks.buybackReserveEth(), 0.002 ether);
+
+        uint256 treasuryPotatoBefore = potato.balanceOf(treasury);
+        uint256 treasuryNativeBefore = treasury.balance;
+        uint256 keeperBefore = keeper.balance;
+        vm.recordLogs();
+        vm.prank(keeper);
+        uint256 amountOut = buybacks.buyback();
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        (uint256 grossSlice, uint256 ethSpent, uint256 bought, uint256 reward, uint256 reserveAfter) =
+            _buybackAccounting(logs);
+
+        assertGt(amountOut, 0);
+        assertEq(amountOut, bought);
+        assertEq(grossSlice, 0.002 ether);
+        assertEq(reward, 0.00001 ether);
+        assertGt(ethSpent, 0);
+        assertLe(ethSpent, grossSlice - reward);
+        assertEq(reserveAfter, grossSlice - reward - ethSpent);
+        assertEq(potato.balanceOf(treasury) - treasuryPotatoBefore, amountOut);
+        assertEq(keeper.balance - keeperBefore, 0.00001 ether);
+        assertEq(treasury.balance, treasuryNativeBefore);
+        assertEq(buybacks.lastBuybackBlock(), block.number);
+        assertEq(buybacks.buybackReserveEth(), reserveAfter);
+        assertEq(potato.transientPoolManagerAllowance(), 0);
+        assertFalse(hook.externalBuysEnabled());
+
+        _expectBuyDisabled(alice, 0.0001 ether);
+    }
+
+    function test_BuybackHonorsCapDelayAndTreasuryCanReusePurchasedPotato() public {
+        vm.prank(authority);
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 0.001 ether, callerRewardBps: 50, delayBlocks: 1}));
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        vm.prank(keeper);
+        uint256 firstOut = buybacks.buyback();
+        assertGt(firstOut, 0);
+        assertEq(keeper.balance, 0.000005 ether);
+        assertEq(buybacks.buybackReserveEth(), 0.001 ether);
+
+        vm.prank(keeper);
+        vm.expectRevert();
+        buybacks.buyback();
+
+        vm.roll(block.number + 1);
+        vm.prank(keeper);
+        uint256 secondOut = buybacks.buyback();
+        assertGt(secondOut, 0);
+        assertEq(keeper.balance, 0.00001 ether);
+        assertEq(buybacks.buybackReserveEth(), 0);
+
+        uint256 treasuryPotato = potato.balanceOf(treasury);
+        uint256 bobBefore = potato.balanceOf(bob);
+        vm.prank(treasury);
+        potato.transfer(bob, treasuryPotato / 4);
+        vm.prank(treasury);
+        potato.burn(treasuryPotato / 4);
+        assertEq(potato.balanceOf(bob) - bobBefore, treasuryPotato / 4);
+    }
+
+    function test_BuybackConfigurationRemainsGovernedAfterFinalization() public {
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, alice));
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 1 ether, callerRewardBps: 0, delayBlocks: 0}));
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidBps.selector);
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 1 ether, callerRewardBps: 10_001, delayBlocks: 0}));
+
+        vm.startPrank(authority);
+        IGovernance(address(diamond)).finalizeProtocol();
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 3 ether, callerRewardBps: 100, delayBlocks: 2}));
+        vm.stopPrank();
+
+        BuybackConfig memory config = buybacks.buybackConfig();
+        assertEq(config.maxSpend, 3 ether);
+        assertEq(config.callerRewardBps, 100);
+        assertEq(config.delayBlocks, 2);
+    }
+
+    function test_BuybackRequiresLaunchAndPoolManagerCallback() public {
+        vm.expectRevert(Errors.MarketNotLaunched.selector);
+        buybacks.buyback();
+
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        buybacks.unlockCallback(abi.encode(1 ether, treasury));
+    }
+
+    function test_FullCallerRewardCanDisableSwapWithoutStrandingReserve() public {
+        vm.prank(authority);
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 2 ether, callerRewardBps: 10_000, delayBlocks: 0}));
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        uint256 supplyBefore = potato.totalSupply();
+        vm.prank(keeper);
+        assertEq(buybacks.buyback(), 0);
+        assertEq(keeper.balance, 0.002 ether);
+        assertEq(buybacks.buybackReserveEth(), 0);
+        assertEq(potato.totalSupply(), supplyBefore);
+    }
+
+    function test_PartialBuybackRestoresUnspentInputToReserve() public {
+        IMarket.MarketConfig memory config = market.marketConfig();
+        config.tickLower = INITIAL_TICK - TICK_SPACING;
+        config.tickUpper = INITIAL_TICK + TICK_SPACING;
+        vm.prank(authority);
+        market.configureMarket(config);
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        vm.recordLogs();
+        vm.prank(keeper);
+        uint256 amountOut = buybacks.buyback();
+        (uint256 gross, uint256 spent, uint256 bought, uint256 reward, uint256 reserve) =
+            _buybackAccounting(vm.getRecordedLogs());
+
+        assertEq(amountOut, bought);
+        assertGt(amountOut, 0);
+        assertLt(spent, gross - reward);
+        assertEq(reserve, gross - reward - spent);
+        assertEq(buybacks.buybackReserveEth(), reserve);
+    }
+
+    function test_BuybackUsesCurrentTreasuryWithoutImplicitDistributorGrant() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        address nextTreasury = makeAddr("buybackTreasury");
+        vm.prank(authority);
+        IGovernance(address(diamond)).setTreasuryRecipient(nextTreasury);
+        assertFalse(potato.isDistributor(nextTreasury));
+
+        vm.prank(keeper);
+        uint256 amountOut = buybacks.buyback();
+        assertGt(amountOut, 0);
+        assertEq(potato.balanceOf(nextTreasury), amountOut);
+        assertEq(potato.transientPoolManagerAllowance(), 0);
+    }
+
     function _createTreasuryInventory() internal {
         vm.prank(alice);
         game.buyPotato{value: 0.01 ether}();
@@ -470,6 +621,19 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(hook) && logs[i].topics[0] == feeTopic) {
                 (nativeFee, potatoFee) = abi.decode(logs[i].data, (uint128, uint128));
+            }
+        }
+    }
+
+    function _buybackAccounting(Vm.Log[] memory logs)
+        internal
+        view
+        returns (uint256 gross, uint256 spent, uint256 bought, uint256 reward, uint256 reserve)
+    {
+        bytes32 topic = keccak256("BuybackExecuted(address,address,uint256,uint256,uint256,uint256,uint256)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == address(diamond) && logs[i].topics[0] == topic) {
+                return abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
             }
         }
     }

@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IClaims} from "../../src/interfaces/IClaims.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
@@ -51,6 +52,16 @@ library BurntatoSelectors {
         selectors[5] = IMarket.marketLaunching.selector;
         selectors[6] = IMarket.marketReady.selector;
         selectors[7] = IMarket.lockedLpRecipient.selector;
+    }
+
+    function buyback() internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](6);
+        selectors[0] = IBuyback.setBuybackConfig.selector;
+        selectors[1] = IBuyback.buybackConfig.selector;
+        selectors[2] = IBuyback.buybackReserveEth.selector;
+        selectors[3] = IBuyback.lastBuybackBlock.selector;
+        selectors[4] = IBuyback.buyback.selector;
+        selectors[5] = IBuyback.unlockCallback.selector;
     }
 
     function token() internal pure returns (bytes4[] memory selectors) {
