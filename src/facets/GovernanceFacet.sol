@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {IGovernance} from "../interfaces/IGovernance.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
+import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 
@@ -107,7 +108,7 @@ contract GovernanceFacet is IGovernance {
 
     function setTreasuryRecipient(address newRecipient) external onlyAuthority beforeFinalization {
         _enforceMutable(TREASURY_RECIPIENT_KEY);
-        if (newRecipient == address(0)) revert Errors.InvalidAddress();
+        LibRecipients.enforceExternal(newRecipient);
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         address previous = ts.recipient;
         ts.recipient = newRecipient;

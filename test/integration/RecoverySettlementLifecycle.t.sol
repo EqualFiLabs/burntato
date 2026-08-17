@@ -5,6 +5,7 @@ import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
+import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
@@ -108,6 +109,49 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         vm.expectRevert(Errors.AlreadyClaimed.selector);
         claims.claimWinner(2, bob);
         vm.stopPrank();
+    }
+
+    function test_ClaimsRejectDiamondRecipientWithoutConsumingEntitlement() public {
+        _prepareRoundTwoCommitment();
+        _expireAndSettle();
+        _buy(bob, 0.01 ether);
+        _expireAndSettle();
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        claims.claimRecovery(2, address(diamond));
+
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        assertEq(claims.claimRecovery(2, alice), 0.01 ether);
+        assertEq(alice.balance - before, 0.01 ether);
+    }
+
+    function test_TreasuryRecipientRejectsProtocolCustody() public {
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        IGovernance(address(diamond)).setTreasuryRecipient(address(diamond));
+    }
+
+    function test_RecoveryClaimUsesFullPrecisionForLargeValues() public {
+        uint256 largePrice = 1 << 200;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(largePrice, 1_000);
+        vm.deal(alice, largePrice);
+        vm.deal(bob, largePrice);
+
+        _buy(alice, largePrice);
+        vm.warp(block.timestamp + 120);
+        game.materializeMaturedEmission();
+        vm.prank(alice);
+        recovery.commitRecovery(10_000 ether);
+        _expireAndSettle();
+
+        _buy(bob, largePrice);
+        _expireAndSettle();
+        Round memory roundTwo = game.getRound(2);
+        vm.prank(alice);
+        assertEq(claims.claimRecovery(2, alice), roundTwo.recoveryPool);
     }
 
     function test_ForcedEthDoesNotBecomeTreasuryRevenue() public {

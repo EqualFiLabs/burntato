@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
 import {IClaims} from "../interfaces/IClaims.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibToken} from "../libraries/LibToken.sol";
+import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
@@ -17,7 +20,7 @@ contract ClaimsFacet is IClaims {
     }
 
     function claimWinner(uint256 roundId, address recipient) external nonReentrant returns (uint256 amount) {
-        if (recipient == address(0)) revert Errors.InvalidAddress();
+        LibRecipients.enforceExternal(recipient);
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[roundId];
         if (!round.settled) revert Errors.InvalidRound(roundId);
@@ -31,7 +34,7 @@ contract ClaimsFacet is IClaims {
     }
 
     function claimRecovery(uint256 roundId, address recipient) external nonReentrant returns (uint256 amount) {
-        if (recipient == address(0)) revert Errors.InvalidAddress();
+        LibRecipients.enforceExternal(recipient);
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[roundId];
         if (!round.settled || round.totalCommitted == 0) revert Errors.InvalidRound(roundId);
@@ -39,7 +42,7 @@ contract ClaimsFacet is IClaims {
         if (rs.claimed[roundId][msg.sender]) revert Errors.AlreadyClaimed();
         uint256 committed = rs.commitments[roundId][msg.sender];
         if (committed == 0) revert Errors.NothingToClaim();
-        amount = (round.recoveryPool * committed) / round.totalCommitted;
+        amount = Math.mulDiv(round.recoveryPool, committed, round.totalCommitted);
         rs.claimed[roundId][msg.sender] = true;
         rs.recoveryPaid[roundId] += amount;
         _sendNative(recipient, amount);
@@ -48,6 +51,7 @@ contract ClaimsFacet is IClaims {
 
     function claimTreasury() external nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
+        LibRecipients.enforceExternal(ts.recipient);
         uint256 total = ts.purchaseEth + ts.hookEth;
         amount = total > ts.reservedEth ? total - ts.reservedEth : 0;
         if (amount == 0) revert Errors.NothingToClaim();
@@ -60,6 +64,7 @@ contract ClaimsFacet is IClaims {
 
     function claimTreasuryPotato() external nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
+        LibRecipients.enforceExternal(ts.recipient);
         amount = ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
         if (amount == 0) revert Errors.NothingToClaim();
         ts.potatoInventory -= amount;

@@ -26,7 +26,7 @@ library LibToken {
     }
 
     function protocolMove(address from, address to, uint256 amount) internal {
-        if (from == address(0) || to == address(0)) revert Errors.InvalidAddress();
+        if (from == address(0) || to == address(0) || from == to) revert Errors.InvalidAddress();
         if (amount == 0) revert Errors.ZeroAmount();
         LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
         if (ts.balanceOf[from] < amount) revert Errors.InsufficientBalance();
