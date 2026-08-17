@@ -1,22 +1,33 @@
-# PR 11 release qualification evidence
+# PR 12 release qualification evidence
 
 Date: August 17, 2026
 
-Pre-audit source candidate: `ca4e61e` on `fix/11-configurable-protocol`, stacked
-on PR 10 commit `379ea5f`. Confirmed audit findings were remediated in
-`fbb49b1`.
+Source candidate: `32116ed` on `feat/12-treasury-buybacks`, stacked on PR 19
+commit `73a9155`. The audit reviewed the equivalent pre-remediation content at
+`db57949`; rebasing moved its exact transfer-authorization ordering into PR 19.
 
 Environment: Foundry 1.5.1-stable, Solidity 0.8.26, Cancun EVM, local Linux
 host. No fork, testnet, remote CI, or production network was used.
 
 ## Candidate behavior
 
-This candidate replaces terminal/frozen governance with retained
-administration, snapshots complete governed economics at round boundaries,
-uses Solady's FWA-style restricted ERC-20 pattern, sends canonical market fees
-directly to the hook's governed Treasury recipient, and leaves the hook and
-PoolManager owned by the configured timelock. `finalizeProtocol()` disables
-only future Diamond cuts.
+Every Hot Potato purchase now divides native value into Winner, Recovery,
+Treasury, and dedicated buyback accounting. Local defaults are 25%, 40%, 25%,
+and 10%. The first three explicitly calculated shares round down and Treasury
+receives the exact remainder, conserving every wei.
+
+After canonical-market launch, anyone may execute a bounded, rate-limited
+native-to-POTATO buyback. The default gross cap is 2 ETH, caller reward is 50
+BPS of the gross slice, and delay is one block. The swap uses the canonical v4
+PoolKey, exact input, and the terminal Uniswap price bound; it pays no bilateral
+hook fee and sends output directly to the current Treasury. Partial-fill input
+is restored to the dedicated reserve.
+
+External pool buys start disabled while sells remain open. Only the Diamond's
+exact-input buyback path can buy while the gate is closed. Hook ownership can
+toggle the gate repeatedly before or after launch and Diamond finalization.
+All canonical buy/sell hook fees continue to route directly to the hook's
+governed Treasury recipient.
 
 The ignored local specification package was updated but is intentionally not a
 versioned PR artifact.
@@ -28,108 +39,83 @@ profiles: 1,000 fuzz runs and 256 invariant runs at depth 50.
 
 | Scope | Command | Result |
 | --- | --- | --- |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 25 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 32 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 5 properties, 5,000 cases |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 8 properties, 102,400 calls |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 41 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 6 properties, 6,000 cases |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
 | Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 12 passed |
 
-In aggregate, 69 deterministic tests, five fuzz properties, and eight stateful
+In aggregate, 84 deterministic tests, six fuzz properties, and nine stateful
 invariants passed with no failures or skips. The executed flows include:
 
-- default and nondefault round economics, zero-budget activation, full and
-  partial holder-time emission, same-timestamp cycling, geometric dust, and no
-  double minting;
-- forward Recovery commitment, configurable consumption, rollovers, settlement,
-  claims, and exact ETH/POTATO conservation;
-- Solady Permit, transfer rejection, voluntary self-burn, exact protocol
-  movements, and transient canonical PoolManager authorization;
-- real v4 launch, locked initial LP, buy and sell swaps, direct bilateral fee
-  delivery, 0% and 100% fee edges, fee rotation after Diamond finalization,
-  foreign-key rejection, and no Diamond hook revenue accounting;
-- repeated and zero authority transfer, guardian pause-only behavior, authority
-  unpause, configuration after finalization, and permanent Diamond-cut closure;
-  and
-- zero-delay and overlapping-proposer deployment, full genesis verification,
-  timelock-owned hook/PoolManager, and a real PoolManager administration call.
-
-## Formatting, linting, selectors, and storage
-
-- `forge fmt --check` passed.
-- `git diff --check` passed.
-- `forge lint src script test --severity high med low -j 1` compiled and exited
-  successfully. It reports visible bounded-cast warnings and unchecked-return
-  warnings in negative-path tests; these remain audit inputs rather than being
-  hidden by global suppressions.
-- `BurntatoSelectors` installs nine facets and 59 selectors. The deterministic
-  verifier checks exact facet group sizes and selector-to-facet routing.
-- `forge inspect <facet> storage-layout --json` reported zero ordinary storage
-  entries for all nine Diamond facets. Protocol state uses explicit namespaced
-  storage.
-- The standalone hook has three intended packed slot-zero fields:
-  `feeAddress`, `feeBps`, and `deploymentBlock`. Its owner uses Solady's
-  namespaced ownership slot; token, PoolManager, and tick spacing are immutable.
-
-## Dependency and security boundaries
-
-Pinned revisions include:
-
-- Solady `166f85b9576f311446b0f9b3082565bbe0c17af5`;
-- Uniswap v4 core `59d3ecf53afa9264a16bba0e38f4c5d2231f80bc`;
-- Uniswap v4 periphery `60cd93803ac2b7fa65fd6cd351fd5fd4cc8c9db5`;
-  and
-- FWA.fun precedent `1085bf6ee255d6d4d13c374a66110bb25229dc76`.
-
-The token restriction governs underlying POTATO ERC-20 movement. Standard v4
-ERC-6909 currency claims and third-party wrappers are derivative assets and do
-not invoke POTATO's transfer hook. This candidate documents that boundary; it
-does not claim universal venue exclusivity for derivative exposure.
-
-Retained authority, hook ownership, and PoolManager ownership are intentional
-governance powers. Their safety depends on the configured timelock roles and
-delay. The protocol itself permits a zero delay and permits explicit ownership
-or authority relinquishment.
+- exact four-way purchase conservation and buyback-reserve isolation from
+  claims, Recovery rollover, and market launch;
+- real canonical v4 launch, open sells, default-closed buys, repeated gate
+  administration, and the fee-free privileged buyback while buys remain closed;
+- cap and block delay, zero and 100% caller rewards, partial-fill restoration,
+  current-Treasury rotation, unauthorized callback rejection, and a terminal
+  block delay regression;
+- Treasury receipt, distribution, self-burn, sale, and commitment-compatible
+  POTATO movement through the Solady transfer restrictions;
+- bilateral 0% and 100% fee edges with direct Treasury delivery and no Diamond
+  fee accounting; and
+- complete fresh deployment and verification of ten facets, 67 selectors,
+  configured buyback state, the external-buy gate, hook ownership, and
+  PoolManager administration.
 
 ## Audit and remediation
 
-The committed `ca4e61e` candidate received the full repository audit workflow
-across the general, precision/math, ERC-20, AMM, proxy/Diamond, governance,
-assembly, and access-control checklists. The review confirmed no Critical,
-High, or Medium findings. Four Low findings were confirmed and remediated in
-`fbb49b1`:
+The committed pre-remediation candidate received an internal changed-scope
+review using the audit workflow's general/DoS, precision/math, ERC-20/access,
+AMM, and Diamond/proxy checklists. No Critical or High finding remained.
 
-- public zero-address transfers could credit the zero-address balance without
-  reducing Solady ERC-20 supply; public transfers now reject zero endpoints and
-  `burn(amount)` remains the explicit destruction path;
-- an unbounded snapshotted round timeout could overflow deadline addition and
-  deadlock that round; configuration, deployment, and verification now enforce
-  the `uint64` deadline domain;
-- hook fee revenue could be directed to protocol system sinks; zero, the hook,
-  POTATO Diamond, and PoolManager are now invalid fee recipients; and
-- the permissionless CREATE2 hook helper exposed the mined salt to public
-  deployment griefing; only the helper creator may execute deployment.
+Two actionable boundary defects were remediated:
 
-The remediation also widens signed v4 deltas before negation and returns through
-the free-memory pointer in the Diamond fallback. Applicable regression tests
-and the complete qualification matrix above passed after remediation.
+- `buybackBps` is appended after the pre-existing packed configuration fields,
+  preserving their storage offsets if PR 12 facets are installed over PR 19;
+  and
+- an unrepresentable positive-delay addition now reverts, preventing repeated
+  execution at the maximum block number.
 
-A final Aderyn pass analyzed 24 source files, 1,140 non-comment source lines,
-and 63 detectors. Its reported candidates were manually classified as intended
-Solady/BaseHook overrides, one-shot initialization, terminal Diamond fallback,
-permissionless fixed-recipient claims, delegatecall/native-value behavior,
-explicit retained administration, or style/static-analysis observations. No
-additional confirmed finding resulted.
+The hook's privileged sender branch was also narrowed to the sole intended
+shape: exact-input native-to-POTATO swaps. All other privileged swap shapes
+revert before transfer authorization.
 
-Accepted informational boundaries are sub-wei pro-rata Recovery floor residue,
-per-swap fee-floor nonadditivity below one base unit per swap, OpenZeppelin
-timelock operations having no built-in expiry, verification proving required
-state rather than exclusive role membership or runtime identity, and the
-documented ERC-6909/wrapper derivative boundary.
+The reviewers confirmed no unresolved High, Medium, or Low implementation
+finding after those corrections. ERC-20/access review found no defect in the
+exact-transfer authorization order or current-Treasury output path. Precision
+review confirmed four-way rounding, signed delta handling, partial-fill reserve
+restoration, cap/reward edge cases, and aggregate ETH backing.
 
-## Proof boundary
+## Accepted FWA-compatible boundary
 
-This evidence proves local compilation, repository-owned test execution,
-checklist-driven internal review, and static-analysis classification against the
-stated commits. It does not prove deployed-chain state, production genesis
-parameters, canonical chain dependency addresses, fork compatibility, remote
-CI, or an independent third-party audit.
+Caller reward is deliberately calculated from the selected gross slice before
+the swap, matching the pinned FWA.fun implementation. A terminal-price partial
+fill may therefore pay the configured reward when little or no native input is
+consumed. Unspent swap input returns to the reserve, but the reward does not.
+This is an explicit product decision bounded by governed cap, reward rate, and
+block delay; it is not represented as fill-proportional compensation.
+
+The buyback deliberately has no quote, TWAP, minimum output, deadline, or
+caller-provided slippage field. Public execution and MEV exposure are accepted
+properties of the approved FWA-style demand mechanism.
+
+The token restriction governs underlying POTATO ERC-20 movement. Standard v4
+ERC-6909 currency claims and third-party wrappers remain derivative assets and
+do not invoke POTATO's transfer hook. The implementation does not claim
+universal venue exclusivity for derivative exposure.
+
+## Formatting and proof boundary
+
+- `forge fmt --check` passed.
+- `git diff --check` passed before the evidence update and is rerun before push.
+- Focused `forge lint` over the changed buyback, type, and lifecycle files exited
+  successfully; its visible bounded-cast and negative-path unchecked-return
+  warnings remain review inputs rather than being globally suppressed.
+- No `forge clean` or unscoped full build was used.
+
+This evidence proves local compilation, repository-owned test execution, and
+checklist-driven internal changed-scope review against the stated commits. It
+does not prove deployed-chain state, production genesis parameters, canonical
+chain dependency addresses, fork compatibility, remote CI, or an independent
+third-party audit.
