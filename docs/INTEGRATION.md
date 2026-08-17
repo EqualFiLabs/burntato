@@ -75,6 +75,14 @@ before launch. After launch, structural reconfiguration and a second launch
 revert. The initial position NFT is held by
 `0x000000000000000000000000000000000000dEaD`.
 
+Genesis reserves the configured POTATO allocation in Diamond custody. The
+initial square-root price must equal `TickMath.getSqrtPriceAtTick(tickUpper)`,
+making the locked launch position entirely POTATO-sided; `launchMarket()` is
+nonpayable and does not consume Treasury ETH. The local default allocation is
+100 million POTATO. Because external buys start closed, the first protocol
+buybacks add ETH-side pool inventory before ordinary users may buy, while POTATO
+holders may sell whenever the pool has ETH available.
+
 The hook follows FWA.fun's bilateral revenue-capture path:
 
 - [FWA hook fee mechanics](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol#L205-L302)

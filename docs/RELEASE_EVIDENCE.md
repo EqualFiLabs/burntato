@@ -1,4 +1,37 @@
-# PR 12 release qualification evidence
+# Release qualification evidence
+
+## Single-sided genesis market candidate
+
+Date: August 17, 2026
+
+Source candidate: `c744882` on `feat/single-sided-launch`, based on merged
+`main` commit `e42ffea`.
+
+The candidate mints and reserves the configured genesis market allocation at
+initialization. The local deployment default is 100 million POTATO. Canonical
+market launch initializes at the configured upper tick, supplies POTATO only,
+consumes no Treasury ETH, and permanently sends the position NFT to the dead
+address. External buys remain closed by default; a real lifecycle test executes
+a permissionless buyback and then sells distributed POTATO into the ETH it put
+in the pool.
+
+Qualification selected each owned test category explicitly. It did not use
+`forge clean`, a forced build, a fork, or a deployed network.
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 44 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 6 properties, 6,001 cases |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 12 passed |
+
+The deployment verifier confirms the genesis supply, Diamond balance,
+reservation-backed readiness, upper-bound initial price, disabled public-buy
+gate, and configured 100 million POTATO default. The final stacked audit is
+deferred until the Treasury-funded reward-schedule PR is complete.
+
+## Treasury buyback qualification history
 
 Date: August 17, 2026
 

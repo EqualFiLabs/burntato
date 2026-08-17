@@ -29,7 +29,7 @@ and bilateral fee. External buys start disabled.
 | Buyback cap / reward / delay | 2 ETH / 50 BPS / 1 block |
 | Tick spacing | 60 |
 | Initial tick | 92,100 |
-| Native / POTATO launch seed | 0.1 ETH / 1,000 POTATO |
+| Genesis POTATO launch allocation | 100,000,000 POTATO |
 
 Defaults are operational inputs, not protocol immutability claims. Zero
 timelock delay is accepted, and the proposer may equal the bootstrap authority.
@@ -68,13 +68,13 @@ BURNTATO_INITIAL_TICK
 BURNTATO_TICK_SPACING
 BURNTATO_TICK_LOWER
 BURNTATO_TICK_UPPER
-BURNTATO_NATIVE_SEED
 BURNTATO_POTATO_SEED
 ```
 
 Numeric values use base units. Narrow BPS and tick inputs are range-checked
 before conversion. Tick spacing must be inside the PoolManager domain; bounds
-must be aligned to spacing and surround the initial tick.
+must be aligned to spacing, and the initial tick must equal the upper bound so
+the locked genesis position starts entirely in POTATO.
 
 The CREATE2 hook helper accepts deployment only from the address that created
 it. This keeps the mined hook address available to the same local broadcast
@@ -112,8 +112,9 @@ forge script script/VerifyBurntato.s.sol:VerifyBurntato \
 The verifier checks code and selector routing, complete protocol configuration,
 timelock delay and roles, Diamond authority, guardian and pause state,
 timelock-owned hook and PoolManager, hook token/fee/tick configuration, exact
-uninitialized PoolKey, PositionManager dependencies, zero initial POTATO supply,
-empty initial round state, disabled external buys, the initial Treasury
+uninitialized PoolKey, PositionManager dependencies, the configured genesis
+POTATO supply and Diamond reservation, empty initial round state, disabled
+external buys, the initial Treasury
 distributor, and zeroed buyback state with the configured execution defaults.
 
 After deployment, operations should separately exercise a timelock call to the

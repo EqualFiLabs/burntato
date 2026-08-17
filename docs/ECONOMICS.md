@@ -123,11 +123,18 @@ its Recovery ETH rolls into the next round; unused POTATO emission never does.
 
 ## Treasury and canonical market
 
-Diamond Treasury accounting includes purchase ETH and Recovery-derived POTATO.
-Prelaunch seed reservations cannot be claimed. When both configured reserves are
-available, anyone may launch the exact canonical native ETH/POTATO v4 pool. The
-initial position NFT is sent permanently to the dead address and the native LP
-fee is fixed at zero.
+Genesis mints a separately reserved market allocation into Diamond custody; the
+local default is 100 million POTATO. It is not holder-time emission and cannot
+be claimed before launch. Governance may resize the allocation before launch,
+subject to the Diamond's available POTATO inventory.
+
+Anyone may launch the exact canonical native ETH/POTATO v4 pool once the token
+reservation is available. The initial price equals the position's upper tick,
+so launch supplies POTATO only and consumes no Treasury ETH. The position NFT
+is sent permanently to the dead address and the native LP fee is fixed at zero.
+Buybacks subsequently supply ETH-side demand while external buys remain closed;
+POTATO holders can sell into that liquidity immediately after ETH has entered
+the pool.
 
 The hook's governed `feeBps` applies bilaterally:
 

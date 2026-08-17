@@ -62,9 +62,10 @@ repeatable external-buy gate.
 PoolManager ownership retains the native v4 administrative surface, including
 the protocol-fee controller. Diamond finalization does not affect either owner.
 
-The PoolKey and launch infrastructure may be corrected before launch. Once the
-pool launches, the PoolKey, PoolManager, hook, range, seeds, and locked LP are
-structurally fixed for that market. Post-launch fee recipient and hook fee
+The PoolKey, token-only launch range, and reserved POTATO allocation may be
+corrected before launch. Once the pool launches, the PoolKey, PoolManager, hook,
+range, allocation, and locked LP are structurally fixed for that market.
+Post-launch fee recipient and hook fee
 administration remain available through hook ownership.
 Diamond authority may also change buyback cap, caller reward, and block delay
 before or after launch and finalization. Setting the cap to zero disables

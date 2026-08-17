@@ -19,9 +19,11 @@ distributor, exact protocol movements, and exact transaction-scoped canonical
 PoolManager movements are allowed; ordinary wallet transfers revert. The
 initial Treasury recipient is a distributor, and later Treasury-recipient and
 distributor changes are administered independently. Users can self-burn. The
-initial v4 LP is permanently sent to the dead address, its native LP fee is
-fixed at zero, and all hook fee ETH is sent directly to the hook's governed
-Treasury recipient.
+genesis deployment mints and reserves 100 million POTATO for a token-only v4
+launch. The initial position starts at the range's upper boundary, contains no
+ETH, and is permanently sent to the dead address. Its native LP fee is fixed at
+zero, and all hook fee ETH is sent directly to the hook's governed Treasury
+recipient.
 
 The buyback share accumulates as dedicated Diamond ETH. After the canonical
 market launches, anyone may spend a governed reserve slice to buy POTATO for the
