@@ -11,11 +11,11 @@ roundTimeout
 roundEmissionBudget
 emissionStepBps
 emissionVestingDuration
-winnerBps / recoveryBps / treasuryBps
+winnerBps / recoveryBps / treasuryBps / buybackBps
 recoveryBurnBps / recoveryTreasuryBps
 ```
 
-The three purchase shares must sum to 10,000 BPS and the two Recovery shares
+The four purchase shares must sum to 10,000 BPS and the two Recovery shares
 must sum to 10,000 BPS. Every individual BPS value is bounded by 10,000.
 Starting price, round timeout, and emission vesting duration must be nonzero.
 Round timeout is at most `type(uint64).max`, which keeps every accepted
@@ -37,9 +37,12 @@ The local genesis defaults are:
 | Round emission budget | 100,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 120 seconds |
-| Winner / Recovery / Treasury purchase split | 25% / 50% / 25% |
+| Winner / Recovery / Treasury / buyback split | 25% / 40% / 25% / 10% |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
+| Maximum buyback slice | 2 ETH |
+| Buyback caller reward | 0.5% |
+| Buyback delay | 1 block |
 
 ## Purchases
 
@@ -50,15 +53,17 @@ resets the deadline, and calculates the next price:
 ```text
 winnerShare   = floor(price * winnerBps / 10_000)
 recoveryShare = floor(price * recoveryBps / 10_000)
-treasuryShare = price - winnerShare - recoveryShare
+buybackShare  = floor(price * buybackBps / 10_000)
+treasuryShare = price - winnerShare - recoveryShare - buybackShare
 
 nextPrice = price + ceil(price * priceIncreaseBps / 10_000)
 deadline  = purchaseTimestamp + roundTimeout
 ```
 
-The Treasury receives deterministic split dust so the three allocations always
-equal the purchase exactly. Purchase count and price progression do not consume
-POTATO emission.
+The Treasury receives deterministic split dust so the four allocations always
+equal the purchase exactly. Buyback ETH is held in a dedicated reserve and is
+not Winner, Recovery, Treasury-claim, or launch-seed accounting. Purchase count
+and price progression do not consume POTATO emission.
 
 ## Holder-time emission budget
 
@@ -134,3 +139,39 @@ The hook's governed `feeBps` applies bilaterally:
 
 Hook revenue never enters the Diamond, is not launch reserve accounting, and is
 not auto-compounded. The default fee is 1%, while 0% through 100% are valid.
+
+## Treasury buybacks and external-buy gate
+
+The buyback reserve accumulates from every purchase, including before launch.
+After launch, anyone may call parameterless `buyback()`. The governed defaults
+select at most 2 ETH gross, pay 50 BPS of that gross slice to the caller, and
+enforce a one-block delay:
+
+```text
+grossSlice = min(buybackReserveEth, maxSpend)
+callerReward = floor(grossSlice * callerRewardBps / 10_000)
+requestedInput = grossSlice - callerReward
+```
+
+The Diamond executes an exact-input native-ETH-to-POTATO swap against only the
+canonical pool with `sqrtPriceLimitX96 = MIN_SQRT_PRICE + 1`. It deliberately
+uses no quote, TWAP, minimum output, deadline, or offchain sequencing. This
+matches the deployed FWA.fun buyback behavior and accepts public execution and
+MEV exposure as part of the demand mechanism. If the pool partially fills,
+unspent requested input returns to the tracked reserve. The caller reward is
+still based on the gross slice.
+
+Buyback swaps bypass the bilateral hook fee and send purchased POTATO directly
+from PoolManager to the current Diamond Treasury recipient. Treasury may hold,
+burn, distribute, sell, or commit that POTATO under the normal token and
+Recovery rules. No purchased POTATO is automatically burned.
+
+External ETH-to-POTATO pool buys start disabled. While disabled, exact-input
+sells remain available and only the Diamond buyback may buy. Hook ownership may
+enable, disable, or re-enable external buys at any time, including after launch
+and Diamond finalization.
+
+Reference precedent:
+
+- [FWA permissionless buyback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
+- [FWA external-buy gate](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol)

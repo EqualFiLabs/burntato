@@ -8,10 +8,10 @@ liquidity and direct Treasury trading revenue.
 
 The deployed defaults are one-hour rounds, a 10% price step, a fresh 100,000
 POTATO emission budget, 10% holder opportunities vesting over 120 seconds, a
-25% Winner / 50% Recovery / 25% Treasury purchase split, a 90% burn / 10%
-Treasury Recovery split, and a 1% bilateral market fee. These are governed
-defaults, not immutable constants. Each active or already-snapshotted target
-round keeps its terms while changes apply to future unsnapshotted rounds.
+25% Winner / 40% Recovery / 25% Treasury / 10% buyback purchase split, a 90%
+burn / 10% Treasury Recovery split, and a 1% bilateral market fee. These are
+governed defaults, not immutable constants. Each active or already-snapshotted
+target round keeps its terms while changes apply to future unsnapshotted rounds.
 
 POTATO uses the same Solady transfer-lock pattern proven by FWA.fun: minting,
 burning, transfers involving the current authority or an administered
@@ -22,6 +22,12 @@ distributor changes are administered independently. Users can self-burn. The
 initial v4 LP is permanently sent to the dead address, its native LP fee is
 fixed at zero, and all hook fee ETH is sent directly to the hook's governed
 Treasury recipient.
+
+The buyback share accumulates as dedicated Diamond ETH. After the canonical
+market launches, anyone may spend a governed reserve slice to buy POTATO for the
+current Treasury and receive a caller reward. External pool buys start disabled,
+but sells and the fee-free protocol buyback remain open; hook governance can
+toggle external buys repeatedly.
 
 Administration remains available through the configured authority. The
 guardian can add purchase or commitment pauses but cannot unpause. Protocol

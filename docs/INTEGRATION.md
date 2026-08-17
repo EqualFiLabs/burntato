@@ -14,12 +14,13 @@ Important state reads include:
 - `IRecovery.recoveryCommitment()` and `totalRecoveryCommitment()`;
 - Treasury claimable ETH and POTATO views; and
 - `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
-  `marketReady()`.
-- `IPotatoToken.isDistributor(account)` for the governed transfer allowlist.
+  `marketReady()`;
+- `IPotatoToken.isDistributor(account)` for the governed transfer allowlist; and
+- `IBuyback.buybackConfig()`, `buybackReserveEth()`, and `lastBuybackBlock()`.
 
 The canonical hook is a separate administered contract. Read `owner()`,
 `token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`, and
-`deploymentBlock()` from the hook itself.
+`deploymentBlock()`, and `externalBuysEnabled()` from the hook itself.
 
 ## POTATO behavior
 
@@ -90,6 +91,31 @@ before or after Diamond finalization. The fee is bounded to 10,000 BPS. Market
 frontends should read it from the hook instead of assuming the 1% genesis
 default. The receiver cannot be zero, the hook, POTATO Diamond, or PoolManager;
 those are system sinks, not Treasury destinations.
+
+External buys are disabled by default. `setExternalBuysEnabled(bool)` is an
+owner-only hook control that remains repeatable after launch and Diamond
+finalization. Disabling buys does not disable exact-input POTATO sells. The
+Diamond's canonical buyback is the sole privileged buy path and pays no hook
+fee.
+
+## Permissionless buyback
+
+Call `IBuyback.buyback()` without parameters after market launch. It selects the
+governed gross slice from `buybackReserveEth`, pays the caller reward, and swaps
+the remainder as exact-input native ETH for POTATO at the extreme Uniswap price
+limit. There is intentionally no caller-provided quote, slippage, deadline, or
+recipient parameter. Partial fills restore unspent input to the reserve.
+
+PoolManager sends output directly to the current `IClaims.treasuryRecipient()`.
+The hook exact-authorizes that transfer even when the current recipient is not a
+distributor, and the buyback leaves `externalBuysEnabled` unchanged. Observe
+`BuybackExecuted` for gross slice, actual ETH spent, POTATO bought, caller
+reward, and final reserve. The default cap, reward, and delay are 2 ETH, 50 BPS,
+and one block.
+
+This is the bounded Burntato adaptation of FWA's production buyback path:
+
+- [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
 
 ## Claims and recipients
 

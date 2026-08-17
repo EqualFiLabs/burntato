@@ -13,6 +13,7 @@ While authority exists it can:
 - add, replace, or remove Diamond selectors until Diamond cuts are finalized;
 - atomically update the complete default `ProtocolConfig`;
 - update the Diamond Treasury recipient;
+- administer POTATO distributors and buyback cap, reward, and delay;
 - appoint or remove the guardian;
 - set or clear purchase and commitment pauses;
 - reconfigure canonical market infrastructure before launch;
@@ -56,7 +57,8 @@ selector-freeze, and one-time authority-lock APIs do not exist.
 ## Independently governed market components
 
 The timelock owns both the canonical `BurntatoSwapFeeHook` and the Uniswap v4
-PoolManager at genesis. Hook ownership controls `feeAddress` and `feeBps`.
+PoolManager at genesis. Hook ownership controls `feeAddress`, `feeBps`, and the
+repeatable external-buy gate.
 PoolManager ownership retains the native v4 administrative surface, including
 the protocol-fee controller. Diamond finalization does not affect either owner.
 
@@ -64,6 +66,9 @@ The PoolKey and launch infrastructure may be corrected before launch. Once the
 pool launches, the PoolKey, PoolManager, hook, range, seeds, and locked LP are
 structurally fixed for that market. Post-launch fee recipient and hook fee
 administration remain available through hook ownership.
+Diamond authority may also change buyback cap, caller reward, and block delay
+before or after launch and finalization. Setting the cap to zero disables
+execution without changing accrued reserve accounting.
 
 ## Operational checks
 
@@ -74,6 +79,9 @@ For a deployment, verify:
 - `guardian()` and both pause bits match intended operations state;
 - the hook and PoolManager owners are the intended timelock;
 - `feeAddress()` and `feeBps()` match Treasury policy;
+- `externalBuysEnabled()` matches current launch policy;
+- buyback split, cap, caller reward, delay, reserve, and last execution block
+  match Treasury policy;
 - `protocolFinalized()` is false unless Diamond cuts were intentionally ended;
   and
 - after finalization, governance setters still work while `diamondCut` reverts.
