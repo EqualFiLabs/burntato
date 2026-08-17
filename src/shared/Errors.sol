@@ -13,12 +13,23 @@ library Errors {
     error InvalidAddress();
     error InvalidBps();
     error InvalidFacetAction(uint8 action);
+    error IncorrectPayment(uint256 expected, uint256 received);
+    error InsufficientAllowance();
+    error InsufficientBalance();
     error NoCode(address target);
     error NotGuardian(address caller);
+    error NotCanonicalHook(address caller);
+    error NoCurrentHolder();
     error NotAuthority(address caller);
     error SelectorAlreadyExists(bytes4 selector);
     error SelectorDoesNotExist(bytes4 selector);
     error SelectorFrozen(bytes4 selector);
     error SelectorUnchanged(bytes4 selector);
     error ParameterFrozen(bytes32 key);
+    error PoolManagerAllowanceExceeded(uint256 available, uint256 required);
+    error PurchasesPaused();
+    error RoundExpired();
+    error TransferRestricted(address from, address to);
+    error VestingIncomplete();
+    error ZeroAmount();
 }
