@@ -117,7 +117,9 @@ contract DeployBurntato is Script {
             .diamondCut(
                 _initialCut(deployment),
                 deployment.foundationInit,
-                abi.encodeCall(FoundationInit.initialize, (config.protocol, config.treasuryRecipient))
+                abi.encodeCall(
+                    FoundationInit.initialize, (config.protocol, config.treasuryRecipient, config.potatoSeed)
+                )
             );
     }
 
@@ -164,7 +166,6 @@ contract DeployBurntato is Script {
                     tickLower: config.tickLower,
                     tickUpper: config.tickUpper,
                     tickSpacing: config.tickSpacing,
-                    nativeSeed: config.nativeSeed,
                     potatoSeed: config.potatoSeed
                 })
             );
@@ -226,7 +227,6 @@ contract DeployBurntato is Script {
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
         config.tickUpper =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
-        config.nativeSeed = vm.envOr("BURNTATO_NATIVE_SEED", config.nativeSeed);
         config.potatoSeed = vm.envOr("BURNTATO_POTATO_SEED", config.potatoSeed);
     }
 
@@ -300,9 +300,9 @@ contract DeployBurntato is Script {
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK
-                || config.tickLower >= config.initialTick || config.initialTick >= config.tickUpper
+                || config.tickLower >= config.initialTick || config.initialTick != config.tickUpper
                 || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
-                || config.nativeSeed == 0 || config.potatoSeed == 0
+                || config.potatoSeed == 0
         ) revert InvalidGenesisConfiguration();
     }
 

@@ -177,9 +177,8 @@ contract DeterministicDeploymentTest is Test {
         assertEq(poolManager.protocolFeeController(), controller);
     }
 
-    function test_LocalDependenciesLaunchLockedTwoSidedMarket() public {
+    function test_LocalDependenciesLaunchLockedSingleSidedMarket() public {
         GenesisConfig memory launchConfig = config;
-        launchConfig.nativeSeed = 0.001 ether;
         launchConfig.potatoSeed = 1 ether;
         BurntatoDeployment memory launchDeployment = deployScript.deploy(launchConfig, address(deployScript));
         IGame game = IGame(launchDeployment.diamond);
@@ -202,7 +201,7 @@ contract DeterministicDeploymentTest is Test {
         settlement.settleRound();
 
         IMarket market = IMarket(launchDeployment.diamond);
-        assertEq(IPotatoToken(launchDeployment.diamond).balanceOf(launchDeployment.diamond), 1_000 ether);
+        assertEq(IPotatoToken(launchDeployment.diamond).balanceOf(launchDeployment.diamond), 1_001 ether);
         assertTrue(market.marketReady());
         (bytes32 poolId, uint128 liquidity) = market.launchMarket();
         assertNotEq(poolId, bytes32(0));

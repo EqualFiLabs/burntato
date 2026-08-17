@@ -28,6 +28,7 @@ import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {BuybackConfig, FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 abstract contract DiamondTestSetup is Test {
+    uint256 internal constant GENESIS_MARKET_SUPPLY = 1 ether;
     address internal authority = makeAddr("authority");
     address internal guardian = makeAddr("guardian");
     address internal treasury = makeAddr("treasury");
@@ -53,7 +54,9 @@ abstract contract DiamondTestSetup is Test {
         vm.prank(authority);
         IDiamondCut(address(diamond))
             .diamondCut(
-                noCuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (_defaultConfig(), treasury))
+                noCuts,
+                address(initializer),
+                abi.encodeCall(FoundationInit.initialize, (_defaultConfig(), treasury, GENESIS_MARKET_SUPPLY))
             );
         vm.prank(authority);
         IGovernance(address(diamond)).setGuardian(guardian);

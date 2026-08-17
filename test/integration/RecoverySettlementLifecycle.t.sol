@@ -48,8 +48,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         roundTwo = game.getRound(2);
         assertTrue(roundTwo.settled);
         assertEq(roundTwo.totalCommitted, 10_000 ether);
-        assertEq(potato.totalSupply(), 11_000 ether);
-        assertEq(potato.balanceOf(address(diamond)), 1_000 ether);
+        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 11_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 1_000 ether);
         assertEq(claims.treasuryPotatoAvailable(), 1_000 ether);
         assertEq(game.getRound(3).remainingEmission, 100_000 ether);
 
@@ -94,7 +94,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         assertEq(game.getRound(2).totalCommitted, 10_000 ether);
         assertEq(claims.treasuryPotatoAvailable(), 10_000 ether);
-        assertEq(potato.totalSupply(), 20_000 ether);
+        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 20_000 ether);
     }
 
     function test_CommitmentIsIrrevocableAndTargetAdvancesAtRoundStart() public {
@@ -114,7 +114,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(recovery.recoveryCommitment(2, alice), 9_000 ether);
         assertEq(recovery.recoveryCommitment(3, alice), 1_000 ether);
         assertEq(potato.balanceOf(alice), 0);
-        assertEq(potato.balanceOf(address(diamond)), 10_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 10_000 ether);
     }
 
     function test_ClaimsCannotBeRepeated() public {

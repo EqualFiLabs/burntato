@@ -42,7 +42,6 @@ library LibProtocolStorage {
         address recipient;
         uint256 purchaseEth;
         uint256 potatoInventory;
-        uint256 reservedEth;
         uint256 reservedPotato;
     }
 
@@ -58,7 +57,6 @@ library LibProtocolStorage {
         address positionManager;
         address permit2;
         bytes32 poolId;
-        uint256 nativeSeed;
         uint256 potatoSeed;
         uint160 sqrtPriceX96;
         int24 tickLower;

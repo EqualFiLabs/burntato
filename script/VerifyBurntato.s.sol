@@ -88,7 +88,6 @@ contract VerifyBurntato is Script {
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
         config.tickUpper =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
-        config.nativeSeed = vm.envOr("BURNTATO_NATIVE_SEED", config.nativeSeed);
         config.potatoSeed = vm.envOr("BURNTATO_POTATO_SEED", config.potatoSeed);
     }
 }

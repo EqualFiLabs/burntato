@@ -241,9 +241,8 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
                 permit2: PERMIT2_ADDRESS,
                 sqrtPriceX96: TickMath.getSqrtPriceAtTick(69_060),
                 tickLower: TickMath.minUsableTick(60),
-                tickUpper: TickMath.maxUsableTick(60),
+                tickUpper: 69_060,
                 tickSpacing: 60,
-                nativeSeed: 0.001 ether,
                 potatoSeed: 1 ether
             })
         );

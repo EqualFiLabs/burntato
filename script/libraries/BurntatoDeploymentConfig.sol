@@ -42,9 +42,8 @@ library BurntatoDeploymentConfig {
             initialTick: DEFAULT_INITIAL_TICK,
             tickSpacing: DEFAULT_TICK_SPACING,
             tickLower: TickMath.minUsableTick(DEFAULT_TICK_SPACING),
-            tickUpper: TickMath.maxUsableTick(DEFAULT_TICK_SPACING),
-            nativeSeed: 0.1 ether,
-            potatoSeed: 1_000 ether
+            tickUpper: DEFAULT_INITIAL_TICK,
+            potatoSeed: 100_000_000 ether
         });
     }
 

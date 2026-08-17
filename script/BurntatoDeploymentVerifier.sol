@@ -105,7 +105,8 @@ contract BurntatoDeploymentVerifier {
         _check(keccak256(bytes(token.name())) == keccak256("Burntato Potato"), "TOKEN_NAME");
         _check(keccak256(bytes(token.symbol())) == keccak256("POTATO"), "TOKEN_SYMBOL");
         _check(token.decimals() == 18, "TOKEN_DECIMALS");
-        _check(token.totalSupply() == 0, "TOKEN_SUPPLY");
+        _check(token.totalSupply() == config.potatoSeed, "TOKEN_SUPPLY");
+        _check(token.balanceOf(deployment.diamond) == config.potatoSeed, "GENESIS_MARKET_BALANCE");
         _check(token.isDistributor(config.treasuryRecipient), "TREASURY_DISTRIBUTOR");
         BuybackConfig memory buybackConfig = buyback.buybackConfig();
         _check(buybackConfig.maxSpend == config.buyback.maxSpend, "BUYBACK_MAX_SPEND");
@@ -129,12 +130,11 @@ contract BurntatoDeploymentVerifier {
         _check(actual.tickLower == config.tickLower, "MARKET_TICK_LOWER");
         _check(actual.tickUpper == config.tickUpper, "MARKET_TICK_UPPER");
         _check(actual.tickSpacing == config.tickSpacing, "MARKET_TICK_SPACING");
-        _check(actual.nativeSeed == config.nativeSeed, "MARKET_NATIVE_SEED");
         _check(actual.potatoSeed == config.potatoSeed, "MARKET_POTATO_SEED");
 
         (bytes32 poolId, bool configured, bool launching, bool launched) = market.marketState();
         _check(poolId == bytes32(0) && configured && !launching && !launched, "MARKET_STATE");
-        _check(!market.marketReady(), "MARKET_NOT_FUNDED");
+        _check(market.marketReady(), "MARKET_READY");
         _check(market.lockedLpRecipient() == 0x000000000000000000000000000000000000dEaD, "LOCKED_LP");
 
         PoolKey memory key = market.canonicalPoolKey();
@@ -192,12 +192,12 @@ contract BurntatoDeploymentVerifier {
             "TICK_SPACING_DOMAIN"
         );
         _check(config.tickLower >= TickMath.MIN_TICK && config.tickUpper <= TickMath.MAX_TICK, "TICK_BOUNDS_DOMAIN");
-        _check(config.tickLower < config.initialTick && config.initialTick < config.tickUpper, "INITIAL_TICK_DOMAIN");
+        _check(config.tickLower < config.initialTick && config.initialTick == config.tickUpper, "INITIAL_TICK_DOMAIN");
         _check(
             config.tickLower % config.tickSpacing == 0 && config.tickUpper % config.tickSpacing == 0,
             "TICK_ALIGNMENT_DOMAIN"
         );
-        _check(config.nativeSeed != 0 && config.potatoSeed != 0, "SEED_DOMAIN");
+        _check(config.potatoSeed != 0, "SEED_DOMAIN");
     }
 
     function _verifyGroup(IDiamondLoupe loupe, address expectedFacet, bytes4[] memory selectors) private view {

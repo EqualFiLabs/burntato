@@ -13,15 +13,10 @@ interface IMarket {
         int24 tickLower,
         int24 tickUpper,
         int24 tickSpacing,
-        uint256 nativeSeed,
         uint256 potatoSeed
     );
     event MarketLaunched(
-        bytes32 indexed poolId,
-        uint128 liquidity,
-        uint256 nativeUsed,
-        uint256 potatoUsed,
-        address indexed lockedRecipient
+        bytes32 indexed poolId, uint128 liquidity, uint256 potatoUsed, address indexed lockedRecipient
     );
 
     struct MarketConfig {
@@ -33,7 +28,6 @@ interface IMarket {
         int24 tickLower;
         int24 tickUpper;
         int24 tickSpacing;
-        uint256 nativeSeed;
         uint256 potatoSeed;
     }
 

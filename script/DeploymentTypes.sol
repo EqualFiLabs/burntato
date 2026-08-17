@@ -16,7 +16,6 @@ struct GenesisConfig {
     int24 tickSpacing;
     int24 tickLower;
     int24 tickUpper;
-    uint256 nativeSeed;
     uint256 potatoSeed;
 }
 
