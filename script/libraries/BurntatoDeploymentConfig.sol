@@ -6,6 +6,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {GenesisConfig} from "../DeploymentTypes.sol";
 
 library BurntatoDeploymentConfig {
+    error NarrowingOverflow();
     address internal constant ANVIL_DEPLOYER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
     address internal constant ANVIL_PROPOSER = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     address internal constant ANVIL_GUARDIAN = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
@@ -30,5 +31,15 @@ library BurntatoDeploymentConfig {
             nativeSeed: 0.1 ether,
             potatoSeed: 1_000 ether
         });
+    }
+
+    function checkedUint16(uint256 value) internal pure returns (uint16 narrowed) {
+        if (value > type(uint16).max) revert NarrowingOverflow();
+        narrowed = uint16(value);
+    }
+
+    function checkedInt24(int256 value) internal pure returns (int24 narrowed) {
+        if (value < type(int24).min || value > type(int24).max) revert NarrowingOverflow();
+        narrowed = int24(value);
     }
 }

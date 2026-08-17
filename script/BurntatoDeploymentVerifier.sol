@@ -15,7 +15,7 @@ import {IGame} from "../src/interfaces/IGame.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
-import {Round} from "../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
@@ -29,6 +29,7 @@ contract BurntatoDeploymentVerifier {
     error VerificationFailed(bytes32 check);
 
     function verify(GenesisConfig memory config, BurntatoDeployment memory deployment) external view returns (bool) {
+        _verifyConfigDomain(config);
         _verifyCode(deployment);
         _verifySelectors(deployment);
         _verifyAuthority(config, deployment);
@@ -90,6 +91,9 @@ contract BurntatoDeploymentVerifier {
         _check(!governance.purchasesPaused(), "PURCHASES_UNPAUSED");
         _check(!governance.commitmentsPaused(), "COMMITMENTS_UNPAUSED");
         _check(!governance.protocolFinalized(), "NOT_FINALIZED");
+        ProtocolConfig memory protocol = governance.protocolConfig();
+        _check(protocol.startingPrice == config.startingPrice, "STARTING_PRICE");
+        _check(protocol.priceIncreaseBps == config.priceIncreaseBps, "PRICE_INCREASE_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
         _check(claims.treasuryEthAvailable() == 0, "TREASURY_ETH_AVAILABLE");
         _check(claims.treasuryPotatoAvailable() == 0, "TREASURY_POTATO_AVAILABLE");
@@ -144,6 +148,23 @@ contract BurntatoDeploymentVerifier {
         _check(
             address(PositionManager(payable(deployment.positionManager)).permit2()) == deployment.permit2, "PM_PERMIT2"
         );
+    }
+
+    function _verifyConfigDomain(GenesisConfig memory config) private pure {
+        _check(config.timelockDelay >= Constants.MIN_TIMELOCK_DELAY, "TIMELOCK_MINIMUM_DELAY");
+        _check(config.startingPrice != 0, "STARTING_PRICE_DOMAIN");
+        _check(config.priceIncreaseBps != 0 && config.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
+        _check(
+            config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
+            "TICK_SPACING_DOMAIN"
+        );
+        _check(config.tickLower >= TickMath.MIN_TICK && config.tickUpper <= TickMath.MAX_TICK, "TICK_BOUNDS_DOMAIN");
+        _check(config.tickLower < config.initialTick && config.initialTick < config.tickUpper, "INITIAL_TICK_DOMAIN");
+        _check(
+            config.tickLower % config.tickSpacing == 0 && config.tickUpper % config.tickSpacing == 0,
+            "TICK_ALIGNMENT_DOMAIN"
+        );
+        _check(config.nativeSeed != 0 && config.potatoSeed != 0, "SEED_DOMAIN");
     }
 
     function _verifyGroup(IDiamondLoupe loupe, address expectedFacet, bytes4[] memory selectors) private view {

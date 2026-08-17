@@ -145,11 +145,17 @@ contract DeployBurntato is Script {
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
         config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
         config.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.startingPrice);
-        config.priceIncreaseBps = uint16(vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.priceIncreaseBps)));
-        config.initialTick = int24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
-        config.tickSpacing = int24(vm.envOr("BURNTATO_TICK_SPACING", int256(config.tickSpacing)));
-        config.tickLower = int24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
-        config.tickUpper = int24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
+        config.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.priceIncreaseBps))
+        );
+        config.initialTick =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
+        config.tickSpacing =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_SPACING", int256(config.tickSpacing)));
+        config.tickLower =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
+        config.tickUpper =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
         config.nativeSeed = vm.envOr("BURNTATO_NATIVE_SEED", config.nativeSeed);
         config.potatoSeed = vm.envOr("BURNTATO_POTATO_SEED", config.potatoSeed);
     }
@@ -209,9 +215,11 @@ contract DeployBurntato is Script {
                 || config.guardian == address(0) || config.treasuryRecipient == address(0)
                 || config.proposer == bootstrapAuthority || config.timelockDelay < Constants.MIN_TIMELOCK_DELAY
                 || config.startingPrice == 0 || config.priceIncreaseBps == 0 || config.priceIncreaseBps > 10_000
-                || config.tickSpacing <= 0 || config.tickLower >= config.initialTick
-                || config.initialTick >= config.tickUpper || config.tickLower % config.tickSpacing != 0
-                || config.tickUpper % config.tickSpacing != 0 || config.nativeSeed == 0 || config.potatoSeed == 0
+                || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
+                || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK
+                || config.tickLower >= config.initialTick || config.initialTick >= config.tickUpper
+                || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
+                || config.nativeSeed == 0 || config.potatoSeed == 0
         ) revert InvalidGenesisConfiguration();
     }
 

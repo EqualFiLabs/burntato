@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {ProtocolConfig} from "../shared/Types.sol";
+
 interface IGovernance {
     event AuthorityTransferred(address indexed previousAuthority, address indexed newAuthority);
     event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
@@ -17,6 +19,7 @@ interface IGovernance {
     function purchasesPaused() external view returns (bool);
     function commitmentsPaused() external view returns (bool);
     function protocolFinalized() external view returns (bool);
+    function protocolConfig() external view returns (ProtocolConfig memory);
     function parameterFrozen(bytes32 key) external view returns (bool);
     function selectorFrozen(bytes4 selector) external view returns (bool);
     function setAuthority(address newAuthority) external;

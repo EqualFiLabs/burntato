@@ -7,6 +7,7 @@ import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
+import {ProtocolConfig} from "../shared/Types.sol";
 
 interface ITimelockDelay {
     function getMinDelay() external view returns (uint256);
@@ -49,6 +50,10 @@ contract GovernanceFacet is IGovernance {
 
     function protocolFinalized() external view returns (bool) {
         return LibProtocolStorage.governance().finalized;
+    }
+
+    function protocolConfig() external view returns (ProtocolConfig memory) {
+        return LibProtocolStorage.game().config;
     }
 
     function parameterFrozen(bytes32 key) external view returns (bool) {

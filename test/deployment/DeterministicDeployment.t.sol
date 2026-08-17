@@ -7,6 +7,7 @@ import {TimelockController} from "@openzeppelin/contracts/governance/TimelockCon
 
 import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
+import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
 import {BurntatoDeployment, GenesisConfig} from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
@@ -23,6 +24,16 @@ interface IPoolManagerAuthority {
 
 interface IPositionOwner {
     function ownerOf(uint256 tokenId) external view returns (address);
+}
+
+contract DeploymentConfigHarness {
+    function checkedUint16(uint256 value) external pure returns (uint16) {
+        return BurntatoDeploymentConfig.checkedUint16(value);
+    }
+
+    function checkedInt24(int256 value) external pure returns (int24) {
+        return BurntatoDeploymentConfig.checkedInt24(value);
+    }
 }
 
 contract DeterministicDeploymentTest is Test {
@@ -53,6 +64,35 @@ contract DeterministicDeploymentTest is Test {
 
         vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
         deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_DeploymentRejectsTickSpacingOutsidePoolManagerDomain() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.tickSpacing = 32_768;
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_EnvironmentNarrowingHelpersRejectTruncation() public {
+        DeploymentConfigHarness harness = new DeploymentConfigHarness();
+
+        vm.expectRevert(BurntatoDeploymentConfig.NarrowingOverflow.selector);
+        harness.checkedUint16(uint256(type(uint16).max) + 1);
+        vm.expectRevert(BurntatoDeploymentConfig.NarrowingOverflow.selector);
+        harness.checkedInt24(int256(type(int24).max) + 1);
+        vm.expectRevert(BurntatoDeploymentConfig.NarrowingOverflow.selector);
+        harness.checkedInt24(int256(type(int24).min) - 1);
+    }
+
+    function test_VerifierRejectsProtocolConfigurationMismatch() public {
+        GenesisConfig memory mismatched = config;
+        mismatched.startingPrice += 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("STARTING_PRICE"))
+        );
+        verifier.verify(mismatched, deployment);
     }
 
     function test_GenesisPurchaseSnapshotsFixedEmissionBudget() public {

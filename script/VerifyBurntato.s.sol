@@ -44,11 +44,17 @@ contract VerifyBurntato is Script {
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
         config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
         config.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.startingPrice);
-        config.priceIncreaseBps = uint16(vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.priceIncreaseBps)));
-        config.initialTick = int24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
-        config.tickSpacing = int24(vm.envOr("BURNTATO_TICK_SPACING", int256(config.tickSpacing)));
-        config.tickLower = int24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
-        config.tickUpper = int24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
+        config.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.priceIncreaseBps))
+        );
+        config.initialTick =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
+        config.tickSpacing =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_SPACING", int256(config.tickSpacing)));
+        config.tickLower =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
+        config.tickUpper =
+            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
         config.nativeSeed = vm.envOr("BURNTATO_NATIVE_SEED", config.nativeSeed);
         config.potatoSeed = vm.envOr("BURNTATO_POTATO_SEED", config.potatoSeed);
     }
