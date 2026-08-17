@@ -93,6 +93,7 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.winnerBps == expected.winnerBps, "WINNER_BPS");
         _check(protocol.recoveryBps == expected.recoveryBps, "RECOVERY_BPS");
         _check(protocol.treasuryBps == expected.treasuryBps, "TREASURY_BPS");
+        _check(protocol.buybackBps == expected.buybackBps, "BUYBACK_BPS");
         _check(protocol.recoveryBurnBps == expected.recoveryBurnBps, "RECOVERY_BURN_BPS");
         _check(protocol.recoveryTreasuryBps == expected.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
@@ -167,7 +168,8 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
         _check(protocol.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
         _check(
-            uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps == Constants.BPS,
+            uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
+                == Constants.BPS,
             "PURCHASE_SPLIT_DOMAIN"
         );
         _check(

@@ -40,7 +40,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         Round memory roundTwo = game.getRound(2);
         assertEq(roundTwo.remainingEmission, 100_000 ether);
-        assertEq(roundTwo.recoveryCarryIn, 0.005 ether);
+        assertEq(roundTwo.recoveryCarryIn, 0.004 ether);
 
         _buy(bob, 0.01 ether);
         _expireAndSettle();
@@ -55,8 +55,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         uint256 aliceEthBefore = alice.balance;
         vm.prank(alice);
-        assertEq(claims.claimRecovery(2, alice), 0.01 ether);
-        assertEq(alice.balance - aliceEthBefore, 0.01 ether);
+        assertEq(claims.claimRecovery(2, alice), 0.008 ether);
+        assertEq(alice.balance - aliceEthBefore, 0.008 ether);
 
         uint256 bobEthBefore = bob.balance;
         vm.prank(bob);
@@ -75,8 +75,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         _buy(alice, 0.01 ether);
         _expireAndSettle();
         Round memory roundTwo = game.getRound(2);
-        assertEq(roundTwo.recoveryCarryIn, 0.005 ether);
-        assertEq(roundTwo.recoveryPool, 0.005 ether);
+        assertEq(roundTwo.recoveryCarryIn, 0.004 ether);
+        assertEq(roundTwo.recoveryPool, 0.004 ether);
         assertEq(claims.treasuryPotatoAvailable(), 0);
     }
 
@@ -140,8 +140,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         uint256 before = alice.balance;
         vm.prank(alice);
-        assertEq(claims.claimRecovery(2, alice), 0.01 ether);
-        assertEq(alice.balance - before, 0.01 ether);
+        assertEq(claims.claimRecovery(2, alice), 0.008 ether);
+        assertEq(alice.balance - before, 0.008 ether);
     }
 
     function test_TreasuryRecipientRejectsProtocolCustody() public {

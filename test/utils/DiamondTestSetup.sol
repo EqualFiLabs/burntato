@@ -74,8 +74,9 @@ abstract contract DiamondTestSetup is Test {
             emissionStepBps: 1_000,
             emissionVestingDuration: 120 seconds,
             winnerBps: 2_500,
-            recoveryBps: 5_000,
+            recoveryBps: 4_000,
             treasuryBps: 2_500,
+            buybackBps: 1_000,
             recoveryBurnBps: 9_000,
             recoveryTreasuryBps: 1_000
         });

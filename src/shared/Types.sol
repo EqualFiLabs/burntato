@@ -28,6 +28,7 @@ struct ProtocolConfig {
     uint16 winnerBps;
     uint16 recoveryBps;
     uint16 treasuryBps;
+    uint16 buybackBps;
     uint16 recoveryBurnBps;
     uint16 recoveryTreasuryBps;
 }
@@ -42,6 +43,7 @@ struct RoundConfig {
     uint16 winnerBps;
     uint16 recoveryBps;
     uint16 treasuryBps;
+    uint16 buybackBps;
     uint16 recoveryBurnBps;
     uint16 recoveryTreasuryBps;
 }

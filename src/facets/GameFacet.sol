@@ -20,10 +20,14 @@ contract GameFacet is IGame {
 
         uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
         uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
-        uint256 treasuryShare = msg.value - winnerShare - recoveryShare;
+        uint256 buybackShare = LibMath.mulBpsDown(msg.value, round.config.buybackBps);
+        uint256 treasuryShare = msg.value - winnerShare - recoveryShare - buybackShare;
         round.winnerPool += winnerShare;
         round.recoveryPool += recoveryShare;
         LibProtocolStorage.treasury().purchaseEth += treasuryShare;
+        LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
+        bs.reserveEth += buybackShare;
+        emit BuybackFunded(round.roundId, buybackShare, bs.reserveEth);
 
         round.currentHolder = msg.sender;
         round.holderSince = block.timestamp;

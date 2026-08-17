@@ -198,6 +198,9 @@ contract DeployBurntato is Script {
         config.protocol.treasuryBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.protocol.treasuryBps))
         );
+        config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
+        );
         config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
         );
@@ -275,9 +278,11 @@ contract DeployBurntato is Script {
                 || protocol.roundTimeout > type(uint64).max || protocol.emissionVestingDuration == 0
                 || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
                 || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
-                || protocol.treasuryBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
-                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
-                || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps != Constants.BPS
+                || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
+                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
+                || config.hookFeeBps > Constants.BPS
+                || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
+                    != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK

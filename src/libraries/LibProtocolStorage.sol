@@ -10,6 +10,7 @@ library LibProtocolStorage {
     bytes32 internal constant TREASURY_SLOT = keccak256("burntato.storage.treasury.v1");
     bytes32 internal constant GOVERNANCE_SLOT = keccak256("burntato.storage.governance.v1");
     bytes32 internal constant MARKET_SLOT = keccak256("burntato.storage.market.v1");
+    bytes32 internal constant BUYBACK_SLOT = keccak256("burntato.storage.buyback.v1");
     bytes32 internal constant REENTRANCY_SLOT = keccak256("burntato.storage.reentrancy.v1");
 
     bytes32 internal constant POOL_MANAGER_ALLOWANCE_SLOT = keccak256("burntato.transient.pool-manager-allowance.v1");
@@ -71,6 +72,10 @@ library LibProtocolStorage {
         uint256 status;
     }
 
+    struct BuybackStorage {
+        uint256 reserveEth;
+    }
+
     function game() internal pure returns (GameStorage storage s) {
         bytes32 slot = GAME_SLOT;
         assembly ("memory-safe") {
@@ -115,6 +120,13 @@ library LibProtocolStorage {
 
     function reentrancy() internal pure returns (ReentrancyStorage storage s) {
         bytes32 slot = REENTRANCY_SLOT;
+        assembly ("memory-safe") {
+            s.slot := slot
+        }
+    }
+
+    function buyback() internal pure returns (BuybackStorage storage s) {
+        bytes32 slot = BUYBACK_SLOT;
         assembly ("memory-safe") {
             s.slot := slot
         }

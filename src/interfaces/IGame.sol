@@ -16,6 +16,7 @@ interface IGame {
     event EmissionFinalized(
         uint256 indexed roundId, address indexed holder, uint256 maxReward, uint256 earned, uint256 heldSeconds
     );
+    event BuybackFunded(uint256 indexed roundId, uint256 amount, uint256 reserveEth);
 
     function buyPotato() external payable;
     function materializeMaturedEmission() external returns (uint256 earned);

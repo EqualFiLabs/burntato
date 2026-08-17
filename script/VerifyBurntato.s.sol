@@ -63,6 +63,9 @@ contract VerifyBurntato is Script {
         config.protocol.treasuryBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.protocol.treasuryBps))
         );
+        config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
+        );
         config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
         );
