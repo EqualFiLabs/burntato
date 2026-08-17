@@ -42,6 +42,12 @@ contract CanonicalHookConfigStub {
     }
 }
 
+contract ForceNativeIntoPositionManager {
+    constructor(address payable target) payable {
+        selfdestruct(target);
+    }
+}
+
 contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     int24 internal constant TICK_SPACING = 60;
@@ -127,6 +133,21 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(market.lockedLpRecipient(), 0x000000000000000000000000000000000000dEaD);
         assertEq(address(positionManager).balance, 0);
         assertGt(claims.treasuryEthAvailable(), 0);
+    }
+
+    function test_ForcedPositionManagerEthDoesNotCorruptLaunchAccounting() public {
+        _createTreasuryInventory();
+        uint256 treasuryBefore = claims.treasuryEthAvailable();
+        uint256 forcedNative = 1 ether;
+        vm.deal(address(this), forcedNative);
+        new ForceNativeIntoPositionManager{value: forcedNative}(payable(address(positionManager)));
+        assertEq(address(positionManager).balance, forcedNative);
+
+        market.launchMarket();
+
+        assertEq(address(positionManager).balance, 0);
+        assertGe(claims.treasuryEthAvailable(), treasuryBefore);
+        assertLe(claims.treasuryEthAvailable(), treasuryBefore + NATIVE_SEED);
     }
 
     function test_RealBuyAndSellRouteBothOnePercentFeesDirectlyToTreasury() public {
