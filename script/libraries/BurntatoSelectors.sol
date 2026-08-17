@@ -54,7 +54,7 @@ library BurntatoSelectors {
     }
 
     function token() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](18);
+        selectors = new bytes4[](20);
         selectors[0] = IPotatoToken.name.selector;
         selectors[1] = IPotatoToken.symbol.selector;
         selectors[2] = IPotatoToken.decimals.selector;
@@ -73,6 +73,8 @@ library BurntatoSelectors {
         selectors[15] = IPotatoToken.protocolTransfer.selector;
         selectors[16] = IPotatoToken.authorizePoolManagerTransfer.selector;
         selectors[17] = IPotatoToken.transientPoolManagerAllowance.selector;
+        selectors[18] = IPotatoToken.isDistributor.selector;
+        selectors[19] = IPotatoToken.setDistributor.selector;
     }
 
     function game() internal pure returns (bytes4[] memory selectors) {

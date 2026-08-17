@@ -59,6 +59,7 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(verifier.verify(config, deployment));
         assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), deployment.timelock);
         assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), deployment.timelock);
+        assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
     }
 
     function test_DeploymentAcceptsZeroTimelockDelay() public {

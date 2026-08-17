@@ -27,6 +27,7 @@ library LibProtocolStorage {
     struct TokenStorage {
         address canonicalHook;
         address poolManager;
+        mapping(address => bool) distributors;
     }
 
     struct RecoveryStorage {

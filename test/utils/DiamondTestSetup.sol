@@ -54,6 +54,8 @@ abstract contract DiamondTestSetup is Test {
             );
         vm.prank(authority);
         IGovernance(address(diamond)).setGuardian(guardian);
+        vm.prank(authority);
+        IPotatoToken(address(diamond)).setDistributor(treasury, true);
     }
 
     function _install(address facet, bytes4[] memory selectors) internal {
@@ -110,7 +112,7 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _tokenSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](18);
+        selectors = new bytes4[](20);
         selectors[0] = IPotatoToken.name.selector;
         selectors[1] = IPotatoToken.symbol.selector;
         selectors[2] = IPotatoToken.decimals.selector;
@@ -129,6 +131,8 @@ abstract contract DiamondTestSetup is Test {
         selectors[15] = IPotatoToken.protocolTransfer.selector;
         selectors[16] = IPotatoToken.authorizePoolManagerTransfer.selector;
         selectors[17] = IPotatoToken.transientPoolManagerAllowance.selector;
+        selectors[18] = IPotatoToken.isDistributor.selector;
+        selectors[19] = IPotatoToken.setDistributor.selector;
     }
 
     function _marketSelectors() internal pure returns (bytes4[] memory selectors) {

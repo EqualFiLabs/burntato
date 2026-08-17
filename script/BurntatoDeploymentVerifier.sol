@@ -102,6 +102,7 @@ contract BurntatoDeploymentVerifier {
         _check(keccak256(bytes(token.symbol())) == keccak256("POTATO"), "TOKEN_SYMBOL");
         _check(token.decimals() == 18, "TOKEN_DECIMALS");
         _check(token.totalSupply() == 0, "TOKEN_SUPPLY");
+        _check(token.isDistributor(config.treasuryRecipient), "TREASURY_DISTRIBUTOR");
         _check(game.currentRoundId() == 0, "ROUND_NOT_STARTED");
         Round memory emptyRound = game.getRound(0);
         _check(emptyRound.roundId == 0 && emptyRound.remainingEmission == 0, "EMPTY_GENESIS_ROUND");

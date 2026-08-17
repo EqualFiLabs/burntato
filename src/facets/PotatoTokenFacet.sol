@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {ERC20} from "solady/src/tokens/ERC20.sol";
 
+import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Errors} from "../shared/Errors.sol";
 
@@ -10,6 +11,7 @@ contract PotatoTokenFacet is ERC20 {
     event PotatoBurned(address indexed account, uint256 amount);
     event PoolManagerAllowanceAuthorized(uint256 amount);
     event PoolManagerAllowanceSpent(address indexed from, address indexed to, uint256 amount);
+    event DistributorSet(address indexed account, bool allowed);
 
     function name() public pure override returns (string memory) {
         return "Burntato Potato";
@@ -26,6 +28,17 @@ contract PotatoTokenFacet is ERC20 {
     function burn(uint256 amount) external {
         _burn(msg.sender, amount);
         emit PotatoBurned(msg.sender, amount);
+    }
+
+    function isDistributor(address account) external view returns (bool) {
+        return LibProtocolStorage.token().distributors[account];
+    }
+
+    function setDistributor(address account, bool allowed) external {
+        LibDiamond.enforceAuthority();
+        if (account == address(0)) revert Errors.InvalidAddress();
+        LibProtocolStorage.token().distributors[account] = allowed;
+        emit DistributorSet(account, allowed);
     }
 
     function transfer(address to, uint256 amount) public override returns (bool) {
@@ -69,13 +82,19 @@ contract PotatoTokenFacet is ERC20 {
     function _afterTokenTransfer(address from, address to, uint256 amount) internal override {
         if (from == address(0) || to == address(0)) return;
 
+        LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
+        if (ts.distributors[from] || ts.distributors[to]) return;
+
+        address authority = LibDiamond.authority();
+        if (from == authority || to == authority) return;
+
         bytes32 movement = keccak256(abi.encode(from, to, amount));
         if (_protocolMovement() == movement) {
             _setProtocolMovement(bytes32(0));
             return;
         }
 
-        address poolManager = LibProtocolStorage.token().poolManager;
+        address poolManager = ts.poolManager;
         if (from == poolManager || to == poolManager) {
             uint256 available = _poolManagerAllowance();
             if (available < amount) revert Errors.PoolManagerAllowanceExceeded(available, amount);

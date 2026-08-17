@@ -138,6 +138,78 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(potato.allowance(signer, bob), 1 ether);
     }
 
+    function test_DistributorEndpointAllowsTransfersUntilRevoked() public {
+        _earnForAlice();
+
+        vm.prank(authority);
+        potato.setDistributor(bob, true);
+        assertTrue(potato.isDistributor(bob));
+
+        vm.prank(alice);
+        potato.transfer(bob, 2 ether);
+        vm.prank(bob);
+        potato.transfer(alice, 1 ether);
+        assertEq(potato.balanceOf(bob), 1 ether);
+
+        vm.prank(authority);
+        potato.setDistributor(bob, false);
+        assertFalse(potato.isDistributor(bob));
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, bob));
+        potato.transfer(bob, 1 ether);
+    }
+
+    function test_CurrentAuthorityIsAlwaysAValidTransferEndpoint() public {
+        _earnForAlice();
+
+        vm.prank(alice);
+        potato.transfer(authority, 2 ether);
+        vm.prank(authority);
+        potato.transfer(bob, 1 ether);
+
+        address nextAuthority = makeAddr("nextAuthority");
+        vm.prank(authority);
+        IGovernance(address(diamond)).setAuthority(nextAuthority);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, authority));
+        potato.transfer(authority, 1 ether);
+        vm.prank(alice);
+        potato.transfer(nextAuthority, 1 ether);
+    }
+
+    function test_OnlyAuthorityCanAdministerDistributors() public {
+        vm.prank(guardian);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, guardian));
+        potato.setDistributor(bob, true);
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        potato.setDistributor(address(0), true);
+    }
+
+    function test_TreasuryChangeDoesNotMutateDistributorRegistry() public {
+        address nextTreasury = makeAddr("nextTreasury");
+        assertTrue(potato.isDistributor(treasury));
+        assertFalse(potato.isDistributor(nextTreasury));
+
+        vm.prank(authority);
+        IGovernance(address(diamond)).setTreasuryRecipient(nextTreasury);
+
+        assertTrue(potato.isDistributor(treasury));
+        assertFalse(potato.isDistributor(nextTreasury));
+    }
+
+    function test_FinalizationDoesNotDisableDistributorAdministration() public {
+        vm.prank(authority);
+        IGovernance(address(diamond)).finalizeProtocol();
+
+        vm.prank(authority);
+        potato.setDistributor(bob, true);
+        assertTrue(potato.isDistributor(bob));
+    }
+
     function test_ProtocolTokenEndpointsRejectExternalCallers() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
         potato.protocolMint(alice, 1 ether);

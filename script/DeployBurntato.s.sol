@@ -30,6 +30,7 @@ import {FoundationInit} from "../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../src/interfaces/IDiamondCut.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
+import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
@@ -147,6 +148,7 @@ contract DeployBurntato is Script {
 
     function _configureProtocol(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         IGovernance(deployment.diamond).setGuardian(config.guardian);
+        IPotatoToken(deployment.diamond).setDistributor(config.treasuryRecipient, true);
         IMarket(deployment.diamond)
             .configureMarket(
                 IMarket.MarketConfig({

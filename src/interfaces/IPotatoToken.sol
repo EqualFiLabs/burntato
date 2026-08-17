@@ -7,6 +7,7 @@ interface IPotatoToken {
     event PotatoBurned(address indexed account, uint256 amount);
     event PoolManagerAllowanceAuthorized(uint256 amount);
     event PoolManagerAllowanceSpent(address indexed from, address indexed to, uint256 amount);
+    event DistributorSet(address indexed account, bool allowed);
 
     function name() external pure returns (string memory);
     function symbol() external pure returns (string memory);
@@ -22,6 +23,8 @@ interface IPotatoToken {
     function nonces(address owner) external view returns (uint256);
     function DOMAIN_SEPARATOR() external view returns (bytes32);
     function burn(uint256 amount) external;
+    function isDistributor(address account) external view returns (bool);
+    function setDistributor(address account, bool allowed) external;
     function protocolMint(address to, uint256 amount) external;
     function protocolBurn(address from, uint256 amount) external;
     function protocolTransfer(address from, address to, uint256 amount) external;
