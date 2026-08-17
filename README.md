@@ -20,6 +20,7 @@ Burntato is a fully onchain Hot Potato game built as an EIP-2535 Diamond. ETH ac
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — Diamond interfaces, events, token restrictions, and pool integration.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — timelock, guardian, freezing, and finalization.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — local Anvil defaults, deployment commands, and verification.
+- [`docs/RELEASE_EVIDENCE.md`](docs/RELEASE_EVIDENCE.md) — executed release checks and proof boundaries.
 
 ## Focused development
 
