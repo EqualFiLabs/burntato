@@ -29,12 +29,14 @@ interface IERC721Owner {
 }
 
 contract CanonicalHookConfigStub {
-    address public immutable treasury;
+    address public immutable token;
     IPoolManager public immutable poolManager;
+    int24 public immutable tickSpacing;
 
-    constructor(address treasury_, IPoolManager poolManager_) {
-        treasury = treasury_;
+    constructor(address token_, IPoolManager poolManager_, int24 tickSpacing_) {
+        token = token_;
         poolManager = poolManager_;
+        tickSpacing = tickSpacing_;
     }
 }
 
@@ -66,11 +68,14 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
             Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
                 | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
         );
-        bytes memory constructorArgs = abi.encode(manager, address(diamond));
+        bytes memory constructorArgs =
+            abi.encode(manager, authority, address(diamond), treasury, uint16(100), int24(TICK_SPACING));
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(BurntatoSwapFeeHook).creationCode, constructorArgs);
         vm.prank(CREATE2_DEPLOYER);
-        hook = new BurntatoSwapFeeHook{salt: salt}(IPoolManager(address(manager)), address(diamond));
+        hook = new BurntatoSwapFeeHook{salt: salt}(
+            IPoolManager(address(manager)), authority, address(diamond), treasury, 100, TICK_SPACING
+        );
         assertEq(address(hook), hookAddress);
 
         claims = IClaims(address(diamond));
@@ -120,20 +125,24 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertGt(claims.treasuryEthAvailable(), 0);
     }
 
-    function test_RealBuyAndSellRouteBothOnePercentFeesToTreasury() public {
+    function test_RealBuyAndSellRouteBothOnePercentFeesDirectlyToTreasury() public {
         _createTreasuryInventory();
         market.launchMarket();
-        uint256 treasuryBefore = claims.treasuryEthAvailable();
+        uint256 claimableBefore = claims.treasuryEthAvailable();
+        uint256 treasuryBefore = treasury.balance;
+        uint256 diamondBefore = address(diamond).balance;
 
         vm.recordLogs();
         uint256 bought = _buy(alice, 0.0001 ether);
         Vm.Log[] memory buyLogs = vm.getRecordedLogs();
-        (uint256 buyRevenue, uint256 nativeBuyFee, uint256 potatoBuyFee) = _feeAccounting(buyLogs);
+        (uint256 nativeBuyFee, uint256 potatoBuyFee) = _feeAccounting(buyLogs);
         assertGt(bought, 0);
         assertEq(nativeBuyFee, 0);
         assertEq(potatoBuyFee, (bought + potatoBuyFee) * 100 / 10_000);
-        uint256 afterBuy = claims.treasuryEthAvailable();
-        assertEq(afterBuy - treasuryBefore, buyRevenue);
+        assertGt(treasury.balance, treasuryBefore);
+        uint256 treasuryAfterBuy = treasury.balance;
+        assertEq(claims.treasuryEthAvailable(), claimableBefore);
+        assertEq(address(diamond).balance, diamondBefore);
         assertEq(address(hook).balance, 0);
 
         vm.prank(alice);
@@ -142,13 +151,14 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.recordLogs();
         _sell(alice, bought / 2);
         Vm.Log[] memory sellLogs = vm.getRecordedLogs();
-        (uint256 sellRevenue, uint256 nativeSellFee, uint256 potatoSellFee) = _feeAccounting(sellLogs);
+        (uint256 nativeSellFee, uint256 potatoSellFee) = _feeAccounting(sellLogs);
         uint256 nativeReceived = alice.balance - nativeBefore;
         assertGt(nativeReceived, 0);
         assertEq(potatoSellFee, 0);
         assertEq(nativeSellFee, (nativeReceived + nativeSellFee) * 100 / 10_000);
-        assertEq(sellRevenue, nativeSellFee);
-        assertEq(claims.treasuryEthAvailable() - afterBuy, sellRevenue);
+        assertEq(treasury.balance - treasuryAfterBuy, nativeSellFee);
+        assertEq(claims.treasuryEthAvailable(), claimableBefore);
+        assertEq(address(diamond).balance, diamondBefore);
         assertEq(address(hook).balance, 0);
         assertEq(potato.transientPoolManagerAllowance(), 0);
         assertEq(positionManager.nextTokenId(), 2);
@@ -167,10 +177,86 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertLt(claims.treasuryPotatoAvailable(), 0.003 ether);
     }
 
+    function test_MarketConfigurationCanChangeBeforeLaunchButNotAfter() public {
+        IMarket.MarketConfig memory config = market.marketConfig();
+        config.nativeSeed = 0.003 ether;
+        config.potatoSeed = 2 ether;
+        vm.prank(authority);
+        market.configureMarket(config);
+        IMarket.MarketConfig memory actual = market.marketConfig();
+        assertEq(actual.nativeSeed, 0.003 ether);
+        assertEq(actual.potatoSeed, 2 ether);
+
+        _createTreasuryInventory();
+        market.launchMarket();
+        vm.prank(authority);
+        vm.expectRevert(Errors.AlreadyLaunched.selector);
+        market.configureMarket(config);
+    }
+
+    function test_FeeAdministrationRemainsAvailableAfterDiamondFinalization() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        vm.prank(authority);
+        IGovernance(address(diamond)).finalizeProtocol();
+        address nextTreasury = makeAddr("nextTreasury");
+        vm.startPrank(authority);
+        hook.setFeeAddress(nextTreasury);
+        hook.setFeeBps(500);
+        vm.stopPrank();
+
+        uint256 originalBefore = treasury.balance;
+        _buy(alice, 0.0001 ether);
+        assertGt(nextTreasury.balance, 0);
+        assertEq(treasury.balance, originalBefore);
+        assertEq(hook.feeAddress(), nextTreasury);
+        assertEq(hook.feeBps(), 500);
+    }
+
+    function test_HookSupportsZeroAndFullBilateralFees() public {
+        vm.prank(authority);
+        hook.setFeeBps(0);
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        uint256 treasuryBefore = treasury.balance;
+        uint256 bought = _buy(alice, 0.0001 ether);
+        assertGt(bought, 0);
+        assertEq(treasury.balance, treasuryBefore);
+
+        vm.prank(authority);
+        hook.setFeeBps(10_000);
+        vm.prank(alice);
+        potato.approve(address(swapRouter), bought);
+        uint256 aliceBefore = alice.balance;
+        _sell(alice, bought / 2);
+        assertEq(alice.balance, aliceBefore);
+        assertGt(treasury.balance, treasuryBefore);
+    }
+
+    function test_OnlyHookOwnerCanConfigureRevenueCapture() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        hook.setFeeAddress(alice);
+        vm.prank(alice);
+        vm.expectRevert();
+        hook.setFeeBps(500);
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidBps.selector);
+        hook.setFeeBps(10_001);
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setFeeAddress(address(0));
+    }
+
     function test_ConfigurationRejectsTickSpacingOutsidePoolManagerDomain() public {
         _deployCore();
         IMarket candidate = IMarket(address(diamond));
-        CanonicalHookConfigStub stub = new CanonicalHookConfigStub(address(diamond), IPoolManager(address(manager)));
+        CanonicalHookConfigStub stub = new CanonicalHookConfigStub(
+            address(diamond), IPoolManager(address(manager)), TickMath.MAX_TICK_SPACING + 1
+        );
 
         vm.prank(authority);
         vm.expectRevert(Errors.InvalidMarketConfiguration.selector);
@@ -193,7 +279,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     function test_ConfigurationRejectsTreasuryRecipientAsSystemCustody() public {
         _deployCore();
         IMarket candidate = IMarket(address(diamond));
-        CanonicalHookConfigStub stub = new CanonicalHookConfigStub(address(diamond), IPoolManager(address(manager)));
+        CanonicalHookConfigStub stub =
+            new CanonicalHookConfigStub(address(diamond), IPoolManager(address(manager)), TICK_SPACING);
         vm.startPrank(authority);
         IGovernance(address(diamond)).setTreasuryRecipient(address(manager));
         vm.expectRevert(Errors.InvalidMarketConfiguration.selector);
@@ -320,19 +407,11 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         );
     }
 
-    function _feeAccounting(Vm.Log[] memory logs)
-        internal
-        view
-        returns (uint256 revenue, uint256 nativeFee, uint256 potatoFee)
-    {
+    function _feeAccounting(Vm.Log[] memory logs) internal view returns (uint256 nativeFee, uint256 potatoFee) {
         bytes32 feeTopic = keccak256("HookFee(bytes32,address,uint128,uint128)");
-        bytes32 revenueTopic = keccak256("HookRevenueRecorded(uint256)");
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(hook) && logs[i].topics[0] == feeTopic) {
                 (nativeFee, potatoFee) = abi.decode(logs[i].data, (uint128, uint128));
-            }
-            if (logs[i].emitter == address(diamond) && logs[i].topics[0] == revenueTopic) {
-                revenue += abi.decode(logs[i].data, (uint256));
             }
         }
     }

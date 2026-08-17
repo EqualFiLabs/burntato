@@ -52,12 +52,9 @@ contract ClaimsFacet is IClaims {
     function claimTreasury() external nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         LibRecipients.enforceExternal(ts.recipient);
-        uint256 total = ts.purchaseEth + ts.hookEth;
-        amount = total > ts.reservedEth ? total - ts.reservedEth : 0;
+        amount = ts.purchaseEth > ts.reservedEth ? ts.purchaseEth - ts.reservedEth : 0;
         if (amount == 0) revert Errors.NothingToClaim();
-        uint256 fromPurchase = amount > ts.purchaseEth ? ts.purchaseEth : amount;
-        ts.purchaseEth -= fromPurchase;
-        ts.hookEth -= amount - fromPurchase;
+        ts.purchaseEth -= amount;
         _sendNative(ts.recipient, amount);
         emit TreasuryEthClaimed(ts.recipient, amount);
     }
@@ -78,8 +75,7 @@ contract ClaimsFacet is IClaims {
 
     function treasuryEthAvailable() external view returns (uint256) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        uint256 total = ts.purchaseEth + ts.hookEth;
-        return total > ts.reservedEth ? total - ts.reservedEth : 0;
+        return ts.purchaseEth > ts.reservedEth ? ts.purchaseEth - ts.reservedEth : 0;
     }
 
     function treasuryPotatoAvailable() external view returns (uint256) {

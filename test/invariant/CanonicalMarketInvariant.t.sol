@@ -31,10 +31,10 @@ interface IERC721OwnerView {
 contract CanonicalMarketHandler is Test {
     IPotatoToken internal immutable potato;
     IClaims internal immutable claims;
-    IMarket internal immutable market;
     IPoolManager internal immutable manager;
     PoolSwapTest internal immutable swapRouter;
     BurntatoSwapFeeHook internal immutable hook;
+    address internal immutable feeAddress;
     PoolKey internal key;
     address[3] internal actors;
 
@@ -49,14 +49,15 @@ contract CanonicalMarketHandler is Test {
         IPoolManager manager_,
         PoolSwapTest swapRouter_,
         BurntatoSwapFeeHook hook_,
-        PoolKey memory key_
+        PoolKey memory key_,
+        address feeAddress_
     ) {
         potato = IPotatoToken(diamond);
         claims = IClaims(diamond);
-        market = IMarket(diamond);
         manager = manager_;
         swapRouter = swapRouter_;
         hook = hook_;
+        feeAddress = feeAddress_;
         key = key_;
         actors[0] = makeAddr("market-alice");
         actors[1] = makeAddr("market-bob");
@@ -68,6 +69,7 @@ contract CanonicalMarketHandler is Test {
         uint256 nativeIn = bound(uint256(rawNativeIn), 1e10, 0.0001 ether);
         vm.deal(trader, trader.balance + nativeIn);
         uint256 treasuryBefore = claims.treasuryEthAvailable();
+        uint256 feeBefore = feeAddress.balance;
         uint256 potatoBefore = potato.balanceOf(trader);
         vm.recordLogs();
         vm.prank(trader);
@@ -83,11 +85,11 @@ contract CanonicalMarketHandler is Test {
         ) {
             uint256 treasuryAfter = claims.treasuryEthAvailable();
             if (treasuryAfter < treasuryBefore) treasuryRevenueDecreased = true;
-            (uint256 revenue, uint256 nativeFee, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
+            (uint256 nativeFee, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
             uint256 bought = potato.balanceOf(trader) - potatoBefore;
             if (
-                nativeFee != 0 || potatoFee != (bought + potatoFee) * 100 / 10_000
-                    || treasuryAfter - treasuryBefore != revenue
+                nativeFee != 0 || potatoFee != (bought + potatoFee) * 100 / 10_000 || treasuryAfter != treasuryBefore
+                    || (potatoFee != 0 && feeAddress.balance <= feeBefore)
             ) feeMismatch = true;
         } catch {}
     }
@@ -100,6 +102,7 @@ contract CanonicalMarketHandler is Test {
         vm.prank(trader);
         potato.approve(address(swapRouter), amount);
         uint256 treasuryBefore = claims.treasuryEthAvailable();
+        uint256 feeBefore = feeAddress.balance;
         uint256 nativeBefore = trader.balance;
         vm.recordLogs();
         vm.prank(trader);
@@ -115,11 +118,11 @@ contract CanonicalMarketHandler is Test {
         ) {
             uint256 treasuryAfter = claims.treasuryEthAvailable();
             if (treasuryAfter < treasuryBefore) treasuryRevenueDecreased = true;
-            (uint256 revenue, uint256 nativeFee, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
+            (uint256 nativeFee, uint256 potatoFee) = _feeAccounting(vm.getRecordedLogs());
             uint256 received = trader.balance - nativeBefore;
             if (
-                potatoFee != 0 || nativeFee != (received + nativeFee) * 100 / 10_000 || revenue != nativeFee
-                    || treasuryAfter - treasuryBefore != revenue
+                potatoFee != 0 || nativeFee != (received + nativeFee) * 100 / 10_000
+                    || feeAddress.balance - feeBefore != nativeFee || treasuryAfter != treasuryBefore
             ) feeMismatch = true;
         } catch {}
     }
@@ -173,19 +176,11 @@ contract CanonicalMarketHandler is Test {
         } catch {}
     }
 
-    function _feeAccounting(Vm.Log[] memory logs)
-        internal
-        view
-        returns (uint256 revenue, uint256 nativeFee, uint256 potatoFee)
-    {
+    function _feeAccounting(Vm.Log[] memory logs) internal view returns (uint256 nativeFee, uint256 potatoFee) {
         bytes32 feeTopic = keccak256("HookFee(bytes32,address,uint128,uint128)");
-        bytes32 revenueTopic = keccak256("HookRevenueRecorded(uint256)");
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(hook) && logs[i].topics[0] == feeTopic) {
                 (nativeFee, potatoFee) = abi.decode(logs[i].data, (uint128, uint128));
-            }
-            if (logs[i].emitter == address(market) && logs[i].topics[0] == revenueTopic) {
-                revenue += abi.decode(logs[i].data, (uint256));
             }
         }
     }
@@ -237,7 +232,7 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
 
         PoolKey memory canonicalKey = market.canonicalPoolKey();
         handler = new CanonicalMarketHandler(
-            address(diamond), IPoolManager(address(manager)), swapRouter, hook, canonicalKey
+            address(diamond), IPoolManager(address(manager)), swapRouter, hook, canonicalKey, treasury
         );
         targetContract(address(handler));
     }
@@ -266,11 +261,14 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
             Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
                 | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
         );
-        bytes memory constructorArgs = abi.encode(manager, address(diamond));
+        bytes memory constructorArgs =
+            abi.encode(manager, authority, address(diamond), treasury, uint16(100), int24(60));
         (address expected, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(BurntatoSwapFeeHook).creationCode, constructorArgs);
         vm.prank(CREATE2_DEPLOYER);
-        hook = new BurntatoSwapFeeHook{salt: salt}(IPoolManager(address(manager)), address(diamond));
+        hook = new BurntatoSwapFeeHook{salt: salt}(
+            IPoolManager(address(manager)), authority, address(diamond), treasury, 100, 60
+        );
         assertEq(address(hook), expected);
     }
 

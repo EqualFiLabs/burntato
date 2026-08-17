@@ -102,13 +102,28 @@ contract DeployBurntato is Script {
             );
 
         deployment.hookDeployer = address(new BurntatoHookDeployer());
-        bytes memory constructorArgs = abi.encode(IPoolManager(deployment.poolManager), deployment.diamond);
+        bytes memory constructorArgs = abi.encode(
+            IPoolManager(deployment.poolManager),
+            deployment.timelock,
+            deployment.diamond,
+            config.treasuryRecipient,
+            config.hookFeeBps,
+            config.tickSpacing
+        );
         (address expectedHook, bytes32 salt) = HookMiner.find(
             deployment.hookDeployer, _hookFlags(), type(BurntatoSwapFeeHook).creationCode, constructorArgs
         );
         deployment.hook = address(
             BurntatoHookDeployer(deployment.hookDeployer)
-                .deploy(salt, IPoolManager(deployment.poolManager), deployment.diamond)
+                .deploy(
+                    salt,
+                    IPoolManager(deployment.poolManager),
+                    deployment.timelock,
+                    deployment.diamond,
+                    config.treasuryRecipient,
+                    config.hookFeeBps,
+                    config.tickSpacing
+                )
         );
         if (deployment.hook != expectedHook) revert UnexpectedHookAddress(expectedHook, deployment.hook);
 
@@ -164,6 +179,8 @@ contract DeployBurntato is Script {
         config.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.recoveryTreasuryBps))
         );
+        config.hookFeeBps =
+            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
         config.initialTick =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
         config.tickSpacing =
@@ -234,7 +251,7 @@ contract DeployBurntato is Script {
                 || config.priceIncreaseBps > Constants.BPS || config.emissionStepBps > Constants.BPS
                 || config.winnerBps > Constants.BPS || config.recoveryBps > Constants.BPS
                 || config.treasuryBps > Constants.BPS || config.recoveryBurnBps > Constants.BPS
-                || config.recoveryTreasuryBps > Constants.BPS
+                || config.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
                 || uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps != Constants.BPS
                 || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING

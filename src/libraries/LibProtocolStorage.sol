@@ -39,7 +39,6 @@ library LibProtocolStorage {
     struct TreasuryStorage {
         address recipient;
         uint256 purchaseEth;
-        uint256 hookEth;
         uint256 potatoInventory;
         uint256 reservedEth;
         uint256 reservedPotato;

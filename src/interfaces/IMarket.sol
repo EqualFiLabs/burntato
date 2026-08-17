@@ -23,7 +23,6 @@ interface IMarket {
         uint256 potatoUsed,
         address indexed lockedRecipient
     );
-    event HookRevenueRecorded(uint256 amount);
 
     struct MarketConfig {
         address hook;
@@ -40,7 +39,6 @@ interface IMarket {
 
     function configureMarket(MarketConfig calldata config) external;
     function launchMarket() external returns (bytes32 poolId, uint128 liquidity);
-    function recordHookRevenue() external payable;
     function marketConfig() external view returns (MarketConfig memory config);
     function canonicalPoolKey() external view returns (PoolKey memory key);
     function marketState() external view returns (bytes32 poolId, bool configured, bool launching, bool launched);

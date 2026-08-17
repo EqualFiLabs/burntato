@@ -141,7 +141,11 @@ contract BurntatoDeploymentVerifier {
         _check(address(key.hooks) == deployment.hook, "POOL_HOOK");
 
         BurntatoSwapFeeHook hook = BurntatoSwapFeeHook(payable(deployment.hook));
-        _check(hook.treasury() == deployment.diamond, "HOOK_TREASURY");
+        _check(hook.owner() == deployment.timelock, "HOOK_OWNER");
+        _check(hook.token() == deployment.diamond, "HOOK_TOKEN");
+        _check(hook.feeAddress() == config.treasuryRecipient, "HOOK_FEE_ADDRESS");
+        _check(hook.feeBps() == config.hookFeeBps, "HOOK_FEE_BPS");
+        _check(hook.tickSpacing() == config.tickSpacing, "HOOK_TICK_SPACING");
         _check(address(hook.poolManager()) == deployment.poolManager, "HOOK_POOL_MANAGER");
         _check(hook.deploymentBlock() == 0, "HOOK_POOL_UNINITIALIZED");
         uint160 flags = uint160(
@@ -169,6 +173,7 @@ contract BurntatoDeploymentVerifier {
             "PURCHASE_SPLIT_DOMAIN"
         );
         _check(uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN");
+        _check(config.hookFeeBps <= Constants.BPS, "HOOK_FEE_DOMAIN");
         _check(
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
             "TICK_SPACING_DOMAIN"

@@ -21,19 +21,21 @@ import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 
 interface ICanonicalHookConfig {
-    function treasury() external view returns (address);
+    function token() external view returns (address);
     function poolManager() external view returns (IPoolManager);
+    function tickSpacing() external view returns (int24);
 }
 
 contract MarketFacet is IMarket {
     function configureMarket(MarketConfig calldata config) external {
         LibDiamond.enforceAuthority();
         LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
-        if (ms.configured) revert Errors.AlreadyConfigured();
+        if (ms.launched) revert Errors.AlreadyLaunched();
         _validateConfiguration(config);
         if (
-            ICanonicalHookConfig(config.hook).treasury() != address(this)
+            ICanonicalHookConfig(config.hook).token() != address(this)
                 || address(ICanonicalHookConfig(config.hook).poolManager()) != config.poolManager
+                || ICanonicalHookConfig(config.hook).tickSpacing() != config.tickSpacing
         ) revert Errors.InvalidMarketConfiguration();
         address treasuryRecipient = LibProtocolStorage.treasury().recipient;
         if (
@@ -138,14 +140,6 @@ contract MarketFacet is IMarket {
         emit MarketLaunched(poolId, liquidity, nativeUsed, potatoUsed, Constants.LOCKED_LP_RECIPIENT);
     }
 
-    function recordHookRevenue() external payable {
-        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
-        if (msg.sender != ms.hook || msg.sender == address(0)) revert Errors.NotCanonicalHook(msg.sender);
-        if (msg.value == 0) revert Errors.ZeroAmount();
-        LibProtocolStorage.treasury().hookEth += msg.value;
-        emit HookRevenueRecorded(msg.value);
-    }
-
     function marketConfig() external view returns (MarketConfig memory config) {
         LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
         config = MarketConfig({
@@ -219,15 +213,13 @@ contract MarketFacet is IMarket {
 
     function _marketReady(LibProtocolStorage.MarketStorage storage ms) private view returns (bool) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        return ts.purchaseEth + ts.hookEth >= ms.nativeSeed && ts.potatoInventory >= ms.potatoSeed
+        return ts.purchaseEth >= ms.nativeSeed && ts.potatoInventory >= ms.potatoSeed
             && address(this).balance >= ms.nativeSeed
             && IPotatoToken(address(this)).balanceOf(address(this)) >= ms.potatoSeed;
     }
 
     function _consumeTreasuryEth(LibProtocolStorage.TreasuryStorage storage ts, uint256 amount) private {
-        uint256 fromPurchase = amount > ts.purchaseEth ? ts.purchaseEth : amount;
-        ts.purchaseEth -= fromPurchase;
-        ts.hookEth -= amount - fromPurchase;
+        ts.purchaseEth -= amount;
     }
 
     function _setLaunching(bool value) private {

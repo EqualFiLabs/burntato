@@ -18,6 +18,7 @@ struct GenesisConfig {
     uint16 treasuryBps;
     uint16 recoveryBurnBps;
     uint16 recoveryTreasuryBps;
+    uint16 hookFeeBps;
     int24 initialTick;
     int24 tickSpacing;
     int24 tickLower;

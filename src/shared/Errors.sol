@@ -21,7 +21,6 @@ library Errors {
     error InvalidFacetAction(uint8 action);
     error InvalidRound(uint256 roundId);
     error NativeTransferFailed();
-    error AlreadyConfigured();
     error AlreadyLaunched();
     error ExactOutputNotAllowed();
     error InvalidMarketConfiguration();

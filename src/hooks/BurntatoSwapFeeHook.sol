@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {Ownable} from "solady/src/auth/Ownable.sol";
+import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
+
 import {BaseHook} from "@uniswap/v4-periphery/src/utils/BaseHook.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
@@ -16,19 +19,50 @@ import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 
-contract BurntatoSwapFeeHook is BaseHook {
+contract BurntatoSwapFeeHook is BaseHook, Ownable {
     using BalanceDeltaLibrary for BalanceDelta;
 
-    address public immutable treasury;
+    address public immutable token;
+    int24 public immutable tickSpacing;
+    address public feeAddress;
+    uint16 public feeBps;
     uint64 public deploymentBlock;
 
+    event FeeAddressSet(address indexed feeAddress);
+    event FeeBpsSet(uint16 feeBps);
     event PoolLaunched(bytes32 indexed poolId, uint256 deploymentBlock);
     event HookFee(bytes32 indexed poolId, address indexed sender, uint128 nativeFee, uint128 potatoFee);
     event Trade(bytes32 indexed poolId, address indexed sender, int128 nativeDelta, int128 potatoDelta);
 
-    constructor(IPoolManager manager, address treasury_) BaseHook(manager) {
-        if (treasury_ == address(0)) revert Errors.InvalidAddress();
-        treasury = treasury_;
+    constructor(
+        IPoolManager manager,
+        address owner_,
+        address token_,
+        address feeAddress_,
+        uint16 feeBps_,
+        int24 tickSpacing_
+    ) BaseHook(manager) {
+        if (owner_ == address(0) || token_ == address(0) || feeAddress_ == address(0)) {
+            revert Errors.InvalidAddress();
+        }
+        if (feeBps_ > Constants.BPS) revert Errors.InvalidBps();
+        _initializeOwner(owner_);
+        token = token_;
+        feeAddress = feeAddress_;
+        feeBps = feeBps_;
+        tickSpacing = tickSpacing_;
+    }
+
+    function setFeeAddress(address newFeeAddress) external onlyOwner {
+        if (newFeeAddress == address(0)) revert Errors.InvalidAddress();
+        feeAddress = newFeeAddress;
+        emit FeeAddressSet(newFeeAddress);
+    }
+
+    function setFeeBps(uint16 newFeeBps) external onlyOwner {
+        if (newFeeBps > Constants.BPS) revert Errors.InvalidBps();
+        feeBps = newFeeBps;
+        emit FeeBpsSet(newFeeBps);
     }
 
     function getHookPermissions() public pure override returns (Hooks.Permissions memory) {
@@ -52,8 +86,8 @@ contract BurntatoSwapFeeHook is BaseHook {
 
     function _beforeInitialize(address, PoolKey calldata key, uint160 sqrtPriceX96) internal override returns (bytes4) {
         _validateKey(key);
-        IMarket.MarketConfig memory config = IMarket(treasury).marketConfig();
-        if (!IMarket(treasury).marketLaunching() || sqrtPriceX96 != config.sqrtPriceX96) {
+        IMarket.MarketConfig memory config = IMarket(token).marketConfig();
+        if (!IMarket(token).marketLaunching() || sqrtPriceX96 != config.sqrtPriceX96) {
             revert Errors.MarketNotLaunching();
         }
         if (deploymentBlock != 0) revert Errors.PoolAlreadyInitialized();
@@ -71,10 +105,10 @@ contract BurntatoSwapFeeHook is BaseHook {
         bytes calldata
     ) internal override returns (bytes4, BalanceDelta) {
         _validateKey(key);
-        if (!IMarket(treasury).marketLaunching()) revert Errors.MarketNotLaunching();
+        if (!IMarket(token).marketLaunching()) revert Errors.MarketNotLaunching();
         int128 potatoDelta = delta.amount1();
         if (potatoDelta < 0) {
-            IPotatoToken(treasury).authorizePoolManagerTransfer(uint256(int256(-potatoDelta)));
+            IPotatoToken(token).authorizePoolManagerTransfer(uint256(int256(-potatoDelta)));
         }
         return (BaseHook.afterAddLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
     }
@@ -103,7 +137,7 @@ contract BurntatoSwapFeeHook is BaseHook {
             allowanceForRouter = uint256(int256(-delta.amount1()));
         }
         if (allowanceForRouter != 0) {
-            IPotatoToken(treasury).authorizePoolManagerTransfer(allowanceForRouter);
+            IPotatoToken(token).authorizePoolManagerTransfer(allowanceForRouter);
         }
 
         emit Trade(PoolId.unwrap(key.toId()), sender, delta.amount0(), delta.amount1());
@@ -114,15 +148,15 @@ contract BurntatoSwapFeeHook is BaseHook {
         private
         returns (int128 feeDelta)
     {
-        uint256 fee = uint256(grossPotatoOut) * Constants.HOOK_FEE_BPS / Constants.BPS;
+        uint256 fee = uint256(grossPotatoOut) * feeBps / Constants.BPS;
         if (fee == 0) return 0;
 
-        IPotatoToken(treasury).authorizePoolManagerTransfer(fee);
+        IPotatoToken(token).authorizePoolManagerTransfer(fee);
         poolManager.take(key.currency1, address(this), fee);
         emit HookFee(PoolId.unwrap(key.toId()), sender, 0, uint128(fee));
 
         uint256 nativeReceived = _swapPotatoToNative(key, fee);
-        if (nativeReceived != 0) _recordRevenue(nativeReceived);
+        if (nativeReceived != 0) SafeTransferLib.forceSafeTransferETH(feeAddress, nativeReceived);
         return int128(uint128(fee));
     }
 
@@ -130,12 +164,12 @@ contract BurntatoSwapFeeHook is BaseHook {
         private
         returns (int128 feeDelta)
     {
-        uint256 fee = uint256(grossNativeOut) * Constants.HOOK_FEE_BPS / Constants.BPS;
+        uint256 fee = uint256(grossNativeOut) * feeBps / Constants.BPS;
         if (fee == 0) return 0;
 
         poolManager.take(key.currency0, address(this), fee);
         emit HookFee(PoolId.unwrap(key.toId()), sender, uint128(fee), 0);
-        _recordRevenue(fee);
+        SafeTransferLib.forceSafeTransferETH(feeAddress, fee);
         return int128(uint128(fee));
     }
 
@@ -151,9 +185,9 @@ contract BurntatoSwapFeeHook is BaseHook {
 
         uint256 potatoToSettle = uint256(int256(-delta.amount1()));
         if (potatoToSettle != 0) {
-            IPotatoToken(treasury).authorizePoolManagerTransfer(potatoToSettle);
+            IPotatoToken(token).authorizePoolManagerTransfer(potatoToSettle);
             poolManager.sync(key.currency1);
-            if (!IPotatoToken(treasury).transfer(address(poolManager), potatoToSettle)) {
+            if (!IPotatoToken(token).transfer(address(poolManager), potatoToSettle)) {
                 revert Errors.TokenOperationFailed();
             }
             poolManager.settle();
@@ -163,17 +197,11 @@ contract BurntatoSwapFeeHook is BaseHook {
         nativeReceived = address(this).balance - nativeBefore;
     }
 
-    function _recordRevenue(uint256 amount) private {
-        IMarket(treasury).recordHookRevenue{value: amount}();
-    }
-
     function _validateKey(PoolKey calldata key) private view {
-        IMarket.MarketConfig memory config = IMarket(treasury).marketConfig();
         if (
-            !key.currency0.isAddressZero() || Currency.unwrap(key.currency1) != treasury
+            !key.currency0.isAddressZero() || Currency.unwrap(key.currency1) != token
                 || address(key.hooks) != address(this) || key.fee != Constants.POOL_LP_FEE
-                || key.tickSpacing != config.tickSpacing || config.hook != address(this)
-                || config.poolManager != address(poolManager)
+                || key.tickSpacing != tickSpacing
         ) revert Errors.InvalidMarketConfiguration();
     }
 

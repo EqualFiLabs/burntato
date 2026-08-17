@@ -33,6 +33,7 @@ library BurntatoDeploymentConfig {
             treasuryBps: 2_500,
             recoveryBurnBps: 9_000,
             recoveryTreasuryBps: 1_000,
+            hookFeeBps: 100,
             initialTick: DEFAULT_INITIAL_TICK,
             tickSpacing: DEFAULT_TICK_SPACING,
             tickLower: TickMath.minUsableTick(DEFAULT_TICK_SPACING),
