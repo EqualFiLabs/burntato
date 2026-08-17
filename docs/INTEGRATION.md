@@ -38,6 +38,8 @@ transfer hook permits only:
 All other underlying POTATO movements revert. The transient PoolManager
 allowance expires with the transaction and is observable through
 `transientPoolManagerAllowance()` for integration testing.
+Public transfers to or from `address(0)` also revert. `burn(amount)` is the
+supported voluntary destruction path and reduces `totalSupply()` exactly.
 
 This is the FWA.fun transfer-lock pattern adapted to collision-resistant Diamond
 transient slots and exact protocol escrow/claim movements:
@@ -78,7 +80,8 @@ or hook-fee claim.
 Hook ownership may update `feeAddress` and `feeBps` before or after launch and
 before or after Diamond finalization. The fee is bounded to 10,000 BPS. Market
 frontends should read it from the hook instead of assuming the 1% genesis
-default.
+default. The receiver cannot be zero, the hook, POTATO Diamond, or PoolManager;
+those are system sinks, not Treasury destinations.
 
 ## Claims and recipients
 

@@ -18,8 +18,9 @@ recoveryBurnBps / recoveryTreasuryBps
 The three purchase shares must sum to 10,000 BPS and the two Recovery shares
 must sum to 10,000 BPS. Every individual BPS value is bounded by 10,000.
 Starting price, round timeout, and emission vesting duration must be nonzero.
-Zero price growth, zero emission step, and a zero round emission budget are
-valid configurations.
+Round timeout is at most `type(uint64).max`, which keeps every accepted
+snapshotted deadline addition inside `uint256`. Zero price growth, zero emission
+step, and a zero round emission budget are valid configurations.
 
 Round N snapshots the complete configuration for Round N+1 when Round N
 activates. Later governance changes cannot rewrite the active round or the

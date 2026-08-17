@@ -42,9 +42,10 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         uint16 feeBps_,
         int24 tickSpacing_
     ) BaseHook(manager) {
-        if (owner_ == address(0) || token_ == address(0) || feeAddress_ == address(0)) {
+        if (owner_ == address(0) || token_ == address(0)) {
             revert Errors.InvalidAddress();
         }
+        _validateFeeAddress(feeAddress_, token_, address(manager));
         if (feeBps_ > Constants.BPS) revert Errors.InvalidBps();
         _initializeOwner(owner_);
         token = token_;
@@ -54,7 +55,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     }
 
     function setFeeAddress(address newFeeAddress) external onlyOwner {
-        if (newFeeAddress == address(0)) revert Errors.InvalidAddress();
+        _validateFeeAddress(newFeeAddress, token, address(poolManager));
         feeAddress = newFeeAddress;
         emit FeeAddressSet(newFeeAddress);
     }
@@ -108,7 +109,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         if (!IMarket(token).marketLaunching()) revert Errors.MarketNotLaunching();
         int128 potatoDelta = delta.amount1();
         if (potatoDelta < 0) {
-            IPotatoToken(token).authorizePoolManagerTransfer(uint256(int256(-potatoDelta)));
+            IPotatoToken(token).authorizePoolManagerTransfer(uint256(-int256(potatoDelta)));
         }
         return (BaseHook.afterAddLiquidity.selector, BalanceDeltaLibrary.ZERO_DELTA);
     }
@@ -125,16 +126,17 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         if (params.amountSpecified > 0) revert Errors.ExactOutputNotAllowed();
 
         bool specifiedTokenIs0 = (params.amountSpecified < 0 == params.zeroForOne);
-        int128 swapAmount = specifiedTokenIs0 ? delta.amount1() : delta.amount0();
-        if (swapAmount < 0) swapAmount = -swapAmount;
+        int128 signedSwapAmount = specifiedTokenIs0 ? delta.amount1() : delta.amount0();
+        uint256 swapAmount =
+            signedSwapAmount < 0 ? uint256(-int256(signedSwapAmount)) : uint256(uint128(signedSwapAmount));
 
         uint256 allowanceForRouter;
         if (params.zeroForOne) {
-            feeDelta = _handleBuy(key, uint128(swapAmount), sender);
-            allowanceForRouter = uint256(uint128(swapAmount)) - uint256(uint128(feeDelta));
+            feeDelta = _handleBuy(key, swapAmount, sender);
+            allowanceForRouter = swapAmount - uint256(uint128(feeDelta));
         } else {
-            feeDelta = _handleSell(key, uint128(swapAmount), sender);
-            allowanceForRouter = uint256(int256(-delta.amount1()));
+            feeDelta = _handleSell(key, swapAmount, sender);
+            allowanceForRouter = uint256(-int256(delta.amount1()));
         }
         if (allowanceForRouter != 0) {
             IPotatoToken(token).authorizePoolManagerTransfer(allowanceForRouter);
@@ -144,12 +146,13 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         return (BaseHook.afterSwap.selector, feeDelta);
     }
 
-    function _handleBuy(PoolKey calldata key, uint128 grossPotatoOut, address sender)
+    function _handleBuy(PoolKey calldata key, uint256 grossPotatoOut, address sender)
         private
         returns (int128 feeDelta)
     {
-        uint256 fee = uint256(grossPotatoOut) * feeBps / Constants.BPS;
+        uint256 fee = grossPotatoOut * feeBps / Constants.BPS;
         if (fee == 0) return 0;
+        if (fee > uint256(uint128(type(int128).max))) revert Errors.InvalidMarketConfiguration();
 
         IPotatoToken(token).authorizePoolManagerTransfer(fee);
         poolManager.take(key.currency1, address(this), fee);
@@ -160,12 +163,13 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         return int128(uint128(fee));
     }
 
-    function _handleSell(PoolKey calldata key, uint128 grossNativeOut, address sender)
+    function _handleSell(PoolKey calldata key, uint256 grossNativeOut, address sender)
         private
         returns (int128 feeDelta)
     {
-        uint256 fee = uint256(grossNativeOut) * feeBps / Constants.BPS;
+        uint256 fee = grossNativeOut * feeBps / Constants.BPS;
         if (fee == 0) return 0;
+        if (fee > uint256(uint128(type(int128).max))) revert Errors.InvalidMarketConfiguration();
 
         poolManager.take(key.currency0, address(this), fee);
         emit HookFee(PoolId.unwrap(key.toId()), sender, uint128(fee), 0);
@@ -183,7 +187,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
             ""
         );
 
-        uint256 potatoToSettle = uint256(int256(-delta.amount1()));
+        uint256 potatoToSettle = uint256(-int256(delta.amount1()));
         if (potatoToSettle != 0) {
             IPotatoToken(token).authorizePoolManagerTransfer(potatoToSettle);
             poolManager.sync(key.currency1);
@@ -203,6 +207,12 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
                 || address(key.hooks) != address(this) || key.fee != Constants.POOL_LP_FEE
                 || key.tickSpacing != tickSpacing
         ) revert Errors.InvalidMarketConfiguration();
+    }
+
+    function _validateFeeAddress(address candidate, address token_, address manager_) private view {
+        if (candidate == address(0) || candidate == address(this) || candidate == token_ || candidate == manager_) {
+            revert Errors.InvalidAddress();
+        }
     }
 
     receive() external payable {}

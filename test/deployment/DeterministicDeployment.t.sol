@@ -4,9 +4,11 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
+import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 
 import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
+import {BurntatoHookDeployer} from "../../script/helpers/BurntatoHookDeployer.sol";
 import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
 import {BurntatoDeployment, GenesisConfig} from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
@@ -83,6 +85,21 @@ contract DeterministicDeploymentTest is Test {
 
         vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
         deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_DeploymentRejectsTimeoutOutsideDeadlineDomain() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.protocol.roundTimeout = uint256(type(uint64).max) + 1;
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_HookDeployerRejectsUnauthorizedCaller() public {
+        BurntatoHookDeployer hookDeployer = BurntatoHookDeployer(deployment.hookDeployer);
+        vm.prank(buyer);
+        vm.expectRevert(abi.encodeWithSelector(BurntatoHookDeployer.UnauthorizedDeployer.selector, buyer));
+        hookDeployer.deploy(bytes32(0), IPoolManager(address(0)), address(0), address(0), address(0), 0, 0);
     }
 
     function test_EnvironmentNarrowingHelpersRejectTruncation() public {

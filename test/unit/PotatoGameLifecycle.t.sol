@@ -88,6 +88,12 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         _earnForAlice();
 
         vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, address(0)));
+        potato.transfer(address(0), 1 ether);
+        assertEq(potato.balanceOf(address(0)), 0);
+        assertEq(potato.totalSupply(), 10_000 ether);
+
+        vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, bob));
         potato.transfer(bob, 1 ether);
 
@@ -96,6 +102,11 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         vm.prank(bob);
         vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, bob));
         potato.transferFrom(alice, bob, 1 ether);
+        assertEq(potato.allowance(alice, bob), 1 ether);
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, address(0)));
+        potato.transferFrom(alice, address(0), 1 ether);
         assertEq(potato.allowance(alice, bob), 1 ether);
 
         vm.prank(alice);

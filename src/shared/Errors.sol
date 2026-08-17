@@ -9,11 +9,9 @@ library Errors {
     error CommitmentsPaused();
     error CutsDisabled();
     error EmptySelectors();
-    error FacetHasNoCode(address facet);
     error FunctionNotFound(bytes4 selector);
     error IncorrectPayment(uint256 expected, uint256 received);
     error InitializationFailed(bytes reason);
-    error InsufficientAllowance();
     error InsufficientBalance();
     error InvalidAddress();
     error InvalidBps();

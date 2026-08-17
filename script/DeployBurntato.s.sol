@@ -270,11 +270,11 @@ contract DeployBurntato is Script {
         if (
             bootstrapAuthority == address(0) || config.deployer == address(0) || config.proposer == address(0)
                 || config.treasuryRecipient == address(0) || protocol.startingPrice == 0 || protocol.roundTimeout == 0
-                || protocol.emissionVestingDuration == 0 || protocol.priceIncreaseBps > Constants.BPS
-                || protocol.emissionStepBps > Constants.BPS || protocol.winnerBps > Constants.BPS
-                || protocol.recoveryBps > Constants.BPS || protocol.treasuryBps > Constants.BPS
-                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
-                || config.hookFeeBps > Constants.BPS
+                || protocol.roundTimeout > type(uint64).max || protocol.emissionVestingDuration == 0
+                || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
+                || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
+                || protocol.treasuryBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
+                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING

@@ -99,6 +99,10 @@ contract GovernanceAdministrationTest is Test {
         _expectInvalidConfig(config);
 
         config = _config(0.02 ether, 1_000);
+        config.roundTimeout = uint256(type(uint64).max) + 1;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
         config.priceIncreaseBps = 10_001;
         _expectInvalidConfig(config);
 

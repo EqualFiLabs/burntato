@@ -31,9 +31,10 @@ and bilateral fee.
 
 Defaults are operational inputs, not protocol immutability claims. Zero
 timelock delay is accepted, and the proposer may equal the bootstrap authority.
-Starting price, round timeout, and emission vesting must remain nonzero. BPS
-values are bounded to 10,000; the purchase and Recovery splits must each sum to
-10,000. Zero price growth, emission step, emission budget, or hook fee is valid.
+Starting price, round timeout, and emission vesting must remain nonzero. Round
+timeout is bounded by `type(uint64).max` for deadline safety. BPS values are
+bounded to 10,000; the purchase and Recovery splits must each sum to 10,000.
+Zero price growth, emission step, emission budget, or hook fee is valid.
 
 ## Environment
 
@@ -68,6 +69,10 @@ BURNTATO_POTATO_SEED
 Numeric values use base units. Narrow BPS and tick inputs are range-checked
 before conversion. Tick spacing must be inside the PoolManager domain; bounds
 must be aligned to spacing and surround the initial tick.
+
+The CREATE2 hook helper accepts deployment only from the address that created
+it. This keeps the mined hook address available to the same local broadcast
+sequence between helper creation and hook creation.
 
 ## Commands
 

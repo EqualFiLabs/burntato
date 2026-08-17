@@ -158,7 +158,11 @@ contract BurntatoDeploymentVerifier {
     function _verifyConfigDomain(GenesisConfig memory config) private pure {
         ProtocolConfig memory protocol = config.protocol;
         _check(protocol.startingPrice != 0, "STARTING_PRICE_DOMAIN");
-        _check(protocol.roundTimeout != 0 && protocol.emissionVestingDuration != 0, "TIME_DOMAIN");
+        _check(
+            protocol.roundTimeout != 0 && protocol.roundTimeout <= type(uint64).max
+                && protocol.emissionVestingDuration != 0,
+            "TIME_DOMAIN"
+        );
         _check(protocol.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");
         _check(protocol.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
         _check(

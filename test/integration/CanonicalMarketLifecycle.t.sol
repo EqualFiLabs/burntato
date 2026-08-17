@@ -249,6 +249,15 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(authority);
         vm.expectRevert(Errors.InvalidAddress.selector);
         hook.setFeeAddress(address(0));
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setFeeAddress(address(hook));
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setFeeAddress(address(diamond));
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setFeeAddress(address(manager));
     }
 
     function test_ConfigurationRejectsTickSpacingOutsidePoolManagerDomain() public {

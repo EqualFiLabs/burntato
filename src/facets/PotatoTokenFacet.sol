@@ -28,6 +28,16 @@ contract PotatoTokenFacet is ERC20 {
         emit PotatoBurned(msg.sender, amount);
     }
 
+    function transfer(address to, uint256 amount) public override returns (bool) {
+        if (to == address(0)) revert Errors.TransferRestricted(msg.sender, to);
+        return super.transfer(to, amount);
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        if (from == address(0) || to == address(0)) revert Errors.TransferRestricted(from, to);
+        return super.transferFrom(from, to, amount);
+    }
+
     function protocolMint(address to, uint256 amount) external {
         _enforceProtocol();
         _mint(to, amount);
@@ -40,6 +50,7 @@ contract PotatoTokenFacet is ERC20 {
 
     function protocolTransfer(address from, address to, uint256 amount) external {
         _enforceProtocol();
+        if (from == address(0) || to == address(0)) revert Errors.TransferRestricted(from, to);
         _setProtocolMovement(keccak256(abi.encode(from, to, amount)));
         _transfer(from, to, amount);
     }
