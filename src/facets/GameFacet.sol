@@ -2,9 +2,9 @@
 pragma solidity 0.8.26;
 
 import {IGame} from "../interfaces/IGame.sol";
+import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
-import {LibToken} from "../libraries/LibToken.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
@@ -17,7 +17,7 @@ contract GameFacet is IGame {
         if (round.currentHolder != address(0) && block.timestamp >= round.deadline) revert Errors.RoundExpired();
         if (msg.value != round.nextPrice) revert Errors.IncorrectPayment(round.nextPrice, msg.value);
 
-        if (round.currentHolder != address(0)) _finalizeEmission(round);
+        if (round.currentHolder != address(0)) LibGame.finalizeEmission(round);
 
         uint256 winnerShare = LibMath.mulBpsDown(msg.value, Constants.WINNER_BPS);
         uint256 recoveryShare = LibMath.mulBpsDown(msg.value, Constants.RECOVERY_BPS);
@@ -48,7 +48,7 @@ contract GameFacet is IGame {
         if (block.timestamp - round.holderSince < Constants.EMISSION_VESTING_DURATION) {
             revert Errors.VestingIncomplete();
         }
-        earned = _finalizeEmission(round);
+        earned = LibGame.finalizeEmission(round);
     }
 
     function currentRoundId() external view returns (uint256) {
@@ -70,27 +70,9 @@ contract GameFacet is IGame {
     function _currentOrStartRound(LibProtocolStorage.GameStorage storage gs) private returns (Round storage round) {
         if (gs.currentRoundId == 0) {
             gs.currentRoundId = 1;
-            round = gs.rounds[1];
-            round.roundId = 1;
-            round.config.startingPrice = gs.config.startingPrice;
-            round.config.priceIncreaseBps = gs.config.priceIncreaseBps;
-            round.nextPrice = round.config.startingPrice;
-            round.remainingEmission = Constants.ROUND_EMISSION_BUDGET;
-            emit RoundStarted(1, round.nextPrice, round.remainingEmission);
+            round = LibGame.activateRound(1, 0);
         } else {
             round = gs.rounds[gs.currentRoundId];
         }
-    }
-
-    function _finalizeEmission(Round storage round) private returns (uint256 earned) {
-        if (round.holderEmissionFinalized) return round.holderEarned;
-        uint256 heldSeconds = block.timestamp - round.holderSince;
-        earned = LibMath.linearEarned(round.holderMaxReward, heldSeconds);
-        round.holderEmissionFinalized = true;
-        round.holderEarned = earned;
-        round.remainingEmission -= earned;
-        round.emittedPotato += earned;
-        LibToken.mint(round.currentHolder, earned);
-        emit EmissionFinalized(round.roundId, round.currentHolder, round.holderMaxReward, earned, heldSeconds);
     }
 }

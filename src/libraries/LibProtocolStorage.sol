@@ -21,6 +21,7 @@ library LibProtocolStorage {
         ProtocolConfig config;
         uint256 currentRoundId;
         mapping(uint256 => Round) rounds;
+        mapping(uint256 => bool) winnerClaimed;
     }
 
     struct TokenStorage {
@@ -35,6 +36,7 @@ library LibProtocolStorage {
         mapping(uint256 => mapping(address => uint256)) commitments;
         mapping(uint256 => uint256) totalCommitments;
         mapping(uint256 => mapping(address => bool)) claimed;
+        mapping(uint256 => uint256) recoveryPaid;
     }
 
     struct TreasuryStorage {
