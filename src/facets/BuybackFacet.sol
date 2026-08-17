@@ -58,9 +58,10 @@ contract BuybackFacet is IBuyback {
         uint256 reserve = bs.reserveEth;
         if (reserve == 0 || config.maxSpend == 0) revert Errors.BuybackUnavailable();
 
-        uint256 nextBlock = config.delayBlocks > type(uint256).max - bs.lastBuybackBlock
-            ? type(uint256).max
-            : bs.lastBuybackBlock + config.delayBlocks;
+        if (config.delayBlocks > type(uint256).max - bs.lastBuybackBlock) {
+            revert Errors.BuybackTooSoon(type(uint256).max);
+        }
+        uint256 nextBlock = bs.lastBuybackBlock + config.delayBlocks;
         if (block.number < nextBlock) revert Errors.BuybackTooSoon(nextBlock);
 
         uint256 grossSlice = reserve < config.maxSpend ? reserve : config.maxSpend;

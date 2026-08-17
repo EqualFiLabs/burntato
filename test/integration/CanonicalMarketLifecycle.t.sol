@@ -478,6 +478,22 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(potato.balanceOf(bob) - bobBefore, treasuryPotato / 4);
     }
 
+    function test_PositiveBuybackDelayCannotRepeatAtTerminalBlock() public {
+        vm.prank(authority);
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 0.001 ether, callerRewardBps: 10_000, delayBlocks: 1}));
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        vm.roll(type(uint256).max);
+        vm.prank(keeper);
+        assertEq(buybacks.buyback(), 0);
+        assertEq(buybacks.buybackReserveEth(), 0.001 ether);
+
+        vm.prank(keeper);
+        vm.expectRevert(abi.encodeWithSelector(Errors.BuybackTooSoon.selector, type(uint256).max));
+        buybacks.buyback();
+    }
+
     function test_BuybackConfigurationRemainsGovernedAfterFinalization() public {
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, alice));
