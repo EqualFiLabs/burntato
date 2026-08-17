@@ -10,7 +10,15 @@ import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
 import {BurntatoDeployment, GenesisConfig} from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
+import {IMarket} from "../../src/interfaces/IMarket.sol";
+import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
+import {IRecovery} from "../../src/interfaces/IRecovery.sol";
+import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Round} from "../../src/shared/Types.sol";
+
+interface IPositionOwner {
+    function ownerOf(uint256 tokenId) external view returns (address);
+}
 
 contract DeterministicDeploymentTest is Test {
     DeployBurntato internal deployScript;
@@ -61,5 +69,38 @@ contract DeterministicDeploymentTest is Test {
         timelock.execute(deployment.diamond, 0, data, predecessor, salt);
 
         assertEq(IGovernance(deployment.diamond).guardian(), replacementGuardian);
+    }
+
+    function test_LocalDependenciesLaunchLockedTwoSidedMarket() public {
+        GenesisConfig memory launchConfig = config;
+        launchConfig.nativeSeed = 0.001 ether;
+        launchConfig.potatoSeed = 1 ether;
+        BurntatoDeployment memory launchDeployment = deployScript.deploy(launchConfig, address(deployScript));
+        IGame game = IGame(launchDeployment.diamond);
+        IRecovery recovery = IRecovery(launchDeployment.diamond);
+        ISettlement settlement = ISettlement(launchDeployment.diamond);
+
+        vm.deal(buyer, 1 ether);
+        vm.prank(buyer);
+        game.buyPotato{value: launchConfig.startingPrice}();
+        vm.warp(block.timestamp + 120);
+        game.materializeMaturedEmission();
+        vm.prank(buyer);
+        recovery.commitRecovery(10_000 ether);
+        vm.warp(game.getRound(1).deadline);
+        settlement.settleRound();
+
+        vm.prank(buyer);
+        game.buyPotato{value: launchConfig.startingPrice}();
+        vm.warp(game.getRound(2).deadline);
+        settlement.settleRound();
+
+        IMarket market = IMarket(launchDeployment.diamond);
+        assertEq(IPotatoToken(launchDeployment.diamond).balanceOf(launchDeployment.diamond), 1_000 ether);
+        assertTrue(market.marketReady());
+        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+        assertNotEq(poolId, bytes32(0));
+        assertGt(liquidity, 0);
+        assertEq(IPositionOwner(launchDeployment.positionManager).ownerOf(1), market.lockedLpRecipient());
     }
 }
