@@ -153,7 +153,9 @@ contract BurntatoSwapFeeHook is BaseHook {
         if (potatoToSettle != 0) {
             IPotatoToken(treasury).authorizePoolManagerTransfer(potatoToSettle);
             poolManager.sync(key.currency1);
-            IPotatoToken(treasury).transfer(address(poolManager), potatoToSettle);
+            if (!IPotatoToken(treasury).transfer(address(poolManager), potatoToSettle)) {
+                revert Errors.TokenOperationFailed();
+            }
             poolManager.settle();
         }
         uint256 nativeToTake = uint256(int256(delta.amount0()));

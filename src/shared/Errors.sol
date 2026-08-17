@@ -47,6 +47,7 @@ library Errors {
     error SelectorFrozen(bytes4 selector);
     error SelectorUnchanged(bytes4 selector);
     error TransferRestricted(address from, address to);
+    error TokenOperationFailed();
     error UnauthorizedWinner(address caller);
     error VestingIncomplete();
     error ZeroAmount();

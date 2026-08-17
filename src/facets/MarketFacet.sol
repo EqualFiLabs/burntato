@@ -90,7 +90,9 @@ contract MarketFacet is IMarket {
 
         ms.launched = true;
         _setLaunching(true);
-        IPotatoToken(address(this)).approve(ms.permit2, type(uint256).max);
+        if (!IPotatoToken(address(this)).approve(ms.permit2, type(uint256).max)) {
+            revert Errors.TokenOperationFailed();
+        }
         IAllowanceTransfer(ms.permit2).approve(address(this), ms.positionManager, type(uint160).max, type(uint48).max);
 
         bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
