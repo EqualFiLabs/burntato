@@ -14,6 +14,7 @@ import {Vm} from "forge-std/Vm.sol";
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
+import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
@@ -185,6 +186,21 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         potato.approve(address(this), bought);
         vm.expectRevert(abi.encodeWithSelector(Errors.PoolManagerAllowanceExceeded.selector, 0, bought));
         potato.transferFrom(alice, address(manager), bought);
+    }
+
+    function test_GuardianPauseCannotDisableCanonicalMarketSettlement() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+        vm.prank(guardian);
+        IGovernance(address(diamond)).setPauseState(true, true);
+
+        uint256 bought = _buy(alice, 0.0001 ether);
+        assertGt(bought, 0);
+        vm.prank(alice);
+        potato.approve(address(swapRouter), bought);
+        uint256 nativeBefore = alice.balance;
+        _sell(alice, bought);
+        assertGt(alice.balance, nativeBefore);
     }
 
     function _createTreasuryInventory() internal {
