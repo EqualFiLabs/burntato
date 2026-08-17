@@ -60,6 +60,7 @@ Once both configured reserves exist, anyone may call `launchMarket()`. The launc
 
 - initializes the exact native ETH/POTATO `PoolKey` with zero native LP fee;
 - contributes the predetermined two-sided Treasury inventory;
+- refunds any unused native seed from PositionManager and debits only amounts actually deposited;
 - mints the only initial position directly to `0x000000000000000000000000000000000000dEaD`; and
 - permanently marks the market launched.
 

@@ -2,7 +2,9 @@
 
 ## Timelock authority
 
-After genesis configuration, the Diamond authority is an OpenZeppelin `TimelockController`. The Uniswap v4 PoolManager owner is the same timelock. The deployer receives no Timelock admin, proposer, canceller, or protocol authority role. Execution is permissionless after an authorized proposal's delay expires.
+After genesis configuration, the Diamond authority is an OpenZeppelin `TimelockController` with a protocol-enforced minimum delay of one day. Genesis permits exactly one bootstrap handoff to that timelock and then permanently locks the authority address. The deployer receives no Timelock admin, proposer, canceller, or protocol authority role. Execution is permissionless after an authorized proposal's delay expires.
+
+The Uniswap v4 PoolManager is deployed with both owner and protocol-fee controller disabled. No Burntato authority can later add a PoolManager protocol fee alongside the canonical 1% hook fee.
 
 Before global finalization, delayed governance may:
 
@@ -17,12 +19,12 @@ The canonical market configuration is one-shot. Neither the timelock nor the gua
 
 ## Guardian boundary
 
-The guardian may only set two pause bits:
+The guardian may only change these two pause bits from false to true:
 
 - new Hot Potato purchases; and
 - new Recovery commitments.
 
-The guardian cannot upgrade, configure economics, change recipients, move assets, settle rounds, block claims, block matured emission materialization, block canonical market settlement, mint or burn POTATO, or reverse a freeze. Global finalization removes the guardian and clears both pause bits.
+The guardian cannot clear either pause. Only the timelocked authority can unpause. The guardian also cannot upgrade, configure economics, change recipients, move assets, settle rounds, block claims, block matured emission materialization, block canonical market settlement, mint or burn POTATO, or reverse a freeze. Global finalization removes the guardian and clears both pause bits.
 
 ## Progressive immutability
 
@@ -46,14 +48,16 @@ Use the Diamond loupe and governance views to inspect authority:
 
 ```text
 authority()
+authorityLocked()
 guardian()
 purchasesPaused()
 commitmentsPaused()
 protocolFinalized()
+protocolConfig()
 parameterFrozen(key)
 selectorFrozen(selector)
 facetAddress(selector)
 facetFunctionSelectors(facet)
 ```
 
-For a deployed environment, also confirm that the timelock self-holds `DEFAULT_ADMIN_ROLE`, only the intended governance account has proposer/canceller roles, `EXECUTOR_ROLE` is open at `address(0)`, and the deployer has no privileged role.
+For a deployed environment, also confirm that the timelock delay is at least one day, the timelock self-holds `DEFAULT_ADMIN_ROLE`, only the intended governance account has proposer/canceller roles, `EXECUTOR_ROLE` is open at `address(0)`, the deployer has no privileged role, and the PoolManager owner and protocol-fee controller are both zero.

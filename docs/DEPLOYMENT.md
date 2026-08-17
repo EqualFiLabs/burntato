@@ -69,7 +69,7 @@ BURNTATO_NATIVE_SEED
 BURNTATO_POTATO_SEED
 ```
 
-Numeric token and ETH values use base units. Tick bounds must be multiples of tick spacing and surround the initial tick. The proposer must differ from the bootstrap deployer so the deployer cannot retain proposal authority.
+Numeric token and ETH values use base units. Environment values are range-checked before narrowing, so oversized basis-point or tick inputs revert instead of truncating. Tick spacing must remain within the PoolManager-supported domain, and tick bounds must be multiples of spacing and surround the initial tick. The timelock delay cannot be less than one day. The proposer must differ from the bootstrap deployer so the deployer cannot retain proposal authority.
 
 ## Verify the deployment
 
@@ -91,8 +91,8 @@ The verifier reconstructs every expected selector group through the Diamond loup
 
 - nine facets and all canonical selector routes;
 - Timelock delay, self-administration, intended proposer/canceller, open execution, and absent deployer roles;
-- Timelock ownership of the Diamond and PoolManager;
-- guardian, Treasury recipient, token metadata, empty initial supply, and unpaused/unfinalized state;
+- immutable Timelock authority of the Diamond and disabled PoolManager owner/protocol-fee controller;
+- guardian, complete Hot Potato configuration, Treasury recipient, token metadata, empty initial supply, and unpaused/unfinalized state;
 - complete market configuration, zero native LP fee, canonical PoolKey, and locked LP recipient;
 - mined hook flags, immutable Diamond/PoolManager binding, and uninitialized pool state; and
 - PositionManager binding to the exact PoolManager and Permit2-compatible contract.

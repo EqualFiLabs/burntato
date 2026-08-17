@@ -40,7 +40,9 @@ Supported user actions are:
 - approve a canonical router and trade through the exact hooked pool after launch; and
 - call `burn(amount)` to destroy the caller's own balance.
 
-There is no public or administrative mint, arbitrary third-party burn, permanent PoolManager exemption, or reusable transfer bypass. The hook opens an amount-bounded transient allowance, and each PoolManager movement consumes it in the same transaction.
+There is no public or administrative mint, arbitrary third-party burn, permanent PoolManager exemption, or reusable transfer bypass. The hook opens an amount-bounded transient allowance, and each underlying POTATO movement involving PoolManager consumes it in the same transaction.
+
+This is an underlying ERC-20 restriction, not a universal restriction on derivative representations. The standard v4 PoolManager can issue transferable ERC-6909 currency claims without calling POTATO, and third parties can create wrappers or other representations of POTATO exposure. Those assets are not POTATO balances and their transfers cannot be intercepted by POTATO's transfer hook. Integrators must not interpret the FWA-style restriction as a guarantee that every possible derivative venue pays Burntato's fee.
 
 ## Canonical v4 market
 
@@ -54,7 +56,7 @@ tickSpacing  = configured immutable launch spacing
 hooks        = configured BurntatoSwapFeeHook
 ```
 
-The initial implementation supports exact-input swaps only. Exact-output swaps, foreign keys, alternate hooks, repeated initialization, repeated launch, and post-launch liquidity additions revert. A different pool cannot move POTATO because it cannot obtain the canonical transient transfer allowance.
+The initial implementation supports exact-input swaps only. Exact-output swaps, foreign keys, alternate hooks, repeated initialization, repeated launch, and post-launch liquidity additions revert. A different pool cannot move underlying POTATO ERC-20 balances because it cannot obtain the canonical transient transfer allowance. PoolManager-native ERC-6909 claims remain the explicit derivative boundary described above.
 
 Hook events are `PoolLaunched`, `HookFee`, and `Trade`. Diamond market events are `MarketConfigured`, `MarketLaunched`, and `HookRevenueRecorded`. `MarketLaunched.poolId` is the canonical PoolId derived from the exact PoolKey.
 
@@ -66,4 +68,4 @@ Burntato deliberately adapts the public TokenWorks FWA.fun relaunch implementati
 - [`FWATokenHook.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol) — canonical initialization gating and bilateral after-swap fee deltas.
 - [`FWAToken.t.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWAToken.t.sol) and [`FWATokenHookSquat.t.sol`](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWATokenHookSquat.t.sol) — transfer-lock, fee, one-shot launch, and initialization-squatting regressions.
 
-These are implementation precedents, not dependencies or authorities. Burntato differs by using namespaced Diamond and transient storage, fixed Treasury accounting instead of a mutable fee wallet, a two-sided Treasury seed, a permanently burned LP recipient, no fee auto-compounding, timelocked administration, and progressive immutability.
+These are implementation precedents, not dependencies or authorities. Burntato differs by using namespaced Diamond and transient storage, fixed Treasury accounting instead of a mutable fee wallet, a two-sided Treasury seed, a permanently burned LP recipient, no fee auto-compounding, timelocked administration, and progressive immutability. FWA's same transfer-hook pattern shares the ERC-6909/wrapper boundary; Burntato documents it rather than claiming broader economic exclusivity than the ERC-20 hook can enforce.

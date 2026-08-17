@@ -2,11 +2,11 @@
 
 Date: August 17, 2026
 
-Qualified code candidate: `6755c22` (`fix(market): enforce POTATO operation results`)
+Qualified code candidate: `c57d4e5` (`fix(market): reject custody role collisions`)
 
 Environment: Foundry 1.5.1-stable, Solidity 0.8.26, Cancun EVM, local Linux host, Anvil chain ID 31337
 
-This evidence qualifies the nine-PR implementation candidate before the requested independent full-system audit. The audit and any remediation are intentionally not represented here as complete.
+This evidence qualifies the nine-PR implementation candidate plus the requested full-system audit remediation. The audit was performed against exact PR-09 commit `d31f822e44bbd66887fda3c42eee5e919032bd70`; the commands below were rerun after remediation.
 
 ## Test execution
 
@@ -15,27 +15,27 @@ Foundry's cache selected only currently active artifact roots for a plain `forge
 | Scope | Command | Result |
 | --- | --- | --- |
 | Diamond foundation | `forge test --no-cache --match-path test/unit/DiamondFoundation.t.sol -j 1 -vv` | 5 passed |
-| Governance and immutability | `forge test --match-path test/unit/GovernanceImmutability.t.sol -j 1 -vv` | 5 passed |
+| Governance and immutability | `forge test --match-path test/unit/GovernanceImmutability.t.sol -j 1 -vv` | 8 passed |
 | POTATO and game | `forge test --no-cache --match-path test/unit/PotatoGameLifecycle.t.sol -j 1 -vv` | 7 passed |
-| Recovery settlement | `forge test --no-cache --match-path test/integration/RecoverySettlementLifecycle.t.sol -j 1 -vv` | 5 passed |
+| Recovery settlement | `forge test --no-cache --match-path test/integration/RecoverySettlementLifecycle.t.sol -j 1 -vv` | 8 passed |
 | Integrated lifecycle | `forge test --no-cache --match-path test/integration/IntegratedLifecycle.t.sol -j 1 -vv` | 10 passed |
-| Canonical market | `forge test --match-path test/integration/CanonicalMarketLifecycle.t.sol -j 1 -vv` | 6 passed after static-analysis remediation |
-| Deterministic deployment | `forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1 -vv` | 4 passed after static-analysis remediation |
+| Canonical market | `forge test --match-path test/integration/CanonicalMarketLifecycle.t.sol -j 1 -vv` | 9 passed after audit remediation |
+| Deterministic deployment | `forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1 -vv` | 8 passed after audit remediation |
 | Economic fuzz | `forge test --no-cache --match-path test/fuzz/EconomicFuzz.t.sol -j 1 -vv` | 4 properties × 1,000 runs |
 | Recovery fuzz | `forge test --no-cache --match-path test/fuzz/RecoveryDistributionFuzz.t.sol -j 1 -vv` | 1 property × 1,000 runs |
 | Protocol invariants | `FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --no-cache --match-path test/invariant/ProtocolInvariant.t.sol -j 1 -vv` | 5 invariants, 64,000 calls |
 | Governance invariants | `FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --no-cache --match-path test/invariant/GovernanceInvariant.t.sol -j 1 -vv` | 2 invariants, 25,600 calls |
 | Canonical market invariants | `FOUNDRY_INVARIANT_RUNS=64 FOUNDRY_INVARIANT_DEPTH=32 forge test --match-path test/invariant/CanonicalMarketInvariant.t.sol -j 1 -vv` | 2 invariants, 4,096 real-v4 calls after remediation |
 
-Aggregate executed coverage was 56 test/property/invariant methods, 5,000 fuzz cases, and 93,696 stateful invariant calls. The tests exercise real purchases, time advancement, emission materialization, forward commitments, settlements, claims, pauses, finalization, pool launch, buys, sells, bilateral fees, restricted transfers, and locked LP ownership. Synthetic handler setup remains limited to the documented invariant harnesses.
+Aggregate executed coverage was 69 test/property/invariant methods, 5,000 fuzz cases, and 93,696 stateful invariant calls. The tests exercise real purchases, time advancement, emission materialization, forward commitments, settlements, claims, pauses, finalization, full-precision extreme-value Recovery claims, POTATO-bounded pool launch with native refunds, buys, sells, bilateral fees, restricted transfers, and locked LP ownership. Synthetic handler setup remains limited to the documented invariant harnesses.
 
 ## Formatting, linting, and storage
 
 - `forge fmt --check` passed.
 - `forge lint src script test --severity high med low -j 1` exited successfully. The actionable unchecked POTATO return warnings were remediated in `6755c22`.
-- Forge continues to report non-failing narrow-cast warnings in bounded Diamond array positions, v4 signed deltas, and test generators. They are retained for the full audit rather than hidden with blanket suppressions.
+- Forge continues to report non-failing narrow-cast warnings in bounded Diamond array positions, v4 signed deltas, checked deployment helpers, and test generators. The audit confirmed the relevant bounds; the warnings remain visible rather than hidden with blanket suppressions.
 - `forge inspect <facet> storage-layout --json` reported zero ordinary storage entries for every Diamond facet. `BurntatoSwapFeeHook` reported its one intended standalone `deploymentBlock` entry. Diamond state otherwise resides in explicit namespaced libraries.
-- The deployment verifier confirmed 9 installed facets and 57 expected selectors with exact group routing.
+- The deployment verifier confirmed 9 installed facets and 59 expected selectors with exact group routing.
 
 ## Static analysis
 
@@ -47,12 +47,12 @@ FOUNDRY_EVM_VERSION=cancun aderyn . \
   --path-excludes lib,test,script \
   --skip-build \
   --skip-update-check \
-  --output /tmp/burntato-aderyn-pr9-remediated.md
+  --output /tmp/burntato-aderyn-pr10.md
 ```
 
-The EVM override works around this installed Aderyn version failing to parse an `osaka` setting inside a pinned dependency. Aderyn analyzed 24 Burntato source files, 1,098 nSLOC, and 63 detectors.
+The EVM override works around this installed Aderyn version failing to parse an `osaka` setting inside a pinned dependency. Aderyn analyzed 24 Burntato source files, 1,138 nSLOC, and 63 detectors.
 
-The initial report contained 5 high detector categories. The unchecked-return category was confirmed and fixed for Diamond approval and hook settlement transfer. The rerun contains 4 high detector categories and 5 low categories:
+The initial report contained 5 high detector categories. The unchecked-return category was confirmed and fixed for Diamond approval and hook settlement transfer. The post-audit rerun contains the same 4 classified high detector categories and 5 low categories:
 
 | Detector | Classification |
 | --- | --- |
@@ -67,6 +67,25 @@ The initial report contained 5 high detector categories. The unchecked-return ca
 | Unused custom errors | Analyzer limitation across qualified library error references; the reported errors are used by protocol libraries and tests. |
 
 The static report is a release input, not a substitute for the requested audit. Disposable analyzer reports remain outside version control.
+
+## Full audit and remediation
+
+The requested audit loaded the general, precision/math, ERC-20, AMM, Diamond/proxy, governance, assembly, and access-control checklists. Eight independent specialist passes were synthesized and deduplicated. The PR-09 candidate contained one High, seven Medium, and five Low findings.
+
+Confirmed executable findings were remediated in reviewable slices:
+
+| Commit | Remediation |
+| --- | --- |
+| `60d969b` | One-time minimum-delay authority handoff, containment-only guardian, timelock unpause, and disabled PoolManager fee authority |
+| `c90d22d` | Round N+1 configuration snapshot at Round N activation |
+| `237ea7f` | Full-precision Recovery claims and protocol-custody recipient rejection |
+| `88c9a2e` | Native launch-residue refund, actual-use accounting, tick-domain validation, and additive transient authorization |
+| `46c0452` | Checked environment narrowing and complete independent genesis verification |
+| `c57d4e5` | Treasury/system-custody role collision rejection during one-shot market configuration |
+
+One Medium architectural boundary is accepted rather than misrepresented as fixed: the FWA-style token hook governs underlying POTATO ERC-20 movement, but standard v4 ERC-6909 currency claims and third-party wrappers do not call POTATO and therefore cannot be transfer-restricted by POTATO. Canonical fee capture is guaranteed for the underlying canonical pool, not for every possible derivative representation. The integration guide and local ignored specifications state this boundary explicitly.
+
+Disposable specialist reports and the synthesized audit report remain outside version control. This was an internal checklist-driven source audit, not an independent third-party audit or deployed-chain assurance.
 
 ## Clean local deployment
 
@@ -105,7 +124,7 @@ The deployment test separately earned launch inventory through real gameplay and
 
 The verifier confirmed:
 
-- Diamond authority and PoolManager ownership are the TimelockController;
+- Diamond authority is irreversibly locked to the TimelockController, while PoolManager ownership and its protocol-fee controller are disabled;
 - the timelock self-holds admin, the intended account holds proposer/canceller, execution is open, and the deployer holds no role;
 - guardian and Treasury recipient match separate configured accounts;
 - purchases and commitments are unpaused and global finalization is false;
