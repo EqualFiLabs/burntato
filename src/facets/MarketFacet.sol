@@ -90,8 +90,7 @@ contract MarketFacet is IMarket {
         if (liquidity == 0) revert Errors.InvalidMarketConfiguration();
 
         uint256 nativeBefore = address(this).balance;
-        LibProtocolStorage.TokenStorage storage token = LibProtocolStorage.token();
-        uint256 potatoBefore = token.balanceOf[address(this)];
+        uint256 potatoBefore = IPotatoToken(address(this)).balanceOf(address(this));
 
         ms.launched = true;
         _setLaunching(true);
@@ -125,7 +124,7 @@ contract MarketFacet is IMarket {
         _setLaunching(false);
 
         uint256 nativeUsed = nativeBefore - address(this).balance;
-        uint256 potatoUsed = potatoBefore - token.balanceOf[address(this)];
+        uint256 potatoUsed = potatoBefore - IPotatoToken(address(this)).balanceOf(address(this));
         if (nativeUsed == 0 || potatoUsed == 0) revert Errors.InvalidMarketConfiguration();
 
         LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
@@ -222,7 +221,7 @@ contract MarketFacet is IMarket {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         return ts.purchaseEth + ts.hookEth >= ms.nativeSeed && ts.potatoInventory >= ms.potatoSeed
             && address(this).balance >= ms.nativeSeed
-            && LibProtocolStorage.token().balanceOf[address(this)] >= ms.potatoSeed;
+            && IPotatoToken(address(this)).balanceOf(address(this)) >= ms.potatoSeed;
     }
 
     function _consumeTreasuryEth(LibProtocolStorage.TreasuryStorage storage ts, uint256 amount) private {

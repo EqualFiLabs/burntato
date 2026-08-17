@@ -2,9 +2,9 @@
 pragma solidity 0.8.26;
 
 import {IGame} from "../interfaces/IGame.sol";
+import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibMath} from "./LibMath.sol";
 import {LibProtocolStorage} from "./LibProtocolStorage.sol";
-import {LibToken} from "./LibToken.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Round} from "../shared/Types.sol";
 
@@ -37,7 +37,7 @@ library LibGame {
         round.holderEarned = earned;
         round.remainingEmission -= earned;
         round.emittedPotato += earned;
-        LibToken.mint(round.currentHolder, earned);
+        IPotatoToken(address(this)).protocolMint(round.currentHolder, earned);
         emit IGame.EmissionFinalized(round.roundId, round.currentHolder, round.holderMaxReward, earned, heldSeconds);
     }
 }

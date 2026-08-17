@@ -35,6 +35,7 @@ library Errors {
     error NotAuthority(address caller);
     error NotCanonicalHook(address caller);
     error NotGuardian(address caller);
+    error NotProtocol(address caller);
     error NothingToClaim();
     error ParameterFrozen(bytes32 key);
     error PoolManagerAllowanceExceeded(uint256 available, uint256 required);

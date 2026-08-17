@@ -2,10 +2,10 @@
 pragma solidity 0.8.26;
 
 import {ISettlement} from "../interfaces/ISettlement.sol";
+import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
-import {LibToken} from "../libraries/LibToken.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
@@ -31,7 +31,7 @@ contract SettlementFacet is ISettlement {
             carry = round.recoveryPool;
         } else {
             (burned, treasuryPotato) = LibMath.splitRecovery(totalCommitted);
-            LibToken.burn(address(this), burned);
+            IPotatoToken(address(this)).protocolBurn(address(this), burned);
             LibProtocolStorage.treasury().potatoInventory += treasuryPotato;
         }
 

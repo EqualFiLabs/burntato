@@ -9,6 +9,9 @@ import {Errors} from "../../src/shared/Errors.sol";
 import {Round} from "../../src/shared/Types.sol";
 
 contract PotatoGameLifecycleTest is DiamondTestSetup {
+    bytes32 internal constant PERMIT_TYPEHASH =
+        keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
     address internal keeper = makeAddr("keeper");
@@ -96,6 +99,38 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         potato.burn(1 ether);
         assertEq(potato.balanceOf(alice), 9_999 ether);
         assertEq(potato.totalSupply(), 9_999 ether);
+    }
+
+    function test_PermitSetsAllowanceButDoesNotBypassTransferRestriction() public {
+        uint256 signerKey = 0xA11CE;
+        address signer = vm.addr(signerKey);
+        vm.deal(signer, 1 ether);
+        _buy(signer, 0.01 ether);
+        vm.warp(block.timestamp + 120);
+        game.materializeMaturedEmission();
+
+        uint256 deadline = block.timestamp + 1 days;
+        bytes32 structHash = keccak256(abi.encode(PERMIT_TYPEHASH, signer, bob, 1 ether, 0, deadline));
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", potato.DOMAIN_SEPARATOR(), structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerKey, digest);
+
+        potato.permit(signer, bob, 1 ether, deadline, v, r, s);
+        assertEq(potato.nonces(signer), 1);
+        assertEq(potato.allowance(signer, bob), 1 ether);
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, signer, bob));
+        potato.transferFrom(signer, bob, 1 ether);
+        assertEq(potato.allowance(signer, bob), 1 ether);
+    }
+
+    function test_ProtocolTokenEndpointsRejectExternalCallers() public {
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
+        potato.protocolMint(alice, 1 ether);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
+        potato.protocolBurn(alice, 1 ether);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
+        potato.protocolTransfer(alice, bob, 1 ether);
     }
 
     function test_PurchaseConservesNativeAllocationAndRaisesPrice() public {

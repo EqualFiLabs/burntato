@@ -2,9 +2,9 @@
 pragma solidity 0.8.26;
 
 import {IRecovery} from "../interfaces/IRecovery.sol";
+import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
-import {LibToken} from "../libraries/LibToken.sol";
 import {Errors} from "../shared/Errors.sol";
 
 contract RecoveryFacet is IRecovery {
@@ -17,7 +17,7 @@ contract RecoveryFacet is IRecovery {
         if (gs.rounds[targetRoundId].remainingEmission != 0) revert Errors.CommitmentClosed(targetRoundId);
 
         LibGame.snapshotFutureRound(targetRoundId);
-        LibToken.protocolMove(msg.sender, address(this), amount);
+        IPotatoToken(address(this)).protocolTransfer(msg.sender, address(this), amount);
         LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
         rs.commitments[targetRoundId][msg.sender] += amount;
         rs.totalCommitments[targetRoundId] += amount;

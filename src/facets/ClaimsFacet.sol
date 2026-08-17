@@ -4,8 +4,8 @@ pragma solidity 0.8.26;
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 import {IClaims} from "../interfaces/IClaims.sol";
+import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
-import {LibToken} from "../libraries/LibToken.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
@@ -68,7 +68,7 @@ contract ClaimsFacet is IClaims {
         amount = ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
         if (amount == 0) revert Errors.NothingToClaim();
         ts.potatoInventory -= amount;
-        LibToken.protocolMove(address(this), ts.recipient, amount);
+        IPotatoToken(address(this)).protocolTransfer(address(this), ts.recipient, amount);
         emit TreasuryPotatoClaimed(ts.recipient, amount);
     }
 

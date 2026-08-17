@@ -25,9 +25,6 @@ library LibProtocolStorage {
     }
 
     struct TokenStorage {
-        uint256 totalSupply;
-        mapping(address => uint256) balanceOf;
-        mapping(address => mapping(address => uint256)) allowance;
         address canonicalHook;
         address poolManager;
     }

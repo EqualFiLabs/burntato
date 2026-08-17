@@ -1,82 +1,110 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
+import {ERC20} from "solady/src/tokens/ERC20.sol";
+
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
-import {LibToken} from "../libraries/LibToken.sol";
-import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 
-contract PotatoTokenFacet is IPotatoToken {
-    function name() external pure returns (string memory) {
+contract PotatoTokenFacet is ERC20 {
+    event PotatoBurned(address indexed account, uint256 amount);
+    event PoolManagerAllowanceAuthorized(uint256 amount);
+    event PoolManagerAllowanceSpent(address indexed from, address indexed to, uint256 amount);
+
+    function name() public pure override returns (string memory) {
         return "Burntato Potato";
     }
 
-    function symbol() external pure returns (string memory) {
+    function symbol() public pure override returns (string memory) {
         return "POTATO";
     }
 
-    function decimals() external pure returns (uint8) {
-        return Constants.POTATO_DECIMALS;
-    }
-
-    function totalSupply() external view returns (uint256) {
-        return LibProtocolStorage.token().totalSupply;
-    }
-
-    function balanceOf(address account) external view returns (uint256) {
-        return LibProtocolStorage.token().balanceOf[account];
-    }
-
-    function allowance(address owner, address spender) external view returns (uint256) {
-        return LibProtocolStorage.token().allowance[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) external returns (bool) {
-        if (spender == address(0)) revert Errors.InvalidAddress();
-        LibProtocolStorage.token().allowance[msg.sender][spender] = amount;
-        emit Approval(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transfer(address to, uint256 amount) external returns (bool) {
-        _restrictedMove(msg.sender, to, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address to, uint256 amount) external returns (bool) {
-        LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
-        uint256 approved = ts.allowance[from][msg.sender];
-        if (approved < amount) revert Errors.InsufficientAllowance();
-        if (approved != type(uint256).max) {
-            ts.allowance[from][msg.sender] = approved - amount;
-            emit Approval(from, msg.sender, approved - amount);
-        }
-        _restrictedMove(from, to, amount);
-        return true;
+    function decimals() public pure override returns (uint8) {
+        return 18;
     }
 
     function burn(uint256 amount) external {
-        LibToken.burn(msg.sender, amount);
+        _burn(msg.sender, amount);
         emit PotatoBurned(msg.sender, amount);
+    }
+
+    function protocolMint(address to, uint256 amount) external {
+        _enforceProtocol();
+        _mint(to, amount);
+    }
+
+    function protocolBurn(address from, uint256 amount) external {
+        _enforceProtocol();
+        _burn(from, amount);
+    }
+
+    function protocolTransfer(address from, address to, uint256 amount) external {
+        _enforceProtocol();
+        _setProtocolMovement(keccak256(abi.encode(from, to, amount)));
+        _transfer(from, to, amount);
     }
 
     function authorizePoolManagerTransfer(uint256 amount) external {
         LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
         if (msg.sender != ts.canonicalHook || msg.sender == address(0)) revert Errors.NotCanonicalHook(msg.sender);
-        LibToken.setPoolManagerAllowance(LibToken.poolManagerAllowance() + amount);
+        _setPoolManagerAllowance(_poolManagerAllowance() + amount);
         emit PoolManagerAllowanceAuthorized(amount);
     }
 
     function transientPoolManagerAllowance() external view returns (uint256) {
-        return LibToken.poolManagerAllowance();
+        return _poolManagerAllowance();
     }
 
-    function _restrictedMove(address from, address to, uint256 amount) private {
-        LibProtocolStorage.TokenStorage storage ts = LibProtocolStorage.token();
-        bool poolMovement = from == ts.poolManager || to == ts.poolManager;
-        if (!poolMovement) revert Errors.TransferRestricted(from, to);
-        LibToken.consumePoolManagerAllowance(amount);
-        LibToken.protocolMove(from, to, amount);
+    function _afterTokenTransfer(address from, address to, uint256 amount) internal override {
+        if (from == address(0) || to == address(0)) return;
+
+        bytes32 movement = keccak256(abi.encode(from, to, amount));
+        if (_protocolMovement() == movement) {
+            _setProtocolMovement(bytes32(0));
+            return;
+        }
+
+        address poolManager = LibProtocolStorage.token().poolManager;
+        if (from == poolManager || to == poolManager) {
+            uint256 available = _poolManagerAllowance();
+            if (available < amount) revert Errors.PoolManagerAllowanceExceeded(available, amount);
+            _setPoolManagerAllowance(available - amount);
+            emit PoolManagerAllowanceSpent(from, to, amount);
+            return;
+        }
+
+        revert Errors.TransferRestricted(from, to);
+    }
+
+    function _enforceProtocol() private view {
+        if (msg.sender != address(this)) revert Errors.NotProtocol(msg.sender);
+    }
+
+    function _poolManagerAllowance() private view returns (uint256 amount) {
+        bytes32 slot = LibProtocolStorage.POOL_MANAGER_ALLOWANCE_SLOT;
+        assembly ("memory-safe") {
+            amount := tload(slot)
+        }
+    }
+
+    function _setPoolManagerAllowance(uint256 amount) private {
+        bytes32 slot = LibProtocolStorage.POOL_MANAGER_ALLOWANCE_SLOT;
+        assembly ("memory-safe") {
+            tstore(slot, amount)
+        }
+    }
+
+    function _protocolMovement() private view returns (bytes32 movement) {
+        bytes32 slot = LibProtocolStorage.PROTOCOL_MOVEMENT_SLOT;
+        assembly ("memory-safe") {
+            movement := tload(slot)
+        }
+    }
+
+    function _setProtocolMovement(bytes32 movement) private {
+        bytes32 slot = LibProtocolStorage.PROTOCOL_MOVEMENT_SLOT;
+        assembly ("memory-safe") {
+            tstore(slot, movement)
+        }
     }
 }
