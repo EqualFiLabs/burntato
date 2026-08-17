@@ -2,7 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {TimelockController} from "openzeppelin-contracts/governance/TimelockController.sol";
+import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
 import {DiamondCutFacet} from "../../src/facets/DiamondCutFacet.sol";
