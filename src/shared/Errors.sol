@@ -4,7 +4,6 @@ pragma solidity 0.8.26;
 library Errors {
     error AlreadyClaimed();
     error AlreadyFinalized();
-    error AlreadyFrozen(bytes32 key);
     error AlreadyInitialized();
     error CommitmentClosed(uint256 roundId);
     error CommitmentsPaused();
@@ -25,7 +24,6 @@ library Errors {
     error ExactOutputNotAllowed();
     error InvalidMarketConfiguration();
     error InvalidProtocolConfig();
-    error InvalidTimelock(address candidate);
     error MarketNotConfigured();
     error MarketNotLaunching();
     error MarketNotReady();
@@ -37,7 +35,6 @@ library Errors {
     error NotGuardian(address caller);
     error NotProtocol(address caller);
     error NothingToClaim();
-    error ParameterFrozen(bytes32 key);
     error PoolManagerAllowanceExceeded(uint256 available, uint256 required);
     error PurchasesPaused();
     error Reentrancy();
@@ -46,10 +43,8 @@ library Errors {
     error RoundNotExpired();
     error SelectorAlreadyExists(bytes4 selector);
     error SelectorDoesNotExist(bytes4 selector);
-    error SelectorFrozen(bytes4 selector);
     error SelectorUnchanged(bytes4 selector);
     error TransferRestricted(address from, address to);
-    error AuthorityLocked();
     error UnpauseRequiresAuthority(address caller);
     error TokenOperationFailed();
     error UnauthorizedWinner(address caller);
