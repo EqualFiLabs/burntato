@@ -92,6 +92,7 @@ contract MarketFacet is IMarket {
         if (liquidity == 0) revert Errors.InvalidMarketConfiguration();
 
         uint256 nativeBefore = address(this).balance;
+        uint256 positionManagerNativeBefore = address(ms.positionManager).balance;
         uint256 potatoBefore = IPotatoToken(address(this)).balanceOf(address(this));
 
         ms.launched = true;
@@ -125,7 +126,12 @@ contract MarketFacet is IMarket {
         IPositionManager(ms.positionManager).multicall{value: ms.nativeSeed}(calls);
         _setLaunching(false);
 
-        uint256 nativeUsed = nativeBefore - address(this).balance;
+        uint256 nativeBalanceWithoutSeed = nativeBefore - ms.nativeSeed;
+        uint256 nativeSweptBack = address(this).balance - nativeBalanceWithoutSeed;
+        if (nativeSweptBack < positionManagerNativeBefore) revert Errors.InvalidMarketConfiguration();
+        uint256 nativeSeedRefund = nativeSweptBack - positionManagerNativeBefore;
+        if (nativeSeedRefund > ms.nativeSeed) revert Errors.InvalidMarketConfiguration();
+        uint256 nativeUsed = ms.nativeSeed - nativeSeedRefund;
         uint256 potatoUsed = potatoBefore - IPotatoToken(address(this)).balanceOf(address(this));
         if (nativeUsed == 0 || potatoUsed == 0) revert Errors.InvalidMarketConfiguration();
 
