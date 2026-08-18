@@ -6,12 +6,16 @@ actual holder time. Forward Recovery commitments, restricted token movement,
 and a canonical Uniswap v4 market turn settled activity into permanently locked
 liquidity and direct Treasury trading revenue.
 
-The deployed defaults are one-hour rounds, a 10% price step, a fresh 100,000
-POTATO emission budget, 10% holder opportunities vesting over 120 seconds, a
-25% Winner / 40% Recovery / 25% Treasury / 10% buyback purchase split, a 90%
-burn / 10% Treasury Recovery split, and a 1% bilateral market fee. These are
-governed defaults, not immutable constants. Each active or already-snapshotted
-target round keeps its terms while changes apply to future unsnapshotted rounds.
+The deployed defaults give the first holder one hour and shorten each later
+purchase reset by five minutes until reaching a five-minute floor, alongside a
+10% price step, a fresh 100,000 POTATO emission budget, 10% holder
+opportunities vesting over 120 seconds, a 25% Winner / 40% Recovery / 25%
+Treasury / 10% buyback purchase split, a 90% burn / 10% Treasury Recovery split,
+and a 1% bilateral market fee. These are governed defaults, not immutable
+constants. Each active or already-snapshotted target round keeps its terms while
+changes apply to future unsnapshotted rounds.
+Every successful purchase resets from its own timestamp; purchase count drives
+the urgency schedule but still does not consume POTATO emission.
 
 POTATO uses the same Solady transfer-lock pattern proven by FWA.fun: minting,
 burning, transfers involving the current authority or an administered

@@ -21,6 +21,8 @@ and bilateral fee. External buys start disabled.
 | Starting Hot Potato price | 0.01 ETH |
 | Price increase | 1,000 BPS |
 | Round timeout | 1 hour |
+| Round timeout decay | 5 minutes |
+| Minimum round timeout | 5 minutes |
 | Round emission budget | 100,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 120 seconds |
@@ -35,10 +37,13 @@ and bilateral fee. External buys start disabled.
 
 Defaults are operational inputs, not protocol immutability claims. Zero
 timelock delay is accepted, and the proposer may equal the bootstrap authority.
-Starting price, round timeout, and emission vesting must remain nonzero. Round
-timeout is bounded by `type(uint64).max` for deadline safety. BPS values are
-bounded to 10,000; the purchase and Recovery splits must each sum to 10,000.
-Zero price growth, emission step, emission budget, or hook fee is valid.
+Starting price, round timeout, minimum round timeout, and emission vesting must
+remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
+safety. Minimum timeout cannot exceed the initial timeout, and timeout decay
+cannot exceed the initial timeout. Zero timeout decay is valid and produces
+fixed resets. BPS values are bounded to 10,000; the purchase and Recovery
+splits must each sum to 10,000. Zero price growth, emission step, emission
+budget, or hook fee is valid.
 
 ## Environment
 
@@ -54,6 +59,8 @@ BURNTATO_TIMELOCK_DELAY
 BURNTATO_STARTING_PRICE
 BURNTATO_PRICE_INCREASE_BPS
 BURNTATO_ROUND_TIMEOUT
+BURNTATO_ROUND_TIMEOUT_DECAY
+BURNTATO_MINIMUM_ROUND_TIMEOUT
 BURNTATO_ROUND_EMISSION_BUDGET
 BURNTATO_EMISSION_STEP_BPS
 BURNTATO_EMISSION_VESTING_DURATION
@@ -112,7 +119,8 @@ forge script script/VerifyBurntato.s.sol:VerifyBurntato \
 
 ## Verification checks
 
-The verifier checks code and selector routing, complete protocol configuration,
+The verifier checks code and selector routing, complete protocol configuration
+including the diminishing timeout domain,
 timelock delay and roles, Diamond authority, guardian and pause state,
 timelock-owned hook and PoolManager, hook token/fee/tick configuration, exact
 uninitialized PoolKey, PositionManager dependencies, the configured genesis
