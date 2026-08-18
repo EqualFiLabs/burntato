@@ -31,6 +31,42 @@ reservation-backed readiness, upper-bound initial price, disabled public-buy
 gate, and configured 100 million POTATO default. The final stacked audit is
 deferred until the Treasury-funded reward-schedule PR is complete.
 
+## Treasury-funded reward schedule candidate
+
+Date: August 17, 2026
+
+Source candidate: `25c1515` on `feat/treasury-reward-schedules`, stacked on the
+single-sided launch branch at `f921bbe`. Core schedule accounting is commit
+`bf6848b`.
+
+The configured reward allocator, initially the Treasury recipient, can move
+existing POTATO into exact future-round schedules without approval or minting.
+O(1) start/end deltas compose overlapping schedules. Activated rounds apply a
+separate Treasury budget through the snapshotted holder-time curve; earned
+amount transfers escrowed POTATO while base reward remains the only mint.
+Settlement releases unearned funds and cancellation releases only unactivated
+schedule value into claimable Treasury inventory.
+
+Qualification selected each owned test category explicitly:
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 50 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 7 properties, 7,001 cases |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 12 passed |
+
+Focused schedule flows prove full and partial holds, base-unit remainder,
+overlap, future-only cancellation, single materialization, settlement release,
+Recovery commitment eligibility, no Treasury-reward minting, post-finalization
+allocator administration, insufficient-balance rejection, and aggregate
+reservation isolation. Focused lint, formatting, and diff checks passed.
+
+This remains local Foundry evidence. It does not prove a fork, testnet,
+deployed-network state, remote CI, or independent review. The final stacked
+audit follows after the PR is pushed and will not create GitHub issues.
+
 ## Treasury buyback qualification history
 
 Date: August 17, 2026

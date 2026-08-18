@@ -14,6 +14,7 @@ While authority exists it can:
 - atomically update the complete default `ProtocolConfig`;
 - update the Diamond Treasury recipient;
 - administer POTATO distributors and buyback cap, reward, and delay;
+- replace or zero the Treasury reward allocator;
 - appoint or remove the guardian;
 - set or clear purchase and commitment pauses;
 - reconfigure canonical market infrastructure before launch;
@@ -71,6 +72,11 @@ Diamond authority may also change buyback cap, caller reward, and block delay
 before or after launch and finalization. Setting the cap to zero disables
 execution without changing accrued reserve accounting.
 
+The Treasury reward allocator is independent from the Treasury recipient and
+distributor registry. Genesis configures both roles to the Treasury Safe, but
+authority may replace or zero only the allocator before or after finalization.
+Changing any one of these three roles does not implicitly mutate the others.
+
 ## Operational checks
 
 For a deployment, verify:
@@ -83,6 +89,7 @@ For a deployment, verify:
 - `externalBuysEnabled()` matches current launch policy;
 - buyback split, cap, caller reward, delay, reserve, and last execution block
   match Treasury policy;
+- the reward allocator and funded POTATO escrow match Treasury policy;
 - `protocolFinalized()` is false unless Diamond cuts were intentionally ended;
   and
 - after finalization, governance setters still work while `diamondCut` reverts.

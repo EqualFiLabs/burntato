@@ -31,6 +31,14 @@ current Treasury and receive a caller reward. External pool buys start disabled,
 but sells and the fee-free protocol buyback remain open; hook governance can
 toggle external buys repeatedly.
 
+The Treasury Safe can also fund existing POTATO into future-round reward
+schedules. Each target round applies that separate budget through the same
+holder-time curve as base emission, but transfers escrowed POTATO instead of
+minting. Unearned or canceled future allocations return to claimable Treasury
+inventory. The reward allocator is independently administered and may be
+replaced or disabled without changing the Treasury recipient or distributor
+registry.
+
 Administration remains available through the configured authority. The
 guardian can add purchase or commitment pauses but cannot unpause. Protocol
 finalization permanently disables only future Diamond cuts; it does not disable

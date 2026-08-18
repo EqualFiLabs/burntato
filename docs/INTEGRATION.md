@@ -16,7 +16,10 @@ Important state reads include:
 - `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
   `marketReady()`;
 - `IPotatoToken.isDistributor(account)` for the governed transfer allowlist; and
-- `IBuyback.buybackConfig()`, `buybackReserveEth()`, and `lastBuybackBlock()`.
+- `IBuyback.buybackConfig()`, `buybackReserveEth()`, and `lastBuybackBlock()`;
+  and
+- `ITreasuryRewards.rewardAllocator()`, `treasuryRewardsReserved()`,
+  `rewardSchedule()`, and `nextTreasuryRewardBudget()`.
 
 The canonical hook is a separate administered contract. Read `owner()`,
 `token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`, and
@@ -129,6 +132,28 @@ by the swap. Integrators should expose the current cap, reward, delay, and
 reserve so governance and users can evaluate that explicit tradeoff.
 
 - [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
+
+## Treasury reward schedules
+
+`ITreasuryRewards.allocateTreasuryRewards(amount, firstRoundId, roundCount)` is
+callable only by the current reward allocator. It checks the allocator's POTATO
+balance and atomically moves the exact amount through the Diamond's one-shot
+protocol-transfer path; no ERC-20 approval is required and no POTATO is minted.
+`firstRoundId` must be later than the current activated round.
+
+Schedules expose exact `perRound` and `firstRoundRemainder` fields. Multiple
+schedules add together. `nextTreasuryRewardBudget()` reports only the next
+unactivated round in constant time; activated history is read through
+`IGame.getRound()`. Round fields distinguish base emission from Treasury-funded
+budget, maximum, earned, remaining, emitted, and released values.
+
+The current allocator may call `cancelTreasuryRewards(scheduleId)` once while a
+schedule still has unactivated value. The function releases only that future
+amount into `treasuryPotatoAvailable()`; it does not return tokens directly or
+change the active round. Settlement similarly releases unused active-round
+budget. `TreasuryRewardsAllocated`, `TreasuryRewardsCanceled`,
+`TreasuryRewardRoundActivated`, `TreasuryRewardFinalized`, and
+`TreasuryRewardReleased` provide the accounting event stream.
 
 ## Claims and recipients
 

@@ -5,7 +5,8 @@ timelock-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
 PositionManager, Diamond and facets, initializer, CREATE2 hook deployer, and
 mined-address canonical hook. It installs the selector manifest, configures the
 market, enables the initial Treasury distributor, configures buybacks, appoints
-the guardian, and transfers Diamond authority to the timelock.
+the reward allocator and guardian, and transfers Diamond authority to the
+timelock.
 
 The hook and PoolManager are independently owned by the timelock. Deployment
 does not renounce either owner and does not disable the PoolManager protocol-fee
@@ -30,6 +31,7 @@ and bilateral fee. External buys start disabled.
 | Tick spacing | 60 |
 | Initial tick | 92,100 |
 | Genesis POTATO launch allocation | 100,000,000 POTATO |
+| Reward allocator | Treasury recipient |
 
 Defaults are operational inputs, not protocol immutability claims. Zero
 timelock delay is accepted, and the proposer may equal the bootstrap authority.
@@ -47,6 +49,7 @@ BURNTATO_DEPLOYER
 BURNTATO_PROPOSER
 BURNTATO_GUARDIAN
 BURNTATO_TREASURY
+BURNTATO_REWARD_ALLOCATOR
 BURNTATO_TIMELOCK_DELAY
 BURNTATO_STARTING_PRICE
 BURNTATO_PRICE_INCREASE_BPS
@@ -114,8 +117,9 @@ timelock delay and roles, Diamond authority, guardian and pause state,
 timelock-owned hook and PoolManager, hook token/fee/tick configuration, exact
 uninitialized PoolKey, PositionManager dependencies, the configured genesis
 POTATO supply and Diamond reservation, empty initial round state, disabled
-external buys, the initial Treasury
-distributor, and zeroed buyback state with the configured execution defaults.
+external buys, the initial Treasury distributor, independently configured
+reward allocator with zero reward escrow, and zeroed buyback state with the
+configured execution defaults.
 
 After deployment, operations should separately exercise a timelock call to the
 Diamond, a hook fee update, and a PoolManager owner function. Diamond
