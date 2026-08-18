@@ -4,7 +4,7 @@
 
 Date: August 17, 2026
 
-Source candidate: `c744882` on `feat/single-sided-launch`, based on merged
+Source candidate: `05aa73d` on `feat/single-sided-launch`, based on merged
 `main` commit `e42ffea`.
 
 The candidate mints and reserves the configured genesis market allocation at
@@ -21,22 +21,23 @@ Qualification selected each owned test category explicitly. It did not use
 | Scope | Command | Result |
 | --- | --- | --- |
 | Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 44 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 45 passed |
 | Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 6 properties, 6,001 cases |
 | Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 12 passed |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 13 passed |
 
 The deployment verifier confirms the genesis supply, Diamond balance,
 reservation-backed readiness, upper-bound initial price, disabled public-buy
-gate, and configured 100 million POTATO default. The final stacked audit is
-deferred until the Treasury-funded reward-schedule PR is complete.
+gate, and configured 100 million POTATO default. Audit remediation rejects the
+terminal v4 tick whose `MAX_SQRT_PRICE` cannot initialize, and targeted market
+and deployment suites pass with that regression.
 
 ## Treasury-funded reward schedule candidate
 
 Date: August 17, 2026
 
-Source candidate: `25c1515` on `feat/treasury-reward-schedules`, stacked on the
-single-sided launch branch at `f921bbe`. Core schedule accounting is commit
+Source candidate: `6b371e4` on `feat/treasury-reward-schedules`, stacked on the
+single-sided launch branch at `05aa73d`. Core schedule accounting is commit
 `bf6848b`.
 
 The configured reward allocator, initially the Treasury recipient, can move
@@ -52,10 +53,10 @@ Qualification selected each owned test category explicitly:
 | Scope | Command | Result |
 | --- | --- | --- |
 | Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 50 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 51 passed |
 | Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 7 properties, 7,001 cases |
 | Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 12 passed |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 13 passed |
 
 Focused schedule flows prove full and partial holds, base-unit remainder,
 overlap, future-only cancellation, single materialization, settlement release,
@@ -64,8 +65,30 @@ allocator administration, insufficient-balance rejection, and aggregate
 reservation isolation. Focused lint, formatting, and diff checks passed.
 
 This remains local Foundry evidence. It does not prove a fork, testnet,
-deployed-network state, remote CI, or independent review. The final stacked
-audit follows after the PR is pushed and will not create GitHub issues.
+deployed-network state, remote CI, or independent third-party review.
+
+## Final stacked audit
+
+The combined `e42ffea..0035de7` implementation received checklist-driven
+reviews for general Solidity behavior, precision and math, ERC-20 behavior,
+Uniswap v4 and AMM integration, Diamond storage and upgrades, access control,
+assembly and low-level operations, and denial of service. Reviewers reran
+focused real-flow suites and the 1,000-run Treasury schedule conservation
+property. No GitHub issues were created.
+
+One Low-severity availability defect was verified: runtime configuration,
+deployment validation, and deployment verification accepted
+`tickUpper == TickMath.MAX_TICK`, although the corresponding
+`MAX_SQRT_PRICE` is an exclusive PoolManager initialization bound. Commit
+`05aa73d` rejects that unusable terminal tick across all three validation
+surfaces and adds runtime and deterministic-deployment regressions. The
+remediated stack passed 26 canonical-market tests, 13 deployment tests, six
+Treasury-reward lifecycle tests, and 1,000 Treasury schedule fuzz runs.
+
+No unresolved Critical, High, Medium, or Low finding remains in the reviewed
+scope. The audit assumes a fresh deployment, the pinned Uniswap v4 and Solady
+dependencies, and the documented governance trust model. It is not a fork,
+testnet, live-network, remote-CI, or independent third-party audit.
 
 ## Treasury buyback qualification history
 
