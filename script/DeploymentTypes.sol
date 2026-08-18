@@ -8,6 +8,7 @@ struct GenesisConfig {
     address proposer;
     address guardian;
     address treasuryRecipient;
+    address rewardAllocator;
     uint256 timelockDelay;
     ProtocolConfig protocol;
     BuybackConfig buyback;
@@ -31,6 +32,7 @@ struct BurntatoDeployment {
     address recoveryFacet;
     address settlementFacet;
     address claimsFacet;
+    address treasuryRewardsFacet;
     address foundationInit;
     address timelock;
     address poolManager;

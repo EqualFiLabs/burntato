@@ -26,6 +26,7 @@ import {MarketFacet} from "../src/facets/MarketFacet.sol";
 import {PotatoTokenFacet} from "../src/facets/PotatoTokenFacet.sol";
 import {RecoveryFacet} from "../src/facets/RecoveryFacet.sol";
 import {SettlementFacet} from "../src/facets/SettlementFacet.sol";
+import {TreasuryRewardsFacet} from "../src/facets/TreasuryRewardsFacet.sol";
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
 import {FoundationInit} from "../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../src/interfaces/IDiamondCut.sol";
@@ -33,6 +34,7 @@ import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
+import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
@@ -111,6 +113,7 @@ contract DeployBurntato is Script {
         deployment.recoveryFacet = address(new RecoveryFacet());
         deployment.settlementFacet = address(new SettlementFacet());
         deployment.claimsFacet = address(new ClaimsFacet());
+        deployment.treasuryRewardsFacet = address(new TreasuryRewardsFacet());
         deployment.foundationInit = address(new FoundationInit());
 
         IDiamondCut(deployment.diamond)
@@ -169,6 +172,7 @@ contract DeployBurntato is Script {
                     potatoSeed: config.potatoSeed
                 })
             );
+        ITreasuryRewards(deployment.diamond).setRewardAllocator(config.rewardAllocator);
         IGovernance(deployment.diamond).setAuthority(deployment.timelock);
     }
 
@@ -182,6 +186,7 @@ contract DeployBurntato is Script {
         config.proposer = vm.envOr("BURNTATO_PROPOSER", config.proposer);
         config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
+        config.rewardAllocator = vm.envOr("BURNTATO_REWARD_ALLOCATOR", config.rewardAllocator);
         config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
         config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
         config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
@@ -231,7 +236,7 @@ contract DeployBurntato is Script {
     }
 
     function _initialCut(BurntatoDeployment memory deployment) private pure returns (FacetCut[] memory cuts) {
-        cuts = new FacetCut[](9);
+        cuts = new FacetCut[](10);
         cuts[0] = FacetCut({
             facetAddress: deployment.diamondLoupeFacet,
             action: FacetCutAction.Add,
@@ -275,6 +280,11 @@ contract DeployBurntato is Script {
             action: FacetCutAction.Add,
             functionSelectors: BurntatoSelectors.claims()
         });
+        cuts[9] = FacetCut({
+            facetAddress: deployment.treasuryRewardsFacet,
+            action: FacetCutAction.Add,
+            functionSelectors: BurntatoSelectors.treasuryRewards()
+        });
     }
 
     function _hookFlags() private pure returns (uint160) {
@@ -288,13 +298,14 @@ contract DeployBurntato is Script {
         ProtocolConfig memory protocol = config.protocol;
         if (
             bootstrapAuthority == address(0) || config.deployer == address(0) || config.proposer == address(0)
-                || config.treasuryRecipient == address(0) || protocol.startingPrice == 0 || protocol.roundTimeout == 0
-                || protocol.roundTimeout > type(uint64).max || protocol.emissionVestingDuration == 0
-                || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
-                || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
-                || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
-                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
-                || config.hookFeeBps > Constants.BPS || config.buyback.callerRewardBps > Constants.BPS
+                || config.treasuryRecipient == address(0) || config.rewardAllocator == address(0)
+                || protocol.startingPrice == 0 || protocol.roundTimeout == 0 || protocol.roundTimeout > type(uint64).max
+                || protocol.emissionVestingDuration == 0 || protocol.priceIncreaseBps > Constants.BPS
+                || protocol.emissionStepBps > Constants.BPS || protocol.winnerBps > Constants.BPS
+                || protocol.recoveryBps > Constants.BPS || protocol.treasuryBps > Constants.BPS
+                || protocol.buybackBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
+                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
+                || config.buyback.callerRewardBps > Constants.BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
                     != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
@@ -326,6 +337,7 @@ contract DeployBurntato is Script {
         console2.log("RecoveryFacet", deployment.recoveryFacet);
         console2.log("SettlementFacet", deployment.settlementFacet);
         console2.log("ClaimsFacet", deployment.claimsFacet);
+        console2.log("TreasuryRewardsFacet", deployment.treasuryRewardsFacet);
         console2.log("FoundationInit", deployment.foundationInit);
     }
 }

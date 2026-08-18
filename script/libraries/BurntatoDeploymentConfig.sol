@@ -22,6 +22,7 @@ library BurntatoDeploymentConfig {
             proposer: ANVIL_PROPOSER,
             guardian: ANVIL_GUARDIAN,
             treasuryRecipient: ANVIL_TREASURY,
+            rewardAllocator: ANVIL_TREASURY,
             timelockDelay: 1 days,
             protocol: ProtocolConfig({
                 startingPrice: 0.01 ether,
