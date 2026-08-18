@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {BuybackConfig, ProtocolConfig, Round} from "../shared/Types.sol";
+import {BuybackConfig, ProtocolConfig, RewardSchedule, Round} from "../shared/Types.sol";
 
 library LibProtocolStorage {
     bytes32 internal constant GAME_SLOT = keccak256("burntato.storage.game.v1");
@@ -12,6 +12,7 @@ library LibProtocolStorage {
     bytes32 internal constant MARKET_SLOT = keccak256("burntato.storage.market.v1");
     bytes32 internal constant BUYBACK_SLOT = keccak256("burntato.storage.buyback.v1");
     bytes32 internal constant REENTRANCY_SLOT = keccak256("burntato.storage.reentrancy.v1");
+    bytes32 internal constant TREASURY_REWARDS_SLOT = keccak256("burntato.storage.treasury-rewards.v1");
 
     bytes32 internal constant POOL_MANAGER_ALLOWANCE_SLOT = keccak256("burntato.transient.pool-manager-allowance.v1");
     bytes32 internal constant PROTOCOL_MOVEMENT_SLOT = keccak256("burntato.transient.protocol-movement.v1");
@@ -76,6 +77,17 @@ library LibProtocolStorage {
         uint256 lastBuybackBlock;
     }
 
+    struct TreasuryRewardsStorage {
+        address allocator;
+        uint256 nextScheduleId;
+        uint256 activePerRound;
+        uint256 escrowedPotato;
+        mapping(uint256 => uint256) perRoundIncrease;
+        mapping(uint256 => uint256) perRoundDecrease;
+        mapping(uint256 => uint256) firstRoundRemainder;
+        mapping(uint256 => RewardSchedule) schedules;
+    }
+
     function game() internal pure returns (GameStorage storage s) {
         bytes32 slot = GAME_SLOT;
         assembly ("memory-safe") {
@@ -127,6 +139,13 @@ library LibProtocolStorage {
 
     function buyback() internal pure returns (BuybackStorage storage s) {
         bytes32 slot = BUYBACK_SLOT;
+        assembly ("memory-safe") {
+            s.slot := slot
+        }
+    }
+
+    function treasuryRewards() internal pure returns (TreasuryRewardsStorage storage s) {
+        bytes32 slot = TREASURY_REWARDS_SLOT;
         assembly ("memory-safe") {
             s.slot := slot
         }

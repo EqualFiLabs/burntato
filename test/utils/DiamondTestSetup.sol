@@ -14,6 +14,7 @@ import {MarketFacet} from "../../src/facets/MarketFacet.sol";
 import {PotatoTokenFacet} from "../../src/facets/PotatoTokenFacet.sol";
 import {RecoveryFacet} from "../../src/facets/RecoveryFacet.sol";
 import {SettlementFacet} from "../../src/facets/SettlementFacet.sol";
+import {TreasuryRewardsFacet} from "../../src/facets/TreasuryRewardsFacet.sol";
 import {FoundationInit} from "../../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
@@ -25,6 +26,7 @@ import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
+import {ITreasuryRewards} from "../../src/interfaces/ITreasuryRewards.sol";
 import {BuybackConfig, FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 abstract contract DiamondTestSetup is Test {
@@ -48,6 +50,7 @@ abstract contract DiamondTestSetup is Test {
         _install(address(new RecoveryFacet()), _recoverySelectors());
         _install(address(new SettlementFacet()), _settlementSelectors());
         _install(address(new ClaimsFacet()), _claimSelectors());
+        _install(address(new TreasuryRewardsFacet()), _treasuryRewardSelectors());
 
         FoundationInit initializer = new FoundationInit();
         FacetCut[] memory noCuts = new FacetCut[](0);
@@ -64,6 +67,8 @@ abstract contract DiamondTestSetup is Test {
         IPotatoToken(address(diamond)).setDistributor(treasury, true);
         vm.prank(authority);
         IBuyback(address(diamond)).setBuybackConfig(_defaultBuybackConfig());
+        vm.prank(authority);
+        ITreasuryRewards(address(diamond)).setRewardAllocator(treasury);
     }
 
     function _install(address facet, bytes4[] memory selectors) internal {
@@ -200,5 +205,16 @@ abstract contract DiamondTestSetup is Test {
         selectors[4] = IClaims.treasuryRecipient.selector;
         selectors[5] = IClaims.treasuryEthAvailable.selector;
         selectors[6] = IClaims.treasuryPotatoAvailable.selector;
+    }
+
+    function _treasuryRewardSelectors() internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](7);
+        selectors[0] = ITreasuryRewards.setRewardAllocator.selector;
+        selectors[1] = ITreasuryRewards.allocateTreasuryRewards.selector;
+        selectors[2] = ITreasuryRewards.cancelTreasuryRewards.selector;
+        selectors[3] = ITreasuryRewards.rewardAllocator.selector;
+        selectors[4] = ITreasuryRewards.treasuryRewardsReserved.selector;
+        selectors[5] = ITreasuryRewards.rewardSchedule.selector;
+        selectors[6] = ITreasuryRewards.nextTreasuryRewardBudget.selector;
     }
 }

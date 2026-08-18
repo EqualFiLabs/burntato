@@ -68,7 +68,9 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         _buy(alice, 0.01 ether);
         vm.warp(block.timestamp + 120);
         vm.prank(keeper);
-        assertEq(game.materializeMaturedEmission(), 10_000 ether);
+        (uint256 baseEarned, uint256 treasuryEarned) = game.materializeMaturedEmission();
+        assertEq(baseEarned, 10_000 ether);
+        assertEq(treasuryEarned, 0);
         assertEq(potato.balanceOf(alice), 10_000 ether);
 
         _buy(bob, 0.011 ether);
@@ -79,7 +81,9 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
     function test_RewardNeverExceedsSnapshot() public {
         _buy(alice, 0.01 ether);
         vm.warp(block.timestamp + 10 days);
-        assertEq(game.currentEarnedEmission(), 10_000 ether);
+        (uint256 baseEarned, uint256 treasuryEarned) = game.currentEarnedEmission();
+        assertEq(baseEarned, 10_000 ether);
+        assertEq(treasuryEarned, 0);
         vm.prank(keeper);
         game.materializeMaturedEmission();
         assertEq(potato.balanceOf(alice), 10_000 ether);

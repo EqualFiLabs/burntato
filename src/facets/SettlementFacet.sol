@@ -19,6 +19,7 @@ contract SettlementFacet is ISettlement {
         if (block.timestamp < round.deadline) revert Errors.RoundNotExpired();
 
         LibGame.finalizeEmission(round);
+        LibGame.releaseTreasuryEmission(round);
         round.settled = true;
 
         LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
