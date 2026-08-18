@@ -34,7 +34,10 @@ contract GameFacet is IGame {
         round.deadline = block.timestamp + round.config.roundTimeout;
         round.purchaseIndex += 1;
         round.holderMaxReward = LibMath.mulBpsDown(round.remainingEmission, round.config.emissionStepBps);
+        round.holderTreasuryMaxReward =
+            LibMath.mulBpsDown(round.remainingTreasuryEmission, round.config.emissionStepBps);
         round.holderEarned = 0;
+        round.holderTreasuryEarned = 0;
         round.holderEmissionFinalized = false;
         round.nextPrice = msg.value + LibMath.mulBpsUp(msg.value, round.config.priceIncreaseBps);
 
@@ -43,7 +46,7 @@ contract GameFacet is IGame {
         );
     }
 
-    function materializeMaturedEmission() external returns (uint256 earned) {
+    function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[gs.currentRoundId];
         if (round.currentHolder == address(0)) revert Errors.NoCurrentHolder();
@@ -51,7 +54,7 @@ contract GameFacet is IGame {
         if (block.timestamp - round.holderSince < round.config.emissionVestingDuration) {
             revert Errors.VestingIncomplete();
         }
-        earned = LibGame.finalizeEmission(round);
+        (baseEarned, treasuryEarned) = LibGame.finalizeEmission(round);
     }
 
     function currentRoundId() external view returns (uint256) {
@@ -62,13 +65,16 @@ contract GameFacet is IGame {
         return LibProtocolStorage.game().rounds[roundId];
     }
 
-    function currentEarnedEmission() external view returns (uint256) {
+    function currentEarnedEmission() external view returns (uint256 baseEarned, uint256 treasuryEarned) {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[gs.currentRoundId];
-        if (round.currentHolder == address(0)) return 0;
-        if (round.holderEmissionFinalized) return round.holderEarned;
-        return LibMath.linearEarned(
+        if (round.currentHolder == address(0)) return (0, 0);
+        if (round.holderEmissionFinalized) return (round.holderEarned, round.holderTreasuryEarned);
+        baseEarned = LibMath.linearEarned(
             round.holderMaxReward, block.timestamp - round.holderSince, round.config.emissionVestingDuration
+        );
+        treasuryEarned = LibMath.linearEarned(
+            round.holderTreasuryMaxReward, block.timestamp - round.holderSince, round.config.emissionVestingDuration
         );
     }
 

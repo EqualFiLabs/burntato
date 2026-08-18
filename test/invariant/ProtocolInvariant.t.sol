@@ -217,7 +217,10 @@ contract ProtocolInvariantTest is DiamondTestSetup {
                 recoveryBurned += round.totalCommitted - treasuryPotato;
             }
         }
-        assertEq(IPotatoToken(address(diamond)).totalSupply(), emitted - recoveryBurned - handler.selfBurned());
+        assertEq(
+            IPotatoToken(address(diamond)).totalSupply(),
+            GENESIS_MARKET_SUPPLY + emitted - recoveryBurned - handler.selfBurned()
+        );
     }
 
     function invariant_CurrentRoundEmissionBudgetIsConserved() public view {

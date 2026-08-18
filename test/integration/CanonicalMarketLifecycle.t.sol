@@ -60,7 +60,6 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     int24 internal constant TICK_SPACING = 60;
     int24 internal constant INITIAL_TICK = 69_060;
-    uint256 internal constant NATIVE_SEED = 0.004 ether;
     uint256 internal constant POTATO_SEED = 1 ether;
 
     address internal alice = makeAddr("alice");
@@ -112,9 +111,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
                 permit2: PERMIT2_ADDRESS,
                 sqrtPriceX96: TickMath.getSqrtPriceAtTick(INITIAL_TICK),
                 tickLower: TickMath.minUsableTick(TICK_SPACING),
-                tickUpper: TickMath.maxUsableTick(TICK_SPACING),
+                tickUpper: INITIAL_TICK,
                 tickSpacing: TICK_SPACING,
-                nativeSeed: NATIVE_SEED,
                 potatoSeed: POTATO_SEED
             })
         );
@@ -125,9 +123,10 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.deal(address(manager), 100 ether);
     }
 
-    function test_RecoveryRevenuePermissionlesslyLaunchesLockedTwoSidedLiquidity() public {
-        _createTreasuryInventory();
+    function test_GenesisSupplyPermissionlesslyLaunchesLockedSingleSidedLiquidity() public {
         assertTrue(market.marketReady());
+        uint256 treasuryEthBefore = claims.treasuryEthAvailable();
+        uint256 diamondEthBefore = address(diamond).balance;
 
         vm.prank(keeper);
         (bytes32 poolId, uint128 liquidity) = market.launchMarket();
@@ -140,7 +139,9 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(IERC721Owner(address(positionManager)).ownerOf(1), market.lockedLpRecipient());
         assertEq(market.lockedLpRecipient(), 0x000000000000000000000000000000000000dEaD);
         assertEq(address(positionManager).balance, 0);
-        assertGt(claims.treasuryEthAvailable(), 0);
+        assertEq(claims.treasuryEthAvailable(), treasuryEthBefore);
+        assertEq(address(diamond).balance, diamondEthBefore);
+        assertLe(potato.balanceOf(address(diamond)), 10);
     }
 
     function test_ForcedPositionManagerEthDoesNotCorruptLaunchAccounting() public {
@@ -153,9 +154,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
 
         market.launchMarket();
 
-        assertEq(address(positionManager).balance, 0);
-        assertGe(claims.treasuryEthAvailable(), treasuryBefore);
-        assertLe(claims.treasuryEthAvailable(), treasuryBefore + NATIVE_SEED);
+        assertEq(address(positionManager).balance, forcedNative);
+        assertEq(claims.treasuryEthAvailable(), treasuryBefore);
     }
 
     function test_LaunchRevertsWhenPotatoApprovalReturnsFalse() public {
@@ -242,8 +242,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
 
     function test_ConfiguredReservesCannotBeClaimedAndStillLaunchAfterExcessClaims() public {
         _createTreasuryInventory();
-        assertEq(claims.treasuryEthAvailable(), 0.001 ether);
-        assertEq(claims.treasuryPotatoAvailable(), 999 ether);
+        assertEq(claims.treasuryEthAvailable(), 0.005 ether);
+        assertEq(claims.treasuryPotatoAvailable(), 1_000 ether);
         assertEq(buybacks.buybackReserveEth(), 0.002 ether);
 
         claims.claimTreasury();
@@ -251,21 +251,19 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(buybacks.buybackReserveEth(), 0.002 ether);
         assertTrue(market.marketReady());
         market.launchMarket();
-        assertGt(claims.treasuryEthAvailable(), 0);
-        assertLt(claims.treasuryPotatoAvailable(), 0.003 ether);
+        assertEq(claims.treasuryEthAvailable(), 0);
+        assertLe(claims.treasuryPotatoAvailable(), 10);
     }
 
     function test_MarketConfigurationCanChangeBeforeLaunchButNotAfter() public {
+        _createTreasuryInventory();
         IMarket.MarketConfig memory config = market.marketConfig();
-        config.nativeSeed = 0.003 ether;
         config.potatoSeed = 2 ether;
         vm.prank(authority);
         market.configureMarket(config);
         IMarket.MarketConfig memory actual = market.marketConfig();
-        assertEq(actual.nativeSeed, 0.003 ether);
         assertEq(actual.potatoSeed, 2 ether);
 
-        _createTreasuryInventory();
         market.launchMarket();
         vm.prank(authority);
         vm.expectRevert(Errors.AlreadyLaunched.selector);
@@ -363,7 +361,28 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
                 tickLower: -655_360,
                 tickUpper: 655_360,
                 tickSpacing: TickMath.MAX_TICK_SPACING + 1,
-                nativeSeed: NATIVE_SEED,
+                potatoSeed: POTATO_SEED
+            })
+        );
+    }
+
+    function test_ConfigurationRejectsTerminalUpperTickThatPoolManagerCannotInitialize() public {
+        _deployCore();
+        IMarket candidate = IMarket(address(diamond));
+        CanonicalHookConfigStub stub = new CanonicalHookConfigStub(address(diamond), IPoolManager(address(manager)), 1);
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidMarketConfiguration.selector);
+        candidate.configureMarket(
+            IMarket.MarketConfig({
+                hook: address(stub),
+                poolManager: address(manager),
+                positionManager: address(positionManager),
+                permit2: PERMIT2_ADDRESS,
+                sqrtPriceX96: TickMath.getSqrtPriceAtTick(TickMath.MAX_TICK),
+                tickLower: TickMath.MIN_TICK,
+                tickUpper: TickMath.MAX_TICK,
+                tickSpacing: 1,
                 potatoSeed: POTATO_SEED
             })
         );
@@ -385,9 +404,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
                 permit2: PERMIT2_ADDRESS,
                 sqrtPriceX96: TickMath.getSqrtPriceAtTick(INITIAL_TICK),
                 tickLower: TickMath.minUsableTick(TICK_SPACING),
-                tickUpper: TickMath.maxUsableTick(TICK_SPACING),
+                tickUpper: INITIAL_TICK,
                 tickSpacing: TICK_SPACING,
-                nativeSeed: NATIVE_SEED,
                 potatoSeed: POTATO_SEED
             })
         );
@@ -515,6 +533,15 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertFalse(hook.externalBuysEnabled());
 
         _expectBuyDisabled(alice, 0.0001 ether);
+
+        vm.prank(treasury);
+        potato.transfer(alice, amountOut / 2);
+        vm.prank(alice);
+        potato.approve(address(swapRouter), type(uint256).max);
+        uint256 nativeBefore = alice.balance;
+        _sell(alice, amountOut / 2);
+        assertGt(alice.balance, nativeBefore);
+        assertFalse(hook.externalBuysEnabled());
     }
 
     function test_BuybackHonorsCapDelayAndTreasuryCanReusePurchasedPotato() public {
@@ -610,7 +637,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     function test_PartialBuybackRestoresUnspentInputToReserve() public {
         IMarket.MarketConfig memory config = market.marketConfig();
         config.tickLower = INITIAL_TICK - TICK_SPACING;
-        config.tickUpper = INITIAL_TICK + TICK_SPACING;
+        config.tickUpper = INITIAL_TICK;
         vm.prank(authority);
         market.configureMarket(config);
         _createTreasuryInventory();
@@ -656,7 +683,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(bob);
         game.buyPotato{value: 0.01 ether}();
         _expireAndSettle();
-        assertEq(potato.balanceOf(address(diamond)), 1_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), 1_001 ether);
     }
 
     function _expireAndSettle() internal {

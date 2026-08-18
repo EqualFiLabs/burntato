@@ -59,7 +59,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(round.remainingEmission, 87_750 ether);
         assertEq(round.emittedPotato, 12_250 ether);
         assertEq(round.totalCommitted, 10_000 ether);
-        assertEq(potato.balanceOf(address(diamond)), 1_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 1_000 ether);
 
         uint256 aliceBefore = alice.balance;
         vm.prank(alice);

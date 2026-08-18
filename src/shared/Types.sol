@@ -54,6 +54,17 @@ struct BuybackConfig {
     uint256 delayBlocks;
 }
 
+struct RewardSchedule {
+    uint256 scheduleId;
+    uint256 amount;
+    uint256 firstRoundId;
+    uint256 roundCount;
+    uint256 perRound;
+    uint256 firstRoundRemainder;
+    uint256 canceledFromRound;
+    uint256 canceledAmount;
+}
+
 struct Round {
     uint256 roundId;
     RoundConfig config;
@@ -66,6 +77,12 @@ struct Round {
     uint256 holderEarned;
     uint256 remainingEmission;
     uint256 emittedPotato;
+    uint256 treasuryEmissionBudget;
+    uint256 holderTreasuryMaxReward;
+    uint256 holderTreasuryEarned;
+    uint256 remainingTreasuryEmission;
+    uint256 treasuryEmittedPotato;
+    uint256 treasuryReleasedPotato;
     uint256 winnerPool;
     uint256 recoveryPool;
     uint256 recoveryCarryIn;

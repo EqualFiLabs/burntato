@@ -19,8 +19,8 @@ interface IGame {
     event BuybackFunded(uint256 indexed roundId, uint256 amount, uint256 reserveEth);
 
     function buyPotato() external payable;
-    function materializeMaturedEmission() external returns (uint256 earned);
+    function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned);
     function currentRoundId() external view returns (uint256);
     function getRound(uint256 roundId) external view returns (Round memory);
-    function currentEarnedEmission() external view returns (uint256);
+    function currentEarnedEmission() external view returns (uint256 baseEarned, uint256 treasuryEarned);
 }

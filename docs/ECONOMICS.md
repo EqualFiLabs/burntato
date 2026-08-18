@@ -123,11 +123,18 @@ its Recovery ETH rolls into the next round; unused POTATO emission never does.
 
 ## Treasury and canonical market
 
-Diamond Treasury accounting includes purchase ETH and Recovery-derived POTATO.
-Prelaunch seed reservations cannot be claimed. When both configured reserves are
-available, anyone may launch the exact canonical native ETH/POTATO v4 pool. The
-initial position NFT is sent permanently to the dead address and the native LP
-fee is fixed at zero.
+Genesis mints a separately reserved market allocation into Diamond custody; the
+local default is 100 million POTATO. It is not holder-time emission and cannot
+be claimed before launch. Governance may resize the allocation before launch,
+subject to the Diamond's available POTATO inventory.
+
+Anyone may launch the exact canonical native ETH/POTATO v4 pool once the token
+reservation is available. The initial price equals the position's upper tick,
+so launch supplies POTATO only and consumes no Treasury ETH. The position NFT
+is sent permanently to the dead address and the native LP fee is fixed at zero.
+Buybacks subsequently supply ETH-side demand while external buys remain closed;
+POTATO holders can sell into that liquidity immediately after ETH has entered
+the pool.
 
 The hook's governed `feeBps` applies bilaterally:
 
@@ -173,6 +180,46 @@ External ETH-to-POTATO pool buys start disabled. While disabled, exact-input
 sells remain available and only the Diamond buyback may buy. Hook ownership may
 enable, disable, or re-enable external buys at any time, including after launch
 and Diamond finalization.
+
+## Treasury-funded round rewards
+
+The configured reward allocator, initially the Treasury Safe, may move existing
+POTATO into a schedule for future unactivated rounds:
+
+```text
+perRound = floor(amount / roundCount)
+firstRoundRemainder = amount - perRound * roundCount
+```
+
+Every target round receives `perRound`; the first also receives the exact
+base-unit remainder. Start/end rate deltas make allocation, cancellation, and
+round activation constant-time even when schedules overlap. Funding increases
+Diamond POTATO inventory and reservation together, so scheduled tokens are not
+Treasury-claimable and cannot be spent by the market reservation.
+
+At activation the scheduled amount becomes a separate Treasury reward budget.
+Each holder snapshots:
+
+```text
+treasuryMaxReward =
+    floor(remainingTreasuryEmission * emissionStepBps / 10_000)
+treasuryEarned = floor(
+    treasuryMaxReward * min(heldSeconds, emissionVestingDuration)
+    / emissionVestingDuration
+)
+```
+
+Base and Treasury rewards finalize together. Base reward is minted; Treasury
+reward transfers existing escrowed POTATO. The transfer is normal POTATO, so it
+can be self-burned, sold, distributed through an allowed endpoint, or committed
+to the immediately next Recovery market. It never increases total supply.
+
+Settlement releases every unearned Treasury reward base unit into unreserved,
+claimable Treasury inventory instead of rolling it forward. The current reward
+allocator may likewise cancel only still-unactivated schedule rounds. Current
+round opportunity and already-earned reward are never reduced. Authority can
+replace or zero the allocator independently of Treasury-recipient and
+distributor administration, including after Diamond finalization.
 
 Reference precedent:
 

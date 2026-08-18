@@ -63,7 +63,7 @@ contract RecoveryDistributionFuzzTest is DiamondTestSetup {
         uint256 burned = totalCommitted - treasuryPotato;
         assertEq(target.totalCommitted, totalCommitted);
         assertEq(potato.totalSupply(), supplyBefore + 10_000 ether - burned);
-        assertEq(potato.balanceOf(address(diamond)), treasuryPotato);
+        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + treasuryPotato);
 
         uint256 expectedAlice = target.recoveryPool * aliceCommitment / totalCommitted;
         uint256 expectedBob = target.recoveryPool * bobCommitment / totalCommitted;

@@ -43,6 +43,17 @@ contract MarketFacet is IMarket {
                 || treasuryRecipient == config.positionManager || treasuryRecipient == config.permit2
         ) revert Errors.InvalidMarketConfiguration();
 
+        uint256 previousSeed = ms.potatoSeed;
+        LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
+        if (config.potatoSeed > previousSeed) {
+            uint256 additional = config.potatoSeed - previousSeed;
+            uint256 available = treasuryStorage.potatoInventory - treasuryStorage.reservedPotato;
+            if (additional > available) revert Errors.MarketNotReady();
+            treasuryStorage.reservedPotato += additional;
+        } else if (previousSeed > config.potatoSeed) {
+            treasuryStorage.reservedPotato -= previousSeed - config.potatoSeed;
+        }
+
         ms.hook = config.hook;
         ms.poolManager = config.poolManager;
         ms.positionManager = config.positionManager;
@@ -51,17 +62,12 @@ contract MarketFacet is IMarket {
         ms.tickLower = config.tickLower;
         ms.tickUpper = config.tickUpper;
         ms.tickSpacing = config.tickSpacing;
-        ms.nativeSeed = config.nativeSeed;
         ms.potatoSeed = config.potatoSeed;
         ms.configured = true;
 
         LibProtocolStorage.TokenStorage storage token = LibProtocolStorage.token();
         token.canonicalHook = config.hook;
         token.poolManager = config.poolManager;
-
-        LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
-        treasuryStorage.reservedEth = config.nativeSeed;
-        treasuryStorage.reservedPotato = config.potatoSeed;
 
         emit MarketConfigured(
             config.hook,
@@ -72,7 +78,6 @@ contract MarketFacet is IMarket {
             config.tickLower,
             config.tickUpper,
             config.tickSpacing,
-            config.nativeSeed,
             config.potatoSeed
         );
     }
@@ -86,13 +91,9 @@ contract MarketFacet is IMarket {
         PoolKey memory key = _poolKey(ms);
         uint160 sqrtLower = TickMath.getSqrtPriceAtTick(ms.tickLower);
         uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(ms.tickUpper);
-        liquidity = LiquidityAmounts.getLiquidityForAmounts(
-            ms.sqrtPriceX96, sqrtLower, sqrtUpper, ms.nativeSeed, ms.potatoSeed
-        );
+        liquidity = LiquidityAmounts.getLiquidityForAmount1(sqrtLower, sqrtUpper, ms.potatoSeed);
         if (liquidity == 0) revert Errors.InvalidMarketConfiguration();
 
-        uint256 nativeBefore = address(this).balance;
-        uint256 positionManagerNativeBefore = address(ms.positionManager).balance;
         uint256 potatoBefore = IPotatoToken(address(this)).balanceOf(address(this));
 
         ms.launched = true;
@@ -102,48 +103,38 @@ contract MarketFacet is IMarket {
         }
         IAllowanceTransfer(ms.permit2).approve(address(this), ms.positionManager, type(uint160).max, type(uint48).max);
 
-        bytes memory actions =
-            abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR), uint8(Actions.SWEEP));
-        bytes[] memory mintParams = new bytes[](3);
+        bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
+        bytes[] memory mintParams = new bytes[](2);
         mintParams[0] = abi.encode(
             key,
             ms.tickLower,
             ms.tickUpper,
             liquidity,
-            ms.nativeSeed,
+            uint256(0),
             ms.potatoSeed,
             Constants.LOCKED_LP_RECIPIENT,
             bytes("")
         );
         mintParams[1] = abi.encode(key.currency0, key.currency1);
-        mintParams[2] = abi.encode(key.currency0, address(this));
 
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeWithSelector(IPoolInitializer_v4.initializePool.selector, key, ms.sqrtPriceX96);
         calls[1] = abi.encodeWithSelector(
             IPositionManager.modifyLiquidities.selector, abi.encode(actions, mintParams), block.timestamp + 60
         );
-        IPositionManager(ms.positionManager).multicall{value: ms.nativeSeed}(calls);
+        IPositionManager(ms.positionManager).multicall(calls);
         _setLaunching(false);
 
-        uint256 nativeBalanceWithoutSeed = nativeBefore - ms.nativeSeed;
-        uint256 nativeSweptBack = address(this).balance - nativeBalanceWithoutSeed;
-        if (nativeSweptBack < positionManagerNativeBefore) revert Errors.InvalidMarketConfiguration();
-        uint256 nativeSeedRefund = nativeSweptBack - positionManagerNativeBefore;
-        if (nativeSeedRefund > ms.nativeSeed) revert Errors.InvalidMarketConfiguration();
-        uint256 nativeUsed = ms.nativeSeed - nativeSeedRefund;
         uint256 potatoUsed = potatoBefore - IPotatoToken(address(this)).balanceOf(address(this));
-        if (nativeUsed == 0 || potatoUsed == 0) revert Errors.InvalidMarketConfiguration();
+        if (potatoUsed == 0) revert Errors.InvalidMarketConfiguration();
 
         LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
-        _consumeTreasuryEth(treasuryStorage, nativeUsed);
         treasuryStorage.potatoInventory -= potatoUsed;
-        treasuryStorage.reservedEth = 0;
-        treasuryStorage.reservedPotato = 0;
+        treasuryStorage.reservedPotato -= ms.potatoSeed;
 
         poolId = PoolId.unwrap(key.toId());
         ms.poolId = poolId;
-        emit MarketLaunched(poolId, liquidity, nativeUsed, potatoUsed, Constants.LOCKED_LP_RECIPIENT);
+        emit MarketLaunched(poolId, liquidity, potatoUsed, Constants.LOCKED_LP_RECIPIENT);
     }
 
     function marketConfig() external view returns (MarketConfig memory config) {
@@ -157,7 +148,6 @@ contract MarketFacet is IMarket {
             tickLower: ms.tickLower,
             tickUpper: ms.tickUpper,
             tickSpacing: ms.tickSpacing,
-            nativeSeed: ms.nativeSeed,
             potatoSeed: ms.potatoSeed
         });
     }
@@ -187,20 +177,17 @@ contract MarketFacet is IMarket {
     }
 
     function _validateConfiguration(MarketConfig calldata config) private view {
-        int24 initialTick;
-        if (config.sqrtPriceX96 > TickMath.MIN_SQRT_PRICE && config.sqrtPriceX96 < TickMath.MAX_SQRT_PRICE) {
-            initialTick = TickMath.getTickAtSqrtPrice(config.sqrtPriceX96);
-        }
         if (
             config.hook == address(0) || config.poolManager == address(0) || config.positionManager == address(0)
-                || config.permit2 == address(0) || config.nativeSeed == 0 || config.potatoSeed == 0
+                || config.permit2 == address(0) || config.potatoSeed == 0
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower >= config.tickUpper || config.tickLower % config.tickSpacing != 0
                 || config.tickUpper % config.tickSpacing != 0 || config.tickLower < TickMath.MIN_TICK
-                || config.tickUpper > TickMath.MAX_TICK || initialTick <= config.tickLower
-                || initialTick >= config.tickUpper || config.sqrtPriceX96 <= TickMath.MIN_SQRT_PRICE
-                || config.sqrtPriceX96 >= TickMath.MAX_SQRT_PRICE
+                || config.tickUpper >= TickMath.MAX_TICK
         ) revert Errors.InvalidMarketConfiguration();
+        if (config.sqrtPriceX96 != TickMath.getSqrtPriceAtTick(config.tickUpper)) {
+            revert Errors.InvalidMarketConfiguration();
+        }
         LibDiamond.enforceHasCode(config.hook);
         LibDiamond.enforceHasCode(config.poolManager);
         LibDiamond.enforceHasCode(config.positionManager);
@@ -219,13 +206,8 @@ contract MarketFacet is IMarket {
 
     function _marketReady(LibProtocolStorage.MarketStorage storage ms) private view returns (bool) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        return ts.purchaseEth >= ms.nativeSeed && ts.potatoInventory >= ms.potatoSeed
-            && address(this).balance >= ms.nativeSeed
+        return ts.potatoInventory >= ms.potatoSeed && ts.reservedPotato >= ms.potatoSeed
             && IPotatoToken(address(this)).balanceOf(address(this)) >= ms.potatoSeed;
-    }
-
-    function _consumeTreasuryEth(LibProtocolStorage.TreasuryStorage storage ts, uint256 amount) private {
-        ts.purchaseEth -= amount;
     }
 
     function _setLaunching(bool value) private {

@@ -51,7 +51,7 @@ contract GovernanceAdministrationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury))
+                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, 1 ether))
             );
 
         vm.startPrank(bootstrap);
@@ -232,7 +232,7 @@ contract GovernanceAdministrationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury))
+                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, 1 ether))
             );
     }
 

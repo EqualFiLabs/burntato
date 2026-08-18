@@ -81,7 +81,9 @@ contract DiamondFoundationTest is Test {
 
         vm.prank(authority);
         IDiamondCut(address(diamond))
-            .diamondCut(cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (_config(), treasury)));
+            .diamondCut(
+                cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (_config(), treasury, 1 ether))
+            );
     }
 
     function _config() private pure returns (ProtocolConfig memory config) {

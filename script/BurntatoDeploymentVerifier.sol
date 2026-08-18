@@ -16,6 +16,7 @@ import {IGame} from "../src/interfaces/IGame.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
+import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {BuybackConfig, ProtocolConfig, Round} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
 import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
@@ -49,7 +50,7 @@ contract BurntatoDeploymentVerifier {
 
     function _verifySelectors(BurntatoDeployment memory deployment) private view {
         IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
-        _check(loupe.facetAddresses().length == 10, "FACET_COUNT");
+        _check(loupe.facetAddresses().length == 11, "FACET_COUNT");
         _verifyGroup(loupe, deployment.diamondCutFacet, BurntatoSelectors.diamondCut());
         _verifyGroup(loupe, deployment.diamondLoupeFacet, BurntatoSelectors.loupe());
         _verifyGroup(loupe, deployment.governanceFacet, BurntatoSelectors.governance());
@@ -60,6 +61,7 @@ contract BurntatoDeploymentVerifier {
         _verifyGroup(loupe, deployment.recoveryFacet, BurntatoSelectors.recovery());
         _verifyGroup(loupe, deployment.settlementFacet, BurntatoSelectors.settlement());
         _verifyGroup(loupe, deployment.claimsFacet, BurntatoSelectors.claims());
+        _verifyGroup(loupe, deployment.treasuryRewardsFacet, BurntatoSelectors.treasuryRewards());
     }
 
     function _verifyAuthority(GenesisConfig memory config, BurntatoDeployment memory deployment) private view {
@@ -81,6 +83,7 @@ contract BurntatoDeploymentVerifier {
         IPotatoToken token = IPotatoToken(deployment.diamond);
         IGame game = IGame(deployment.diamond);
         IBuyback buyback = IBuyback(deployment.diamond);
+        ITreasuryRewards rewards = ITreasuryRewards(deployment.diamond);
         _check(governance.guardian() == config.guardian, "GUARDIAN");
         _check(!governance.purchasesPaused(), "PURCHASES_UNPAUSED");
         _check(!governance.commitmentsPaused(), "COMMITMENTS_UNPAUSED");
@@ -100,12 +103,15 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.recoveryBurnBps == expected.recoveryBurnBps, "RECOVERY_BURN_BPS");
         _check(protocol.recoveryTreasuryBps == expected.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
+        _check(rewards.rewardAllocator() == config.rewardAllocator, "REWARD_ALLOCATOR");
+        _check(rewards.treasuryRewardsReserved() == 0, "REWARD_RESERVE");
         _check(claims.treasuryEthAvailable() == 0, "TREASURY_ETH_AVAILABLE");
         _check(claims.treasuryPotatoAvailable() == 0, "TREASURY_POTATO_AVAILABLE");
         _check(keccak256(bytes(token.name())) == keccak256("Burntato Potato"), "TOKEN_NAME");
         _check(keccak256(bytes(token.symbol())) == keccak256("POTATO"), "TOKEN_SYMBOL");
         _check(token.decimals() == 18, "TOKEN_DECIMALS");
-        _check(token.totalSupply() == 0, "TOKEN_SUPPLY");
+        _check(token.totalSupply() == config.potatoSeed, "TOKEN_SUPPLY");
+        _check(token.balanceOf(deployment.diamond) == config.potatoSeed, "GENESIS_MARKET_BALANCE");
         _check(token.isDistributor(config.treasuryRecipient), "TREASURY_DISTRIBUTOR");
         BuybackConfig memory buybackConfig = buyback.buybackConfig();
         _check(buybackConfig.maxSpend == config.buyback.maxSpend, "BUYBACK_MAX_SPEND");
@@ -129,12 +135,11 @@ contract BurntatoDeploymentVerifier {
         _check(actual.tickLower == config.tickLower, "MARKET_TICK_LOWER");
         _check(actual.tickUpper == config.tickUpper, "MARKET_TICK_UPPER");
         _check(actual.tickSpacing == config.tickSpacing, "MARKET_TICK_SPACING");
-        _check(actual.nativeSeed == config.nativeSeed, "MARKET_NATIVE_SEED");
         _check(actual.potatoSeed == config.potatoSeed, "MARKET_POTATO_SEED");
 
         (bytes32 poolId, bool configured, bool launching, bool launched) = market.marketState();
         _check(poolId == bytes32(0) && configured && !launching && !launched, "MARKET_STATE");
-        _check(!market.marketReady(), "MARKET_NOT_FUNDED");
+        _check(market.marketReady(), "MARKET_READY");
         _check(market.lockedLpRecipient() == 0x000000000000000000000000000000000000dEaD, "LOCKED_LP");
 
         PoolKey memory key = market.canonicalPoolKey();
@@ -191,13 +196,13 @@ contract BurntatoDeploymentVerifier {
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
             "TICK_SPACING_DOMAIN"
         );
-        _check(config.tickLower >= TickMath.MIN_TICK && config.tickUpper <= TickMath.MAX_TICK, "TICK_BOUNDS_DOMAIN");
-        _check(config.tickLower < config.initialTick && config.initialTick < config.tickUpper, "INITIAL_TICK_DOMAIN");
+        _check(config.tickLower >= TickMath.MIN_TICK && config.tickUpper < TickMath.MAX_TICK, "TICK_BOUNDS_DOMAIN");
+        _check(config.tickLower < config.initialTick && config.initialTick == config.tickUpper, "INITIAL_TICK_DOMAIN");
         _check(
             config.tickLower % config.tickSpacing == 0 && config.tickUpper % config.tickSpacing == 0,
             "TICK_ALIGNMENT_DOMAIN"
         );
-        _check(config.nativeSeed != 0 && config.potatoSeed != 0, "SEED_DOMAIN");
+        _check(config.potatoSeed != 0, "SEED_DOMAIN");
     }
 
     function _verifyGroup(IDiamondLoupe loupe, address expectedFacet, bytes4[] memory selectors) private view {

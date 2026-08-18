@@ -31,6 +31,7 @@ contract VerifyBurntato is Script {
         deployment.recoveryFacet = loupe.facetAddress(BurntatoSelectors.recovery()[0]);
         deployment.settlementFacet = loupe.facetAddress(BurntatoSelectors.settlement()[0]);
         deployment.claimsFacet = loupe.facetAddress(BurntatoSelectors.claims()[0]);
+        deployment.treasuryRewardsFacet = loupe.facetAddress(BurntatoSelectors.treasuryRewards()[0]);
 
         bool verified = (new BurntatoDeploymentVerifier()).verify(config, deployment);
         console2.log("Burntato deployment verified", verified);
@@ -43,6 +44,7 @@ contract VerifyBurntato is Script {
         config.proposer = vm.envOr("BURNTATO_PROPOSER", config.proposer);
         config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
+        config.rewardAllocator = vm.envOr("BURNTATO_REWARD_ALLOCATOR", config.rewardAllocator);
         config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
         config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
         config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
@@ -88,7 +90,6 @@ contract VerifyBurntato is Script {
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
         config.tickUpper =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
-        config.nativeSeed = vm.envOr("BURNTATO_NATIVE_SEED", config.nativeSeed);
         config.potatoSeed = vm.envOr("BURNTATO_POTATO_SEED", config.potatoSeed);
     }
 }

@@ -17,6 +17,7 @@ library Errors {
     error InvalidBps();
     error InvalidFacetAction(uint8 action);
     error InvalidRound(uint256 roundId);
+    error InvalidSchedule(uint256 scheduleId);
     error NativeTransferFailed();
     error AlreadyLaunched();
     error BuybackUnavailable();
@@ -36,7 +37,9 @@ library Errors {
     error NotCanonicalHook(address caller);
     error NotGuardian(address caller);
     error NotProtocol(address caller);
+    error NotRewardAllocator(address caller);
     error NothingToClaim();
+    error NothingToCancel();
     error PoolManagerAllowanceExceeded(uint256 available, uint256 required);
     error PurchasesPaused();
     error Reentrancy();

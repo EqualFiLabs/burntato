@@ -14,6 +14,7 @@ While authority exists it can:
 - atomically update the complete default `ProtocolConfig`;
 - update the Diamond Treasury recipient;
 - administer POTATO distributors and buyback cap, reward, and delay;
+- replace or zero the Treasury reward allocator;
 - appoint or remove the guardian;
 - set or clear purchase and commitment pauses;
 - reconfigure canonical market infrastructure before launch;
@@ -62,13 +63,19 @@ repeatable external-buy gate.
 PoolManager ownership retains the native v4 administrative surface, including
 the protocol-fee controller. Diamond finalization does not affect either owner.
 
-The PoolKey and launch infrastructure may be corrected before launch. Once the
-pool launches, the PoolKey, PoolManager, hook, range, seeds, and locked LP are
-structurally fixed for that market. Post-launch fee recipient and hook fee
+The PoolKey, token-only launch range, and reserved POTATO allocation may be
+corrected before launch. Once the pool launches, the PoolKey, PoolManager, hook,
+range, allocation, and locked LP are structurally fixed for that market.
+Post-launch fee recipient and hook fee
 administration remain available through hook ownership.
 Diamond authority may also change buyback cap, caller reward, and block delay
 before or after launch and finalization. Setting the cap to zero disables
 execution without changing accrued reserve accounting.
+
+The Treasury reward allocator is independent from the Treasury recipient and
+distributor registry. Genesis configures both roles to the Treasury Safe, but
+authority may replace or zero only the allocator before or after finalization.
+Changing any one of these three roles does not implicitly mutate the others.
 
 ## Operational checks
 
@@ -82,6 +89,7 @@ For a deployment, verify:
 - `externalBuysEnabled()` matches current launch policy;
 - buyback split, cap, caller reward, delay, reserve, and last execution block
   match Treasury policy;
+- the reward allocator and funded POTATO escrow match Treasury policy;
 - `protocolFinalized()` is false unless Diamond cuts were intentionally ended;
   and
 - after finalization, governance setters still work while `diamondCut` reverts.

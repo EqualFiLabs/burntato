@@ -11,6 +11,7 @@ import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
+import {ITreasuryRewards} from "../../src/interfaces/ITreasuryRewards.sol";
 
 library BurntatoSelectors {
     function diamondCut() internal pure returns (bytes4[] memory selectors) {
@@ -118,5 +119,16 @@ library BurntatoSelectors {
         selectors[4] = IClaims.treasuryRecipient.selector;
         selectors[5] = IClaims.treasuryEthAvailable.selector;
         selectors[6] = IClaims.treasuryPotatoAvailable.selector;
+    }
+
+    function treasuryRewards() internal pure returns (bytes4[] memory selectors) {
+        selectors = new bytes4[](7);
+        selectors[0] = ITreasuryRewards.setRewardAllocator.selector;
+        selectors[1] = ITreasuryRewards.allocateTreasuryRewards.selector;
+        selectors[2] = ITreasuryRewards.cancelTreasuryRewards.selector;
+        selectors[3] = ITreasuryRewards.rewardAllocator.selector;
+        selectors[4] = ITreasuryRewards.treasuryRewardsReserved.selector;
+        selectors[5] = ITreasuryRewards.rewardSchedule.selector;
+        selectors[6] = ITreasuryRewards.nextTreasuryRewardBudget.selector;
     }
 }
