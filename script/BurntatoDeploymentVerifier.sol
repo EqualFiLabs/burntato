@@ -196,7 +196,7 @@ contract BurntatoDeploymentVerifier {
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
             "TICK_SPACING_DOMAIN"
         );
-        _check(config.tickLower >= TickMath.MIN_TICK && config.tickUpper <= TickMath.MAX_TICK, "TICK_BOUNDS_DOMAIN");
+        _check(config.tickLower >= TickMath.MIN_TICK && config.tickUpper < TickMath.MAX_TICK, "TICK_BOUNDS_DOMAIN");
         _check(config.tickLower < config.initialTick && config.initialTick == config.tickUpper, "INITIAL_TICK_DOMAIN");
         _check(
             config.tickLower % config.tickSpacing == 0 && config.tickUpper % config.tickSpacing == 0,

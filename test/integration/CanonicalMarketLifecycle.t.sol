@@ -366,6 +366,28 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         );
     }
 
+    function test_ConfigurationRejectsTerminalUpperTickThatPoolManagerCannotInitialize() public {
+        _deployCore();
+        IMarket candidate = IMarket(address(diamond));
+        CanonicalHookConfigStub stub = new CanonicalHookConfigStub(address(diamond), IPoolManager(address(manager)), 1);
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidMarketConfiguration.selector);
+        candidate.configureMarket(
+            IMarket.MarketConfig({
+                hook: address(stub),
+                poolManager: address(manager),
+                positionManager: address(positionManager),
+                permit2: PERMIT2_ADDRESS,
+                sqrtPriceX96: TickMath.getSqrtPriceAtTick(TickMath.MAX_TICK),
+                tickLower: TickMath.MIN_TICK,
+                tickUpper: TickMath.MAX_TICK,
+                tickSpacing: 1,
+                potatoSeed: POTATO_SEED
+            })
+        );
+    }
+
     function test_ConfigurationRejectsTreasuryRecipientAsSystemCustody() public {
         _deployCore();
         IMarket candidate = IMarket(address(diamond));

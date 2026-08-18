@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
@@ -83,6 +84,17 @@ contract DeterministicDeploymentTest is Test {
     function test_DeploymentRejectsTickSpacingOutsidePoolManagerDomain() public {
         GenesisConfig memory unsafeConfig = config;
         unsafeConfig.tickSpacing = 32_768;
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_DeploymentRejectsTerminalUpperTickThatPoolManagerCannotInitialize() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.tickSpacing = 1;
+        unsafeConfig.tickLower = TickMath.MIN_TICK;
+        unsafeConfig.initialTick = TickMath.MAX_TICK;
+        unsafeConfig.tickUpper = TickMath.MAX_TICK;
 
         vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
         deployScript.deploy(unsafeConfig, address(deployScript));
