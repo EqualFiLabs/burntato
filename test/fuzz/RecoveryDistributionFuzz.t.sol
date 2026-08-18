@@ -67,6 +67,8 @@ contract RecoveryDistributionFuzzTest is DiamondTestSetup {
 
         uint256 expectedAlice = target.recoveryPool * aliceCommitment / totalCommitted;
         uint256 expectedBob = target.recoveryPool * bobCommitment / totalCommitted;
+        assertEq(claims.claimableRecovery(2, alice), expectedAlice);
+        assertEq(claims.claimableRecovery(2, bob), expectedBob);
         if (bobClaimsFirst) {
             vm.prank(bob);
             assertEq(claims.claimRecovery(2, bob), expectedBob);
@@ -78,6 +80,10 @@ contract RecoveryDistributionFuzzTest is DiamondTestSetup {
             vm.prank(bob);
             assertEq(claims.claimRecovery(2, bob), expectedBob);
         }
+        assertTrue(claims.recoveryClaimed(2, alice));
+        assertTrue(claims.recoveryClaimed(2, bob));
+        assertEq(claims.claimableRecovery(2, alice), 0);
+        assertEq(claims.claimableRecovery(2, bob), 0);
         assertLe(expectedAlice + expectedBob, target.recoveryPool);
 
         vm.prank(alice);

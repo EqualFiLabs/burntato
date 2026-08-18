@@ -9,6 +9,9 @@ interface IClaims {
 
     function claimWinner(uint256 roundId, address recipient) external returns (uint256 amount);
     function claimRecovery(uint256 roundId, address recipient) external returns (uint256 amount);
+    function winnerClaimed(uint256 roundId) external view returns (bool);
+    function recoveryClaimed(uint256 roundId, address account) external view returns (bool);
+    function claimableRecovery(uint256 roundId, address account) external view returns (uint256 amount);
     function claimTreasury() external returns (uint256 amount);
     function claimTreasuryPotato() external returns (uint256 amount);
     function treasuryRecipient() external view returns (address);

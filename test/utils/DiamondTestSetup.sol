@@ -197,7 +197,7 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _claimSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](7);
+        selectors = new bytes4[](10);
         selectors[0] = IClaims.claimWinner.selector;
         selectors[1] = IClaims.claimRecovery.selector;
         selectors[2] = IClaims.claimTreasury.selector;
@@ -205,6 +205,9 @@ abstract contract DiamondTestSetup is Test {
         selectors[4] = IClaims.treasuryRecipient.selector;
         selectors[5] = IClaims.treasuryEthAvailable.selector;
         selectors[6] = IClaims.treasuryPotatoAvailable.selector;
+        selectors[7] = IClaims.winnerClaimed.selector;
+        selectors[8] = IClaims.recoveryClaimed.selector;
+        selectors[9] = IClaims.claimableRecovery.selector;
     }
 
     function _treasuryRewardSelectors() internal pure returns (bytes4[] memory selectors) {

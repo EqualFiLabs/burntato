@@ -12,6 +12,8 @@ Important state reads include:
 - `IGovernance.protocolConfig()`, authority, guardian, pause, and finalization
   views;
 - `IRecovery.recoveryCommitment()` and `totalRecoveryCommitment()`;
+- `IClaims.winnerClaimed()`, `recoveryClaimed()`, and
+  `claimableRecovery()` for account claim state;
 - Treasury claimable ETH and POTATO views; and
 - `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
   `marketReady()`;
@@ -161,4 +163,8 @@ Winner and Recovery claims accept an explicit external recipient and are
 pull-based. Treasury ETH and POTATO claims always use the configured Diamond
 Treasury recipient. Protocol custody addresses are rejected as external claim
 recipients. Hook revenue bypasses these claims and arrives directly at the
-hook's configured Treasury wallet.
+hook's configured Treasury wallet. `winnerClaimed(roundId)` and
+`recoveryClaimed(roundId, account)` report completion status.
+`claimableRecovery(roundId, account)` returns the exact current Recovery payout,
+or zero when the round is unsettled, has no aggregate commitment, the account
+did not commit, or the account already claimed.

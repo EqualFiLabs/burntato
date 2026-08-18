@@ -42,11 +42,26 @@ contract ClaimsFacet is IClaims {
         if (rs.claimed[roundId][msg.sender]) revert Errors.AlreadyClaimed();
         uint256 committed = rs.commitments[roundId][msg.sender];
         if (committed == 0) revert Errors.NothingToClaim();
-        amount = Math.mulDiv(round.recoveryPool, committed, round.totalCommitted);
+        amount = _recoveryAmount(round, committed);
         rs.claimed[roundId][msg.sender] = true;
         rs.recoveryPaid[roundId] += amount;
         _sendNative(recipient, amount);
         emit RecoveryClaimed(roundId, msg.sender, recipient, amount);
+    }
+
+    function winnerClaimed(uint256 roundId) external view returns (bool) {
+        return LibProtocolStorage.game().winnerClaimed[roundId];
+    }
+
+    function recoveryClaimed(uint256 roundId, address account) external view returns (bool) {
+        return LibProtocolStorage.recovery().claimed[roundId][account];
+    }
+
+    function claimableRecovery(uint256 roundId, address account) external view returns (uint256 amount) {
+        Round storage round = LibProtocolStorage.game().rounds[roundId];
+        LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
+        if (!round.settled || round.totalCommitted == 0 || rs.claimed[roundId][account]) return 0;
+        return _recoveryAmount(round, rs.commitments[roundId][account]);
     }
 
     function claimTreasury() external nonReentrant returns (uint256 amount) {
@@ -80,6 +95,11 @@ contract ClaimsFacet is IClaims {
     function treasuryPotatoAvailable() external view returns (uint256) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         return ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
+    }
+
+    function _recoveryAmount(Round storage round, uint256 committed) private view returns (uint256) {
+        if (committed == 0) return 0;
+        return Math.mulDiv(round.recoveryPool, committed, round.totalCommitted);
     }
 
     function _sendNative(address recipient, uint256 amount) private {
