@@ -183,7 +183,7 @@ contract MarketFacet is IMarket {
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower >= config.tickUpper || config.tickLower % config.tickSpacing != 0
                 || config.tickUpper % config.tickSpacing != 0 || config.tickLower < TickMath.MIN_TICK
-                || config.tickUpper > TickMath.MAX_TICK
+                || config.tickUpper >= TickMath.MAX_TICK
         ) revert Errors.InvalidMarketConfiguration();
         if (config.sqrtPriceX96 != TickMath.getSqrtPriceAtTick(config.tickUpper)) {
             revert Errors.InvalidMarketConfiguration();

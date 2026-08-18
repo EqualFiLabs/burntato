@@ -299,7 +299,7 @@ contract DeployBurntato is Script {
                     != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
-                || config.tickLower < TickMath.MIN_TICK || config.tickUpper > TickMath.MAX_TICK
+                || config.tickLower < TickMath.MIN_TICK || config.tickUpper >= TickMath.MAX_TICK
                 || config.tickLower >= config.initialTick || config.initialTick != config.tickUpper
                 || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
                 || config.potatoSeed == 0
