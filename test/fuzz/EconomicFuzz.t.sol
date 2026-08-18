@@ -62,7 +62,11 @@ contract EconomicFuzzTest is DiamondTestSetup {
 
         uint256 duration = LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
         uint256 nextDuration = LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases + 1);
+        uint256 maximumReduction = initialTimeout - minimumTimeout;
+        uint256 expectedReduction = priorPurchases * decay;
+        if (expectedReduction > maximumReduction) expectedReduction = maximumReduction;
 
+        assertEq(duration, initialTimeout - expectedReduction);
         assertGe(duration, minimumTimeout);
         assertLe(duration, initialTimeout);
         assertLe(nextDuration, duration);
