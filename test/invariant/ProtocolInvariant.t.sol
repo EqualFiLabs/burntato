@@ -11,6 +11,7 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
+import {LibMath} from "../../src/libraries/LibMath.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 contract ForceNativeIntoDiamond {
@@ -229,6 +230,25 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         if (current == 0) return;
         Round memory round = game.getRound(current);
         assertEq(round.emittedPotato + round.remainingEmission, 100_000 ether);
+    }
+
+    function invariant_CurrentRoundDeadlineMatchesDiminishingSchedule() public view {
+        IGame game = IGame(address(diamond));
+        uint256 current = game.currentRoundId();
+        if (current == 0) return;
+        Round memory round = game.getRound(current);
+        if (round.currentHolder == address(0)) return;
+
+        uint256 duration = round.deadline - round.holderSince;
+        uint256 expected = LibMath.diminishingTimeout(
+            round.config.roundTimeout,
+            round.config.roundTimeoutDecay,
+            round.config.minimumRoundTimeout,
+            round.purchaseIndex - 1
+        );
+        assertEq(duration, expected);
+        assertGe(duration, round.config.minimumRoundTimeout);
+        assertLe(duration, round.config.roundTimeout);
     }
 
     function invariant_BuybackReserveRemainsBackedAndPurchaseBounded() public view {

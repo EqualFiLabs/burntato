@@ -140,6 +140,8 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
 
         ProtocolConfig memory updated = _configWithPrice(0.02 ether, 2_000);
         updated.roundTimeout = 2 hours;
+        updated.roundTimeoutDecay = 10 minutes;
+        updated.minimumRoundTimeout = 15 minutes;
         updated.roundEmissionBudget = 250_000 ether;
         updated.emissionStepBps = 2_000;
         updated.emissionVestingDuration = 240;
@@ -161,6 +163,8 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundTwo.config.startingPrice, 0.01 ether);
         assertEq(roundTwo.config.priceIncreaseBps, 1_000);
         assertEq(roundTwo.config.roundTimeout, 1 hours);
+        assertEq(roundTwo.config.roundTimeoutDecay, 5 minutes);
+        assertEq(roundTwo.config.minimumRoundTimeout, 5 minutes);
         assertEq(roundTwo.config.roundEmissionBudget, 100_000 ether);
         assertEq(roundTwo.config.emissionStepBps, 1_000);
         assertEq(roundTwo.config.emissionVestingDuration, 120);
@@ -180,6 +184,8 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundThree.config.startingPrice, 0.02 ether);
         assertEq(roundThree.config.priceIncreaseBps, 2_000);
         assertEq(roundThree.config.roundTimeout, 2 hours);
+        assertEq(roundThree.config.roundTimeoutDecay, 10 minutes);
+        assertEq(roundThree.config.minimumRoundTimeout, 15 minutes);
         assertEq(roundThree.config.roundEmissionBudget, 250_000 ether);
         assertEq(roundThree.config.emissionStepBps, 2_000);
         assertEq(roundThree.config.emissionVestingDuration, 240);

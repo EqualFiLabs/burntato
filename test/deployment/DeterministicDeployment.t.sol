@@ -108,6 +108,23 @@ contract DeterministicDeploymentTest is Test {
         deployScript.deploy(unsafeConfig, address(deployScript));
     }
 
+    function test_DeploymentRejectsInvalidDiminishingTimeoutDomain() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.protocol.minimumRoundTimeout = 0;
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+
+        unsafeConfig = config;
+        unsafeConfig.protocol.minimumRoundTimeout = unsafeConfig.protocol.roundTimeout + 1;
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+
+        unsafeConfig = config;
+        unsafeConfig.protocol.roundTimeoutDecay = unsafeConfig.protocol.roundTimeout + 1;
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
     function test_HookDeployerRejectsUnauthorizedCaller() public {
         BurntatoHookDeployer hookDeployer = BurntatoHookDeployer(deployment.hookDeployer);
         vm.prank(buyer);
@@ -136,6 +153,26 @@ contract DeterministicDeploymentTest is Test {
         verifier.verify(mismatched, deployment);
     }
 
+    function test_VerifierRejectsDiminishingTimeoutMismatch() public {
+        GenesisConfig memory mismatched = config;
+        mismatched.protocol.roundTimeoutDecay += 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("ROUND_TIMEOUT_DECAY")
+            )
+        );
+        verifier.verify(mismatched, deployment);
+
+        mismatched = config;
+        mismatched.protocol.minimumRoundTimeout += 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("MINIMUM_ROUND_TIMEOUT")
+            )
+        );
+        verifier.verify(mismatched, deployment);
+    }
+
     function test_GenesisPurchaseSnapshotsFixedEmissionBudget() public {
         vm.deal(buyer, config.protocol.startingPrice);
         vm.prank(buyer);
@@ -144,6 +181,9 @@ contract DeterministicDeploymentTest is Test {
         Round memory round = IGame(deployment.diamond).getRound(1);
         assertEq(round.roundId, 1);
         assertEq(round.currentHolder, buyer);
+        assertEq(round.config.roundTimeoutDecay, 5 minutes);
+        assertEq(round.config.minimumRoundTimeout, 5 minutes);
+        assertEq(round.deadline - round.holderSince, 1 hours);
         assertEq(round.remainingEmission, config.protocol.roundEmissionBudget);
         assertEq(round.holderMaxReward, config.protocol.roundEmissionBudget * config.protocol.emissionStepBps / 10_000);
         assertEq(

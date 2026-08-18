@@ -64,6 +64,107 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(round.holderMaxReward, 10_000 ether);
     }
 
+    function test_DefaultTimerDiminishesToFiveMinuteFloorDuringAtomicCycling() public {
+        uint256 expectedPrice = 0.01 ether;
+        for (uint256 i; i < 14; ++i) {
+            address buyer = address(uint160(1_000 + i));
+            vm.deal(buyer, expectedPrice);
+            _buy(buyer, expectedPrice);
+
+            Round memory round = game.getRound(1);
+            uint256 expectedDuration = i < 11 ? 1 hours - i * 5 minutes : 5 minutes;
+            assertEq(round.deadline - round.holderSince, expectedDuration);
+            assertEq(round.deadline, block.timestamp + expectedDuration);
+            assertEq(round.purchaseIndex, i + 1);
+            assertEq(round.remainingEmission, 100_000 ether);
+            expectedPrice = round.nextPrice;
+        }
+    }
+
+    function test_ElapsedTimeDoesNotReduceResetFromPurchaseTimestamp() public {
+        _buy(alice, 0.01 ether);
+        vm.warp(block.timestamp + 120);
+        _buy(bob, 0.011 ether);
+
+        Round memory round = game.getRound(1);
+        assertEq(round.deadline, block.timestamp + 55 minutes);
+        assertEq(round.deadline - round.holderSince, 55 minutes);
+    }
+
+    function test_SelfAndContractPurchasesCountWhileRevertsDoNot() public {
+        _buy(alice, 0.01 ether);
+        _buy(alice, 0.011 ether);
+        Round memory beforeRevert = game.getRound(1);
+        assertEq(beforeRevert.deadline - beforeRevert.holderSince, 55 minutes);
+
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(Errors.IncorrectPayment.selector, beforeRevert.nextPrice, 1));
+        game.buyPotato{value: 1}();
+        Round memory afterRevert = game.getRound(1);
+        assertEq(afterRevert.purchaseIndex, beforeRevert.purchaseIndex);
+        assertEq(afterRevert.deadline, beforeRevert.deadline);
+
+        vm.deal(address(this), beforeRevert.nextPrice);
+        game.buyPotato{value: beforeRevert.nextPrice}();
+        Round memory afterContractPurchase = game.getRound(1);
+        assertEq(afterContractPurchase.purchaseIndex, 3);
+        assertEq(afterContractPurchase.deadline - afterContractPurchase.holderSince, 50 minutes);
+    }
+
+    function test_NonEvenDecayClampsAtConfiguredFloor() public {
+        ProtocolConfig memory config = _defaultConfig();
+        config.priceIncreaseBps = 0;
+        config.roundTimeout = 1_000;
+        config.roundTimeoutDecay = 333;
+        config.minimumRoundTimeout = 100;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
+        uint256[5] memory expected = [uint256(1_000), 667, 334, 100, 100];
+        for (uint256 i; i < expected.length; ++i) {
+            address buyer = address(uint160(2_000 + i));
+            vm.deal(buyer, 0.01 ether);
+            _buy(buyer, 0.01 ether);
+            Round memory round = game.getRound(1);
+            assertEq(round.deadline - round.holderSince, expected[i]);
+        }
+    }
+
+    function test_ZeroDecayRestoresFixedResets() public {
+        ProtocolConfig memory config = _defaultConfig();
+        config.roundTimeoutDecay = 0;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+        _buy(alice, 0.01 ether);
+        _buy(bob, 0.011 ether);
+        assertEq(game.getRound(1).deadline - block.timestamp, 1 hours);
+    }
+
+    function test_MinimumEqualToInitialRestoresFixedResets() public {
+        ProtocolConfig memory config = _defaultConfig();
+        config.minimumRoundTimeout = config.roundTimeout;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+        _buy(alice, 0.01 ether);
+        _buy(bob, 0.011 ether);
+        assertEq(game.getRound(1).deadline - block.timestamp, 1 hours);
+    }
+
+    function test_NewRoundRestartsAtInitialTimeout() public {
+        _buy(alice, 0.01 ether);
+        _buy(bob, 0.011 ether);
+        Round memory roundOne = game.getRound(1);
+        assertEq(roundOne.deadline - roundOne.holderSince, 55 minutes);
+
+        vm.warp(roundOne.deadline);
+        ISettlement(address(diamond)).settleRound();
+        _buy(alice, 0.01 ether);
+
+        Round memory roundTwo = game.getRound(2);
+        assertEq(roundTwo.purchaseIndex, 1);
+        assertEq(roundTwo.deadline - roundTwo.holderSince, 1 hours);
+    }
+
     function test_MaterializedRewardCannotMintTwice() public {
         _buy(alice, 0.01 ether);
         vm.warp(block.timestamp + 120);
@@ -287,6 +388,8 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         ProtocolConfig memory config = _defaultConfig();
         config.priceIncreaseBps = 0;
         config.roundTimeout = 10;
+        config.roundTimeoutDecay = 5;
+        config.minimumRoundTimeout = 5;
         config.roundEmissionBudget = 0;
         config.emissionStepBps = 0;
         config.emissionVestingDuration = 5;

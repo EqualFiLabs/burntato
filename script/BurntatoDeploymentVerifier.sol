@@ -93,6 +93,8 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.startingPrice == expected.startingPrice, "STARTING_PRICE");
         _check(protocol.priceIncreaseBps == expected.priceIncreaseBps, "PRICE_INCREASE_BPS");
         _check(protocol.roundTimeout == expected.roundTimeout, "ROUND_TIMEOUT");
+        _check(protocol.roundTimeoutDecay == expected.roundTimeoutDecay, "ROUND_TIMEOUT_DECAY");
+        _check(protocol.minimumRoundTimeout == expected.minimumRoundTimeout, "MINIMUM_ROUND_TIMEOUT");
         _check(protocol.roundEmissionBudget == expected.roundEmissionBudget, "ROUND_EMISSION_BUDGET");
         _check(protocol.emissionStepBps == expected.emissionStepBps, "EMISSION_STEP_BPS");
         _check(protocol.emissionVestingDuration == expected.emissionVestingDuration, "EMISSION_VESTING_DURATION");
@@ -176,8 +178,9 @@ contract BurntatoDeploymentVerifier {
         ProtocolConfig memory protocol = config.protocol;
         _check(protocol.startingPrice != 0, "STARTING_PRICE_DOMAIN");
         _check(
-            protocol.roundTimeout != 0 && protocol.roundTimeout <= type(uint64).max
-                && protocol.emissionVestingDuration != 0,
+            protocol.roundTimeout != 0 && protocol.roundTimeout <= type(uint64).max && protocol.minimumRoundTimeout != 0
+                && protocol.minimumRoundTimeout <= protocol.roundTimeout
+                && protocol.roundTimeoutDecay <= protocol.roundTimeout && protocol.emissionVestingDuration != 0,
             "TIME_DOMAIN"
         );
         _check(protocol.priceIncreaseBps <= Constants.BPS, "PRICE_BPS_DOMAIN");

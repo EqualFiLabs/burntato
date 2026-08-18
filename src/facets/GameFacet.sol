@@ -31,7 +31,13 @@ contract GameFacet is IGame {
 
         round.currentHolder = msg.sender;
         round.holderSince = block.timestamp;
-        round.deadline = block.timestamp + round.config.roundTimeout;
+        uint256 resetDuration = LibMath.diminishingTimeout(
+            round.config.roundTimeout,
+            round.config.roundTimeoutDecay,
+            round.config.minimumRoundTimeout,
+            round.purchaseIndex
+        );
+        round.deadline = block.timestamp + resetDuration;
         round.purchaseIndex += 1;
         round.holderMaxReward = LibMath.mulBpsDown(round.remainingEmission, round.config.emissionStepBps);
         round.holderTreasuryMaxReward =

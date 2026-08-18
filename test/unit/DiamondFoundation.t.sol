@@ -42,6 +42,14 @@ contract MathHarness {
         return LibMath.linearEarned(maxReward, heldSeconds, 120);
     }
 
+    function diminishingTimeout(uint256 initialTimeout, uint256 decay, uint256 minimumTimeout, uint256 priorPurchases)
+        external
+        pure
+        returns (uint256)
+    {
+        return LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
+    }
+
     function splitRecovery(uint256 amount) external pure returns (uint256, uint256) {
         return LibMath.splitRecovery(amount, 1_000);
     }
@@ -99,7 +107,9 @@ contract DiamondFoundationTest is Test {
             treasuryBps: 2_500,
             buybackBps: 1_000,
             recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000
+            recoveryTreasuryBps: 1_000,
+            roundTimeoutDecay: 5 minutes,
+            minimumRoundTimeout: 5 minutes
         });
     }
 
@@ -154,5 +164,14 @@ contract DiamondFoundationTest is Test {
         (uint256 burned, uint256 treasuryPotato) = math.splitRecovery(101);
         assertEq(burned, 91);
         assertEq(treasuryPotato, 10);
+    }
+
+    function test_DiminishingTimeoutSaturatesWithoutUnderflowOrOverflow() public view {
+        assertEq(math.diminishingTimeout(1 hours, 5 minutes, 5 minutes, 0), 1 hours);
+        assertEq(math.diminishingTimeout(1 hours, 5 minutes, 5 minutes, 10), 10 minutes);
+        assertEq(math.diminishingTimeout(1 hours, 5 minutes, 5 minutes, 11), 5 minutes);
+        assertEq(math.diminishingTimeout(1 hours, 5 minutes, 5 minutes, type(uint256).max), 5 minutes);
+        assertEq(math.diminishingTimeout(1_000, 333, 100, 2), 334);
+        assertEq(math.diminishingTimeout(1_000, 333, 100, 3), 100);
     }
 }

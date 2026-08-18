@@ -9,11 +9,12 @@ library LibConfig {
     function validate(ProtocolConfig memory config) internal pure {
         if (
             config.startingPrice == 0 || config.roundTimeout == 0 || config.roundTimeout > type(uint64).max
-                || config.emissionVestingDuration == 0 || config.priceIncreaseBps > Constants.BPS
-                || config.emissionStepBps > Constants.BPS || config.winnerBps > Constants.BPS
-                || config.recoveryBps > Constants.BPS || config.treasuryBps > Constants.BPS
-                || config.buybackBps > Constants.BPS || config.recoveryBurnBps > Constants.BPS
-                || config.recoveryTreasuryBps > Constants.BPS
+                || config.minimumRoundTimeout == 0 || config.minimumRoundTimeout > config.roundTimeout
+                || config.roundTimeoutDecay > config.roundTimeout || config.emissionVestingDuration == 0
+                || config.priceIncreaseBps > Constants.BPS || config.emissionStepBps > Constants.BPS
+                || config.winnerBps > Constants.BPS || config.recoveryBps > Constants.BPS
+                || config.treasuryBps > Constants.BPS || config.buybackBps > Constants.BPS
+                || config.recoveryBurnBps > Constants.BPS || config.recoveryTreasuryBps > Constants.BPS
                 || uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps + config.buybackBps
                     != Constants.BPS || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
         ) revert Errors.InvalidProtocolConfig();
@@ -32,5 +33,7 @@ library LibConfig {
         target.buybackBps = config.buybackBps;
         target.recoveryBurnBps = config.recoveryBurnBps;
         target.recoveryTreasuryBps = config.recoveryTreasuryBps;
+        target.roundTimeoutDecay = config.roundTimeoutDecay;
+        target.minimumRoundTimeout = config.minimumRoundTimeout;
     }
 }

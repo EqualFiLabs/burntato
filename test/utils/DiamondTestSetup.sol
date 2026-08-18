@@ -91,7 +91,9 @@ abstract contract DiamondTestSetup is Test {
             treasuryBps: 2_500,
             buybackBps: 1_000,
             recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000
+            recoveryTreasuryBps: 1_000,
+            roundTimeoutDecay: 5 minutes,
+            minimumRoundTimeout: 5 minutes
         });
     }
 
