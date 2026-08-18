@@ -41,6 +41,9 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         Round memory roundTwo = game.getRound(2);
         assertEq(roundTwo.remainingEmission, 100_000 ether);
         assertEq(roundTwo.recoveryCarryIn, 0.004 ether);
+        assertFalse(claims.winnerClaimed(2));
+        assertFalse(claims.recoveryClaimed(2, alice));
+        assertEq(claims.claimableRecovery(2, alice), 0);
 
         _buy(bob, 0.01 ether);
         _expireAndSettle();
@@ -52,16 +55,21 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 1_000 ether);
         assertEq(claims.treasuryPotatoAvailable(), 1_000 ether);
         assertEq(game.getRound(3).remainingEmission, 100_000 ether);
+        assertEq(claims.claimableRecovery(2, alice), 0.008 ether);
+        assertEq(claims.claimableRecovery(2, bob), 0);
 
         uint256 aliceEthBefore = alice.balance;
         vm.prank(alice);
         assertEq(claims.claimRecovery(2, alice), 0.008 ether);
         assertEq(alice.balance - aliceEthBefore, 0.008 ether);
+        assertTrue(claims.recoveryClaimed(2, alice));
+        assertEq(claims.claimableRecovery(2, alice), 0);
 
         uint256 bobEthBefore = bob.balance;
         vm.prank(bob);
         assertEq(claims.claimWinner(2, bob), 0.0025 ether);
         assertEq(bob.balance - bobEthBefore, 0.0025 ether);
+        assertTrue(claims.winnerClaimed(2));
 
         uint256 treasuryEthBefore = treasury.balance;
         assertEq(claims.claimTreasury(), 0.005 ether);
