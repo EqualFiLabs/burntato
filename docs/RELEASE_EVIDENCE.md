@@ -211,3 +211,55 @@ checklist-driven internal changed-scope review against the stated commits. It
 does not prove deployed-chain state, production genesis parameters, canonical
 chain dependency addresses, fork compatibility, remote CI, or an independent
 third-party audit.
+
+## Diminishing round timer candidate
+
+Date: August 18, 2026
+
+Source candidate: `fc9d01d` on `feat/diminishing-round-timer`, based on merged
+`main` commit `4d9b7e6`. Production behavior and public documentation were
+audited at `ed0b385`; the only later delta strengthens the timer fuzz oracle.
+
+The first successful purchase in every round receives the snapshotted initial
+timeout. Each later successful purchase reduces its reset by the snapshotted
+decay until the minimum is reached. Local defaults produce 60, 55, 50, through
+5-minute resets, with the twelfth and every later purchase remaining at five
+minutes. Each deadline is anchored to its own purchase timestamp. Atomic,
+self, and contract purchases count toward urgency while holder-time emission
+continues to depend only on measurable elapsed time.
+
+The authority can govern initial timeout, decay, and floor for future
+unsnapshotted rounds. Zero decay or a floor equal to the initial timeout
+restores fixed resets. Runtime, deployment, environment, and verifier surfaces
+share the same nonzero/bounds domain.
+
+Qualification selected every owned test category explicitly and did not use
+`forge clean`, a forced build, a fork, or a deployed network:
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 39 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 51 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 8,001 cases |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 10 properties, 128,000 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 15 passed |
+
+Focused timer flows prove the exact default sequence, timestamp anchoring,
+same-timestamp zero-emission cycling, reverted-purchase rollback, self and
+contract participation, non-even floor clamping, zero-decay and equal-floor
+fixed resets, and new-round restart. Fuzzing independently calculates the exact
+duration throughout the accepted `uint64` domain. The stateful protocol suite
+retains ETH, POTATO supply, Recovery, buyback reserve, access-control, emission,
+and exact dynamic-deadline invariants.
+
+The committed candidate received checklist-driven reviews for general Solidity
+and DoS behavior, precision/math, Diamond storage and selectors, deployment,
+and access control. No verified Critical, High, Medium, Low, or Informational
+finding remained, and no GitHub issue was opened. The test-only post-audit delta
+was rechecked against the precision scope.
+
+The review assumes a fresh deployment. Expanding embedded configuration structs
+and changing the tuple-based configuration selector is not an in-place upgrade
+or migration path for a pre-change deployed Diamond. This is local Foundry and
+internal changed-scope audit evidence; it is not fork, testnet, live-network,
+remote-CI, or independent third-party proof.
