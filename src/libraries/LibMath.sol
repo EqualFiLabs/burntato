@@ -22,6 +22,20 @@ library LibMath {
         return Math.mulDiv(maxReward, capped, vestingDuration);
     }
 
+    function diminishingTimeout(uint256 initialTimeout, uint256 decay, uint256 minimumTimeout, uint256 priorPurchases)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (decay == 0 || priorPurchases == 0 || initialTimeout == minimumTimeout) return initialTimeout;
+
+        uint256 maximumReduction = initialTimeout - minimumTimeout;
+        if (priorPurchases > maximumReduction / decay) return minimumTimeout;
+
+        uint256 reduction = priorPurchases * decay;
+        return reduction >= maximumReduction ? minimumTimeout : initialTimeout - reduction;
+    }
+
     function splitRecovery(uint256 amount, uint256 treasuryBps)
         internal
         pure

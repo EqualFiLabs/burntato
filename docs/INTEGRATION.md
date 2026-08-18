@@ -23,6 +23,14 @@ Important state reads include:
 - `ITreasuryRewards.rewardAllocator()`, `treasuryRewardsReserved()`,
   `rewardSchedule()`, and `nextTreasuryRewardBudget()`.
 
+`Round.deadline` is authoritative for the active countdown. Each successful
+purchase sets it from that purchase's timestamp using the round's snapshotted
+`roundTimeout`, `roundTimeoutDecay`, `minimumRoundTimeout`, and pre-increment
+`purchaseIndex`. Integrators should display the stored deadline rather than
+reconstructing it from transaction ordering. A new round restarts at the
+initial timeout; after the configured floor is reached, later purchases keep
+resetting to that floor.
+
 The canonical hook is a separate administered contract. Read `owner()`,
 `token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`, and
 `deploymentBlock()`, and `externalBuysEnabled()` from the hook itself.

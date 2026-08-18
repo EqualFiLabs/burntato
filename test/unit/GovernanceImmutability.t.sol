@@ -104,6 +104,18 @@ contract GovernanceAdministrationTest is Test {
         _expectInvalidConfig(config);
 
         config = _config(0.02 ether, 1_000);
+        config.minimumRoundTimeout = 0;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.minimumRoundTimeout = config.roundTimeout + 1;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.roundTimeoutDecay = config.roundTimeout + 1;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
         config.priceIncreaseBps = 10_001;
         _expectInvalidConfig(config);
 
@@ -249,7 +261,9 @@ contract GovernanceAdministrationTest is Test {
             treasuryBps: 2_500,
             buybackBps: 1_000,
             recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000
+            recoveryTreasuryBps: 1_000,
+            roundTimeoutDecay: 5 minutes,
+            minimumRoundTimeout: 5 minutes
         });
     }
 

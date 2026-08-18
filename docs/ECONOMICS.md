@@ -8,6 +8,8 @@
 startingPrice
 priceIncreaseBps
 roundTimeout
+roundTimeoutDecay
+minimumRoundTimeout
 roundEmissionBudget
 emissionStepBps
 emissionVestingDuration
@@ -17,10 +19,13 @@ recoveryBurnBps / recoveryTreasuryBps
 
 The four purchase shares must sum to 10,000 BPS and the two Recovery shares
 must sum to 10,000 BPS. Every individual BPS value is bounded by 10,000.
-Starting price, round timeout, and emission vesting duration must be nonzero.
-Round timeout is at most `type(uint64).max`, which keeps every accepted
-snapshotted deadline addition inside `uint256`. Zero price growth, zero emission
-step, and a zero round emission budget are valid configurations.
+Starting price, round timeout, minimum round timeout, and emission vesting
+duration must be nonzero. Minimum round timeout cannot exceed the initial round
+timeout, and timeout decay cannot exceed the initial timeout. Round timeout is
+at most `type(uint64).max`, which keeps every accepted snapshotted deadline
+addition inside `uint256`. Zero timeout decay restores fixed-duration resets.
+Zero price growth, zero emission step, and a zero round emission budget are
+valid configurations.
 
 Round N snapshots the complete configuration for Round N+1 when Round N
 activates. Later governance changes cannot rewrite the active round or the
@@ -34,6 +39,8 @@ The local genesis defaults are:
 | Starting price | 0.01 ETH |
 | Price increase | 10% |
 | Round timeout | 1 hour |
+| Timeout decay per purchase | 5 minutes |
+| Minimum round timeout | 5 minutes |
 | Round emission budget | 100,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 120 seconds |
@@ -56,14 +63,29 @@ recoveryShare = floor(price * recoveryBps / 10_000)
 buybackShare  = floor(price * buybackBps / 10_000)
 treasuryShare = price - winnerShare - recoveryShare - buybackShare
 
+priorPurchaseCount = purchaseIndex
+maximumReduction = roundTimeout - minimumRoundTimeout
+reduction = min(priorPurchaseCount * roundTimeoutDecay, maximumReduction)
+resetDuration = roundTimeout - reduction
+deadline = purchaseTimestamp + resetDuration
+purchaseIndex += 1
+
 nextPrice = price + ceil(price * priceIncreaseBps / 10_000)
-deadline  = purchaseTimestamp + roundTimeout
 ```
+
+With the local defaults, successful purchases receive 60, 55, 50, and so on
+down to 5 minutes; the twelfth and every later purchase remain at 5 minutes.
+Each deadline is based on the successful purchase timestamp, not the previous
+deadline or elapsed time. Every successful purchase counts, including multiple
+purchases at one timestamp. Failed transactions do not count, and a new round
+starts again with the initial timeout.
 
 The Treasury receives deterministic split dust so the four allocations always
 equal the purchase exactly. Buyback ETH is held in a dedicated reserve and is
 not Winner, Recovery, Treasury-claim, or launch-seed accounting. Purchase count
-and price progression do not consume POTATO emission.
+and price progression do not consume POTATO emission. Purchase count also
+drives the urgency schedule, but same-timestamp cycling still earns zero and
+leaves both base and Treasury-funded emission budgets unchanged.
 
 ## Holder-time emission budget
 

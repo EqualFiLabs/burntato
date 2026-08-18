@@ -43,7 +43,38 @@ contract EconomicFuzzTest is DiamondTestSetup {
             uint256 next = expected + LibMath.mulBpsUp(expected, increaseBps);
             assertEq(round.nextPrice, next);
             assertGt(next, expected);
+            uint256 expectedTimeout = i < 11 ? 1 hours - i * 5 minutes : 5 minutes;
+            assertEq(round.deadline, block.timestamp + expectedTimeout);
             expected = next;
+        }
+    }
+
+    function testFuzz_DiminishingTimeoutIsBoundedMonotonicAndSaturating(
+        uint256 rawInitial,
+        uint256 rawMinimum,
+        uint256 rawDecay,
+        uint256 rawPriorPurchases
+    ) public pure {
+        uint256 initialTimeout = bound(rawInitial, 1, type(uint64).max);
+        uint256 minimumTimeout = bound(rawMinimum, 1, initialTimeout);
+        uint256 decay = bound(rawDecay, 0, initialTimeout);
+        uint256 priorPurchases = bound(rawPriorPurchases, 0, type(uint64).max);
+
+        uint256 duration = LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
+        uint256 nextDuration = LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases + 1);
+        uint256 maximumReduction = initialTimeout - minimumTimeout;
+        uint256 expectedReduction = priorPurchases * decay;
+        if (expectedReduction > maximumReduction) expectedReduction = maximumReduction;
+
+        assertEq(duration, initialTimeout - expectedReduction);
+        assertGe(duration, minimumTimeout);
+        assertLe(duration, initialTimeout);
+        assertLe(nextDuration, duration);
+        if (priorPurchases == 0 || decay == 0 || initialTimeout == minimumTimeout) {
+            assertEq(duration, initialTimeout);
+        }
+        if (decay != 0 && priorPurchases >= (initialTimeout - minimumTimeout + decay - 1) / decay) {
+            assertEq(duration, minimumTimeout);
         }
     }
 

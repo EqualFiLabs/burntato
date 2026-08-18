@@ -193,6 +193,9 @@ contract DeployBurntato is Script {
             vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
         );
         config.protocol.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.protocol.roundTimeout);
+        config.protocol.roundTimeoutDecay = vm.envOr("BURNTATO_ROUND_TIMEOUT_DECAY", config.protocol.roundTimeoutDecay);
+        config.protocol.minimumRoundTimeout =
+            vm.envOr("BURNTATO_MINIMUM_ROUND_TIMEOUT", config.protocol.minimumRoundTimeout);
         config.protocol.roundEmissionBudget =
             vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.protocol.roundEmissionBudget);
         config.protocol.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(
@@ -300,12 +303,13 @@ contract DeployBurntato is Script {
             bootstrapAuthority == address(0) || config.deployer == address(0) || config.proposer == address(0)
                 || config.treasuryRecipient == address(0) || config.rewardAllocator == address(0)
                 || protocol.startingPrice == 0 || protocol.roundTimeout == 0 || protocol.roundTimeout > type(uint64).max
-                || protocol.emissionVestingDuration == 0 || protocol.priceIncreaseBps > Constants.BPS
-                || protocol.emissionStepBps > Constants.BPS || protocol.winnerBps > Constants.BPS
-                || protocol.recoveryBps > Constants.BPS || protocol.treasuryBps > Constants.BPS
-                || protocol.buybackBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
-                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
-                || config.buyback.callerRewardBps > Constants.BPS
+                || protocol.minimumRoundTimeout == 0 || protocol.minimumRoundTimeout > protocol.roundTimeout
+                || protocol.roundTimeoutDecay > protocol.roundTimeout || protocol.emissionVestingDuration == 0
+                || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
+                || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
+                || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
+                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
+                || config.hookFeeBps > Constants.BPS || config.buyback.callerRewardBps > Constants.BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
                     != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS

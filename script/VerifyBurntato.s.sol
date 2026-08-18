@@ -51,6 +51,9 @@ contract VerifyBurntato is Script {
             vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
         );
         config.protocol.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.protocol.roundTimeout);
+        config.protocol.roundTimeoutDecay = vm.envOr("BURNTATO_ROUND_TIMEOUT_DECAY", config.protocol.roundTimeoutDecay);
+        config.protocol.minimumRoundTimeout =
+            vm.envOr("BURNTATO_MINIMUM_ROUND_TIMEOUT", config.protocol.minimumRoundTimeout);
         config.protocol.roundEmissionBudget =
             vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.protocol.roundEmissionBudget);
         config.protocol.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(

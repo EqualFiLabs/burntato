@@ -36,7 +36,9 @@ library BurntatoDeploymentConfig {
                 treasuryBps: 2_500,
                 buybackBps: 1_000,
                 recoveryBurnBps: 9_000,
-                recoveryTreasuryBps: 1_000
+                recoveryTreasuryBps: 1_000,
+                roundTimeoutDecay: 5 minutes,
+                minimumRoundTimeout: 5 minutes
             }),
             buyback: BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1}),
             hookFeeBps: 100,
