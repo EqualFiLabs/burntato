@@ -37,6 +37,7 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) totalCommitments;
         mapping(uint256 => mapping(address => bool)) claimed;
         mapping(uint256 => uint256) recoveryPaid;
+        mapping(uint256 => uint256) claimedCommitments;
     }
 
     struct TreasuryStorage {

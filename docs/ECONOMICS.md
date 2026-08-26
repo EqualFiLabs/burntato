@@ -139,9 +139,15 @@ treasuryPotato = floor(totalCommitted * recoveryTreasuryBps / 10_000)
 burnedPotato   = totalCommitted - treasuryPotato
 ```
 
-The burn-as-remainder rule consumes every committed base unit exactly once.
-Recovery ETH is claimable pro rata. If the target round has zero commitments,
-its Recovery ETH rolls into the next round; unused POTATO emission never does.
+The burn-as-remainder rule consumes every committed POTATO base unit exactly
+once. Recovery ETH claims are state-dependent. Each ordinary claimant receives
+`floor(recoveryPool * commitment / totalCommitted)`. The claimant whose weight
+completes `totalCommitted` receives the exact remaining
+`recoveryPool - recoveryPaid`, assigning all accumulated division dust to the
+final outstanding commitment. A valid ordinary claim may therefore pay zero;
+it still consumes its full weight so the eventual final claimant can close the
+pool exactly. If the target round has zero commitments, its Recovery ETH rolls
+into the next round; unused POTATO emission never does.
 
 ## Treasury and canonical market
 

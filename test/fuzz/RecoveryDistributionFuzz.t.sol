@@ -65,26 +65,32 @@ contract RecoveryDistributionFuzzTest is DiamondTestSetup {
         assertEq(potato.totalSupply(), supplyBefore + 10_000 ether - burned);
         assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + treasuryPotato);
 
-        uint256 expectedAlice = target.recoveryPool * aliceCommitment / totalCommitted;
-        uint256 expectedBob = target.recoveryPool * bobCommitment / totalCommitted;
-        assertEq(claims.claimableRecovery(2, alice), expectedAlice);
-        assertEq(claims.claimableRecovery(2, bob), expectedBob);
+        uint256 ordinaryAlice = target.recoveryPool * aliceCommitment / totalCommitted;
+        uint256 ordinaryBob = target.recoveryPool * bobCommitment / totalCommitted;
+        assertEq(claims.claimableRecovery(2, alice), ordinaryAlice);
+        assertEq(claims.claimableRecovery(2, bob), ordinaryBob);
+        uint256 firstPaid;
+        uint256 finalPaid;
         if (bobClaimsFirst) {
             vm.prank(bob);
-            assertEq(claims.claimRecovery(2, bob), expectedBob);
+            firstPaid = claims.claimRecovery(2, bob);
+            assertEq(firstPaid, ordinaryBob);
+            assertEq(claims.claimableRecovery(2, alice), target.recoveryPool - firstPaid);
             vm.prank(alice);
-            assertEq(claims.claimRecovery(2, alice), expectedAlice);
+            finalPaid = claims.claimRecovery(2, alice);
         } else {
             vm.prank(alice);
-            assertEq(claims.claimRecovery(2, alice), expectedAlice);
+            firstPaid = claims.claimRecovery(2, alice);
+            assertEq(firstPaid, ordinaryAlice);
+            assertEq(claims.claimableRecovery(2, bob), target.recoveryPool - firstPaid);
             vm.prank(bob);
-            assertEq(claims.claimRecovery(2, bob), expectedBob);
+            finalPaid = claims.claimRecovery(2, bob);
         }
+        assertEq(firstPaid + finalPaid, target.recoveryPool);
         assertTrue(claims.recoveryClaimed(2, alice));
         assertTrue(claims.recoveryClaimed(2, bob));
         assertEq(claims.claimableRecovery(2, alice), 0);
         assertEq(claims.claimableRecovery(2, bob), 0);
-        assertLe(expectedAlice + expectedBob, target.recoveryPool);
 
         vm.prank(alice);
         vm.expectRevert(Errors.AlreadyClaimed.selector);

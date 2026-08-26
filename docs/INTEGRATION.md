@@ -173,6 +173,12 @@ Treasury recipient. Protocol custody addresses are rejected as external claim
 recipients. Hook revenue bypasses these claims and arrives directly at the
 hook's configured Treasury wallet. `winnerClaimed(roundId)` and
 `recoveryClaimed(roundId, account)` report completion status.
-`claimableRecovery(roundId, account)` returns the exact current Recovery payout,
-or zero when the round is unsettled, has no aggregate commitment, the account
-did not commit, or the account already claimed.
+
+`claimableRecovery(roundId, account)` is intentionally order- and
+state-dependent. Before the final outstanding commitment, it returns the
+ordinary floored pro-rata amount. Once that account's complete commitment would
+close the round's claimed weight, it returns `recoveryPool - recoveryPaid`,
+including all prior rounding remainder. It returns zero when the round is
+unsettled, has no aggregate commitment, the account did not commit, the account
+already claimed, or the account has a valid ordinary claim that rounds to zero.
+Use `recoveryClaimed` to distinguish the last two zero-valued states.

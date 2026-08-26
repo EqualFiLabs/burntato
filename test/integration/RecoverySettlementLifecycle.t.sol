@@ -79,6 +79,37 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(potato.balanceOf(treasury), 1_000 ether);
     }
 
+    function test_FinalOutstandingCommitmentReceivesExactRecoveryRemainderInEitherOrder() public {
+        _buy(alice, 0.01 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        _buy(bob, 0.011 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        game.materializeMaturedEmission();
+
+        uint256 aliceCommitment = 3_333 ether + 1;
+        uint256 bobCommitment = 2_222 ether + 2;
+        vm.prank(alice);
+        recovery.commitRecovery(aliceCommitment);
+        vm.prank(bob);
+        recovery.commitRecovery(bobCommitment);
+        _expireAndSettle();
+
+        _buy(alice, 0.01 ether);
+        vm.warp(vm.getBlockTimestamp() + 60);
+        _buy(bob, 0.011 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        _expireAndSettle();
+        Round memory roundTwo = game.getRound(2);
+        uint256 totalCommitted = aliceCommitment + bobCommitment;
+        assertEq(roundTwo.totalCommitted, totalCommitted);
+        assertNotEq(mulmod(roundTwo.recoveryPool, aliceCommitment, totalCommitted), 0);
+
+        uint256 snapshot = vm.snapshotState();
+        _assertExactRecoveryClaims(roundTwo.recoveryPool, alice, aliceCommitment, bob);
+        assertTrue(vm.revertToStateAndDelete(snapshot));
+        _assertExactRecoveryClaims(roundTwo.recoveryPool, bob, bobCommitment, alice);
+    }
+
     function test_ZeroCommitmentRecoveryRollsForwardExactly() public {
         _buy(alice, 0.01 ether);
         _expireAndSettle();
@@ -192,6 +223,35 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(claims.treasuryEthAvailable(), 0.0025 ether);
         vm.deal(address(diamond), address(diamond).balance + 7 ether);
         assertEq(claims.treasuryEthAvailable(), 0.0025 ether);
+    }
+
+    function _assertExactRecoveryClaims(uint256 recoveryPool, address first, uint256 firstCommitment, address last)
+        internal
+    {
+        uint256 totalCommitted = game.getRound(2).totalCommitted;
+        uint256 ordinaryFloor = recoveryPool * firstCommitment / totalCommitted;
+        assertEq(claims.claimableRecovery(2, first), ordinaryFloor);
+
+        uint256 diamondEthBefore = address(diamond).balance;
+        uint256 firstEthBefore = first.balance;
+        vm.prank(first);
+        uint256 firstPaid = claims.claimRecovery(2, first);
+        assertEq(firstPaid, ordinaryFloor);
+        assertEq(first.balance - firstEthBefore, firstPaid);
+
+        uint256 finalRemainder = recoveryPool - firstPaid;
+        assertEq(claims.claimableRecovery(2, last), finalRemainder);
+        uint256 lastEthBefore = last.balance;
+        vm.prank(last);
+        uint256 lastPaid = claims.claimRecovery(2, last);
+        assertEq(lastPaid, finalRemainder);
+        assertEq(last.balance - lastEthBefore, lastPaid);
+        assertEq(firstPaid + lastPaid, recoveryPool);
+        assertEq(diamondEthBefore - address(diamond).balance, recoveryPool);
+        assertEq(claims.claimableRecovery(2, first), 0);
+        assertEq(claims.claimableRecovery(2, last), 0);
+        assertTrue(claims.recoveryClaimed(2, first));
+        assertTrue(claims.recoveryClaimed(2, last));
     }
 
     function _prepareRoundTwoCommitment() internal {
