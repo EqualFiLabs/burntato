@@ -37,12 +37,13 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
-import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
+import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "./DeploymentTypes.sol";
 import {BurntatoHookDeployer} from "./helpers/BurntatoHookDeployer.sol";
 import {LocalPermit2} from "./helpers/LocalPermit2.sol";
 import {LocalWETH9} from "./helpers/LocalWETH9.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
+import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 
 contract DeployBurntato is Script {
     error InvalidGenesisConfiguration();
@@ -66,6 +67,26 @@ contract DeployBurntato is Script {
         _validateConfig(config, bootstrapAuthority);
         _deployTimelock(config, deployment);
         _deployUniswap(deployment);
+        _deployOwnedContracts(config, bootstrapAuthority, deployment);
+    }
+
+    function deployWithDependencies(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        CanonicalV4Dependencies memory dependencies
+    ) public returns (BurntatoDeployment memory deployment) {
+        _validateConfig(config, bootstrapAuthority);
+        RobinhoodDeploymentConfig.validate(dependencies);
+        _populateCanonicalDependencies(dependencies, deployment);
+        _deployTimelock(config, deployment);
+        _deployOwnedContracts(config, bootstrapAuthority, deployment);
+    }
+
+    function _deployOwnedContracts(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        BurntatoDeployment memory deployment
+    ) private {
         _deployDiamond(config, bootstrapAuthority, deployment);
         _deployHook(config, deployment);
         _configureProtocol(config, deployment);
@@ -95,6 +116,21 @@ contract DeployBurntato is Script {
                 IWETH9(deployment.weth9)
             )
         );
+    }
+
+    function _populateCanonicalDependencies(
+        CanonicalV4Dependencies memory dependencies,
+        BurntatoDeployment memory deployment
+    ) private pure {
+        deployment.poolManager = dependencies.poolManager;
+        deployment.permit2 = dependencies.permit2;
+        deployment.weth9 = dependencies.weth;
+        deployment.positionDescriptor = dependencies.positionDescriptor;
+        deployment.positionManager = dependencies.positionManager;
+        deployment.quoter = dependencies.quoter;
+        deployment.stateView = dependencies.stateView;
+        deployment.reservesLens = dependencies.reservesLens;
+        deployment.universalRouter = dependencies.universalRouter;
     }
 
     function _deployDiamond(
@@ -161,16 +197,16 @@ contract DeployBurntato is Script {
         IMarket(deployment.diamond)
             .configureMarket(
                 IMarket.MarketConfig({
-                    hook: deployment.hook,
-                    poolManager: deployment.poolManager,
-                    positionManager: deployment.positionManager,
-                    permit2: deployment.permit2,
-                    sqrtPriceX96: TickMath.getSqrtPriceAtTick(config.initialTick),
-                    tickLower: config.tickLower,
-                    tickUpper: config.tickUpper,
-                    tickSpacing: config.tickSpacing,
-                    potatoSeed: config.potatoSeed
-                })
+                hook: deployment.hook,
+                poolManager: deployment.poolManager,
+                positionManager: deployment.positionManager,
+                permit2: deployment.permit2,
+                sqrtPriceX96: TickMath.getSqrtPriceAtTick(config.initialTick),
+                tickLower: config.tickLower,
+                tickUpper: config.tickUpper,
+                tickSpacing: config.tickSpacing,
+                potatoSeed: config.potatoSeed
+            })
             );
         ITreasuryRewards(deployment.diamond).setRewardAllocator(config.rewardAllocator);
         IGovernance(deployment.diamond).setAuthority(deployment.timelock);
@@ -180,7 +216,7 @@ contract DeployBurntato is Script {
         return BurntatoDeploymentConfig.localDefaults();
     }
 
-    function _environmentConfig() private view returns (GenesisConfig memory config) {
+    function _environmentConfig() internal view returns (GenesisConfig memory config) {
         config = BurntatoDeploymentConfig.localDefaults();
         config.deployer = vm.envOr("BURNTATO_DEPLOYER", config.deployer);
         config.proposer = vm.envOr("BURNTATO_PROPOSER", config.proposer);
@@ -321,14 +357,18 @@ contract DeployBurntato is Script {
         ) revert InvalidGenesisConfiguration();
     }
 
-    function _log(BurntatoDeployment memory deployment) private pure {
+    function _log(BurntatoDeployment memory deployment) internal pure {
         console2.log("BurntatoDiamond", deployment.diamond);
         console2.log("TimelockController", deployment.timelock);
         console2.log("PoolManager", deployment.poolManager);
-        console2.log("LocalPermit2", deployment.permit2);
-        console2.log("LocalWETH9", deployment.weth9);
+        console2.log("Permit2", deployment.permit2);
+        console2.log("WETH9", deployment.weth9);
         console2.log("PositionDescriptor", deployment.positionDescriptor);
         console2.log("PositionManager", deployment.positionManager);
+        if (deployment.quoter != address(0)) console2.log("Quoter", deployment.quoter);
+        if (deployment.stateView != address(0)) console2.log("StateView", deployment.stateView);
+        if (deployment.reservesLens != address(0)) console2.log("ReservesLens", deployment.reservesLens);
+        if (deployment.universalRouter != address(0)) console2.log("UniversalRouter", deployment.universalRouter);
         console2.log("BurntatoHookDeployer", deployment.hookDeployer);
         console2.log("BurntatoSwapFeeHook", deployment.hook);
         console2.log("DiamondCutFacet", deployment.diamondCutFacet);

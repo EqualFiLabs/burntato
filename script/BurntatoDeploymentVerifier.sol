@@ -19,8 +19,9 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {BuybackConfig, ProtocolConfig, Round} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
-import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
+import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
+import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 
 interface IOwnedPoolManager {
     function owner() external view returns (address);
@@ -30,13 +31,44 @@ contract BurntatoDeploymentVerifier {
     error VerificationFailed(bytes32 check);
 
     function verify(GenesisConfig memory config, BurntatoDeployment memory deployment) external view returns (bool) {
+        _verifyCommon(config, deployment);
+        _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
+        return true;
+    }
+
+    function verifyCanonical(
+        GenesisConfig memory config,
+        BurntatoDeployment memory deployment,
+        CanonicalV4Dependencies memory dependencies
+    ) external view returns (bool) {
+        RobinhoodDeploymentConfig.validate(dependencies);
+        _verifyCanonicalAddresses(deployment, dependencies);
+        _verifyCommon(config, deployment);
+        return true;
+    }
+
+    function _verifyCommon(GenesisConfig memory config, BurntatoDeployment memory deployment) private view {
         _verifyConfigDomain(config);
         _verifyCode(deployment);
         _verifySelectors(deployment);
         _verifyAuthority(config, deployment);
         _verifyProtocolState(config, deployment);
         _verifyMarket(config, deployment);
-        return true;
+    }
+
+    function _verifyCanonicalAddresses(
+        BurntatoDeployment memory deployment,
+        CanonicalV4Dependencies memory dependencies
+    ) private pure {
+        _check(deployment.poolManager == dependencies.poolManager, "CANONICAL_POOL_MANAGER");
+        _check(deployment.positionDescriptor == dependencies.positionDescriptor, "CANONICAL_DESCRIPTOR");
+        _check(deployment.positionManager == dependencies.positionManager, "CANONICAL_POSITION_MANAGER");
+        _check(deployment.quoter == dependencies.quoter, "CANONICAL_QUOTER");
+        _check(deployment.stateView == dependencies.stateView, "CANONICAL_STATE_VIEW");
+        _check(deployment.reservesLens == dependencies.reservesLens, "CANONICAL_RESERVES_LENS");
+        _check(deployment.universalRouter == dependencies.universalRouter, "CANONICAL_ROUTER");
+        _check(deployment.permit2 == dependencies.permit2, "CANONICAL_PERMIT2");
+        _check(deployment.weth9 == dependencies.weth, "CANONICAL_WETH");
     }
 
     function _verifyCode(BurntatoDeployment memory deployment) private view {
@@ -68,7 +100,7 @@ contract BurntatoDeploymentVerifier {
         IGovernance governance = IGovernance(deployment.diamond);
         TimelockController timelock = TimelockController(payable(deployment.timelock));
         _check(governance.authority() == deployment.timelock, "DIAMOND_AUTHORITY");
-        _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
+        _check(BurntatoSwapFeeHook(payable(deployment.hook)).owner() == deployment.timelock, "HOOK_OWNER");
         _check(timelock.getMinDelay() == config.timelockDelay, "TIMELOCK_DELAY");
         _check(timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), deployment.timelock), "TIMELOCK_SELF_ADMIN");
         _check(timelock.hasRole(timelock.PROPOSER_ROLE(), config.proposer), "PROPOSER_ROLE");

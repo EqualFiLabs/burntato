@@ -9,9 +9,11 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
+import {DeployBurntatoLocalFork} from "../../script/DeployBurntatoLocalFork.s.sol";
 import {BurntatoHookDeployer} from "../../script/helpers/BurntatoHookDeployer.sol";
 import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
-import {BurntatoDeployment, GenesisConfig} from "../../script/DeploymentTypes.sol";
+import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
+import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
@@ -61,6 +63,54 @@ contract DeterministicDeploymentTest is Test {
         assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), deployment.timelock);
         assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), deployment.timelock);
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
+    }
+
+    function test_CanonicalDependenciesDeployOnlyOwnedContractsAndVerify() public {
+        uint256 forkId = vm.createSelectFork(vm.envString("ROBINHOOD_MAINNET"), 45_234_856);
+        vm.rollFork(forkId, 45_234_855);
+        DeployBurntato canonicalDeployScript = new DeployBurntato();
+        BurntatoDeploymentVerifier canonicalVerifier = new BurntatoDeploymentVerifier();
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        address poolManagerOwnerBefore = IPoolManagerAuthority(dependencies.poolManager).owner();
+
+        GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
+        BurntatoDeployment memory canonicalDeployment =
+            canonicalDeployScript.deployWithDependencies(canonicalConfig, address(canonicalDeployScript), dependencies);
+        assertTrue(canonicalVerifier.verifyCanonical(canonicalConfig, canonicalDeployment, dependencies));
+        assertEq(IPoolManagerAuthority(dependencies.poolManager).owner(), poolManagerOwnerBefore);
+        assertEq(canonicalDeployment.poolManager, dependencies.poolManager);
+        assertEq(canonicalDeployment.positionManager, dependencies.positionManager);
+        assertEq(canonicalDeployment.universalRouter, dependencies.universalRouter);
+        assertEq(BurntatoSwapFeeHook(payable(canonicalDeployment.hook)).owner(), canonicalDeployment.timelock);
+    }
+
+    function test_CanonicalDependencyHashDriftFailsBeforeBurntatoDeployment() public {
+        uint256 forkId = vm.createSelectFork(vm.envString("ROBINHOOD_MAINNET"), 45_234_856);
+        vm.rollFork(forkId, 45_234_855);
+        DeployBurntato canonicalDeployScript = new DeployBurntato();
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        dependencies.poolManagerCodeHash = bytes32(uint256(dependencies.poolManagerCodeHash) ^ 1);
+        GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
+        uint256 deployScriptNonceBefore = vm.getNonce(address(canonicalDeployScript));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RobinhoodDeploymentConfig.InvalidCanonicalCodeHash.selector,
+                dependencies.poolManager,
+                dependencies.poolManagerCodeHash,
+                dependencies.poolManager.codehash
+            )
+        );
+        canonicalDeployScript.deployWithDependencies(canonicalConfig, address(canonicalDeployScript), dependencies);
+
+        assertEq(vm.getNonce(address(canonicalDeployScript)), deployScriptNonceBefore);
+    }
+
+    function test_LocalForkEntrypointRejectsWrongChainBeforeRpcOrPrivateKey() public {
+        DeployBurntatoLocalFork harness = new DeployBurntatoLocalFork();
+        vm.chainId(1);
+        vm.expectRevert(abi.encodeWithSelector(DeployBurntatoLocalFork.InvalidLocalForkChain.selector, 1));
+        harness.preflightLocalFork();
     }
 
     function test_DeploymentAcceptsZeroTimelockDelay() public {

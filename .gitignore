@@ -3,5 +3,6 @@ specs/
 broadcast/
 cache/
 out/
-deployments/
+deployments/*
+!deployments/robinhood-chain-4663.json
 artifacts/

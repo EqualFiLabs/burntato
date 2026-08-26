@@ -1,0 +1,74 @@
+{
+  "network": "Robinhood Chain",
+  "chainId": 4663,
+  "forkBlock": 45234855,
+  "forkBlockHash": "0xd65b81057261cc49ef60573d9f500ec9563257d673e10f1ff8d3d7c6ce33670d",
+  "forkBlockTimestamp": 1787611417,
+  "reviewedAt": "2026-08-26",
+  "rpcDocumentation": "https://docs.robinhood.com/chain/connecting/",
+  "contractDocumentation": {
+    "uniswap": "https://developers.uniswap.org/docs/protocols/v4/deployments",
+    "robinhoodTokens": "https://docs.robinhood.com/chain/contracts/",
+    "blockExplorer": "https://robinhoodchain.blockscout.com/"
+  },
+  "sourceProvenance": {
+    "referenceManifest": "EqualFiLabs/statics deployments/robinhood-chain-4663.json reviewed 2026-08-24",
+    "v4Periphery": "https://github.com/Uniswap/v4-periphery/tree/3779387e5d296f39df543d23524b050f89a62917",
+    "v4Core": "https://github.com/Uniswap/v4-core/tree/59d3ecf53afa9264a16bba0e38f4c5d2231f80bc",
+    "permit2": "https://github.com/Uniswap/permit2/tree/cc56ad0f3439c502c246fc5cfcc3db92bb8b7219"
+  },
+  "contracts": {
+    "poolManager": {
+      "address": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "runtimeCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626"
+    },
+    "positionDescriptor": {
+      "address": "0x9639443158E8C5efa35Bd45287bf2EFfd3D8dC06",
+      "runtimeCodeHash": "0x09d3b199609b46e8921e47c5d0d98ae083e70d2d3b63a6099dc7e947b2f58b20"
+    },
+    "positionManager": {
+      "address": "0x58daec3116aae6D93017bAAea7749052E8a04fA7",
+      "runtimeCodeHash": "0xc873e135dc9aaec88489cfbad146b4cb49d6a32e0d80326377784b7ba17670b2"
+    },
+    "quoter": {
+      "address": "0x8Dc178eFB8111BB0973Dd9d722ebeFF267c98F94",
+      "runtimeCodeHash": "0xd707b1da8cb165e5ea35a3b4450d971eb562ec171e23492aa117036b78a868f6"
+    },
+    "stateView": {
+      "address": "0xF3334192D15450CdD385c8B70e03f9A6bD9E673b",
+      "runtimeCodeHash": "0x7d9c591e0956fd89d98feb4ffcfe8bf1f7a62bd485edd979fa21d104b49878a6"
+    },
+    "reservesLens": {
+      "address": "0x0000001b173C3bbF3984D417d8614E3eed34865B",
+      "runtimeCodeHash": "0x157a3174cbad65b8ff57b8fbf94253b58be07398593d7d677e4fd6051e16ca91"
+    },
+    "universalRouter": {
+      "address": "0x8876789976dEcBfCbBbe364623C63652db8C0904",
+      "runtimeCodeHash": "0x2ce6aaaf9f4151f5e1cbf774668772f17f532ae11b15e9284fd0a072a8b0fbde"
+    },
+    "permit2": {
+      "address": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+      "runtimeCodeHash": "0x5208783f52488f7d3493e5e38311ab707c1d75457fe472a19b0b4d57d66a7fca"
+    },
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+      "implementation": {
+        "address": "0xc6b81b429797e0f555440b70cd99e032d7ae947e",
+        "runtimeCodeHash": "0xbe1295f37be34ffe03ad779bda0ef278907e1856b51a3be2f35ee541d75d4650"
+      },
+      "proxyAdmin": {
+        "address": "0xa3acd31afb851b4eb9dad00f5204c01d924267df",
+        "runtimeCodeHash": "0xa4b2186ab82fa36fb4ae158582e5615ea519e757c26c13ba4a33daaaed8902a7",
+        "owner": {
+          "address": "0x2A153c6A1B66DBc930a8d7017230ab0253005C09",
+          "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353",
+          "implementation": {
+            "address": "0x3c3e52bc8c181d06a76e2518bbc655c5bb3ce7cd",
+            "runtimeCodeHash": "0x0d88feac198ef1b50b99fddf06aa9f6b1050bfe7211d6f04173de9b6d8953bcb"
+          }
+        }
+      }
+    }
+  }
+}

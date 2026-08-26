@@ -20,6 +20,30 @@ struct GenesisConfig {
     uint256 potatoSeed;
 }
 
+struct CanonicalV4Dependencies {
+    uint256 chainId;
+    uint256 forkBlock;
+    bytes32 forkBlockHash;
+    address poolManager;
+    bytes32 poolManagerCodeHash;
+    address positionDescriptor;
+    bytes32 positionDescriptorCodeHash;
+    address positionManager;
+    bytes32 positionManagerCodeHash;
+    address quoter;
+    bytes32 quoterCodeHash;
+    address stateView;
+    bytes32 stateViewCodeHash;
+    address reservesLens;
+    bytes32 reservesLensCodeHash;
+    address universalRouter;
+    bytes32 universalRouterCodeHash;
+    address permit2;
+    bytes32 permit2CodeHash;
+    address weth;
+    bytes32 wethCodeHash;
+}
+
 struct BurntatoDeployment {
     address diamond;
     address diamondCutFacet;
@@ -42,4 +66,8 @@ struct BurntatoDeployment {
     address positionManager;
     address hookDeployer;
     address hook;
+    address quoter;
+    address stateView;
+    address reservesLens;
+    address universalRouter;
 }
