@@ -129,10 +129,12 @@ and Permit2 at `0x000000000022D473030F116dDEE9F6B43aC78BA3`.
 External buys remain closed after deployment. Once hook governance enables
 them, native ETH-to-POTATO exact-input buys use the Universal Router `V4_SWAP`
 command with `SWAP_EXACT_IN_SINGLE`, `SETTLE_ALL`, and `TAKE_ALL`. POTATO sells
-prepend an exact-amount Permit2 `PermitSingle` and the `PERMIT2_PERMIT` command.
-Robinhood's pinned Router single-hop payload includes `minHopPriceX36`; do not
-encode the older five-field v4 router struct. Obtain a canonical Quoter result
-first and use a nonzero slippage-adjusted `amountOutMinimum`.
+prepend an exact-amount Permit2 `PermitSingle` using `PERMIT2_PERMIT` with the
+Universal Router allow-revert flag (`0x8a`), followed by `V4_SWAP`. If another
+caller submits the public Permit2 signature first, the duplicate permit may
+revert without blocking the swap, which consumes the already-installed exact
+allowance. Robinhood's pinned Router single-hop payload includes
+`minHopPriceX36`; do not
 
 For router traffic, `HookFee.sender` and `Trade.sender` are the Universal Router,
 not the user's wallet. User identity comes from the submitted transaction and

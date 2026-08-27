@@ -14,9 +14,9 @@ contract VerifyBurntatoLocalFork is Script {
     string internal constant OUTPUT_PATH = "artifacts/robinhood-local/deployment.json";
 
     function run() external returns (bool verified) {
-        CanonicalV4Dependencies memory dependencies = (new DeployBurntatoLocalFork()).preflightLocalFork();
+        CanonicalV4Dependencies memory dependencies = (new DeployBurntatoLocalFork()).preflightDeployedLocalFork();
         DeployBurntato configLoader = new DeployBurntato();
-        GenesisConfig memory config = configLoader.localDefaults();
+        GenesisConfig memory config = configLoader.environmentConfig();
         BurntatoDeployment memory deployment = _readDeployment(dependencies);
         _loadFacets(deployment);
 

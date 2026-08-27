@@ -305,3 +305,34 @@ public-network deployment. The manually dispatched GitHub workflow remains an
 external gate; no run URL is recorded until it is actually dispatched with the
 protected RPC secret. The audit section below records only the subsequent
 committed-candidate review and any confirmed remediation.
+
+### Committed-candidate audit and remediation
+
+The committed candidate `b8612d4` received parallel checklist review across
+Recovery precision, general deployment safety, Diamond/proxy storage, AMM and
+router integration, Permit2 signatures/ERC-20 restrictions, Robinhood
+chain/assembly assumptions, governance/access control, and operational DoS.
+Confirmed release-scope findings were remediated before final qualification:
+
+- canonical dependency structs are now byte-for-byte bound to the committed
+  manifest before code/binding validation;
+- the broadcast entrypoint requires the exact pinned block, while the
+  post-broadcast verifier separately proves the pinned block hash through Anvil
+  RPC after deployment transactions advance the node;
+- artifact persistence creates its narrowly permitted parent directory;
+- verification reloads the same documented `BURNTATO_*` overrides as deploy;
+- local deployment tests skip RPC-dependent cases so the local CI job remains
+  self-contained;
+- the fork suite asserts live liquidity, exact buyback event accounting, sell
+  input/fee/price direction, router-indexed `Trade` events, and residual state;
+- Permit2 sells use the Router allow-revert permit command so a copied permit
+  submitted first does not block the subsequent exact-allowance swap; and
+- the manual secret-bearing job is restricted to the default branch with
+  read-only repository permissions.
+
+The existing permissionless buyback's lack of quote/TWAP/minimum output remains
+an explicitly accepted FWA-compatible product boundary already documented
+above. Mutable GitHub Action major tags remain the repository-standard workflow
+choice; the workflow limits permissions and secret-bearing execution to `main`,
+but this is not equivalent to full-SHA action pinning or an environment with
+required reviewers.

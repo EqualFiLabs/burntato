@@ -46,6 +46,7 @@ interface IPositionManagerBindings {
     function WETH9() external view returns (address);
     function nextTokenId() external view returns (uint256);
     function ownerOf(uint256 tokenId) external view returns (address);
+    function getPositionLiquidity(uint256 tokenId) external view returns (uint128 liquidity);
 }
 
 struct RouterExactInputSingleParams {
@@ -64,7 +65,7 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
 
     uint256 private constant FORK_BLOCK = 45_234_855;
     bytes32 private constant FORK_BLOCK_HASH = 0xd65b81057261cc49ef60573d9f500ec9563257d673e10f1ff8d3d7c6ce33670d;
-    bytes1 private constant PERMIT2_PERMIT = 0x0a;
+    bytes1 private constant PERMIT2_PERMIT_ALLOW_REVERT = 0x8a;
     bytes1 private constant V4_SWAP = 0x10;
 
     uint256 private constant ALICE_KEY = 0xA11CE;
@@ -107,7 +108,8 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         if (overrideBlock != 0) assertEq(overrideBlock, FORK_BLOCK, "ROBINHOOD_FORK_BLOCK drift");
 
         if (block.chainid == RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID && block.number == FORK_BLOCK) {
-            // The caller already selected the exact qualification fork.
+            string memory pinnedBlock = vm.rpcJson("eth_getBlockByNumber", "[\"0x2b23aa7\",false]");
+            assertEq(vm.parseJsonBytes32(pinnedBlock, ".hash"), FORK_BLOCK_HASH, "pinned block hash drift");
         } else {
             string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
             if (bytes(rpc).length == 0) {
@@ -292,12 +294,12 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         vm.prank(keeper);
         (bytes32 poolId, uint128 liquidity) = market.launchMarket();
         assertEq(poolId, PoolId.unwrap(key.toId()));
-        assertGt(liquidity, 0);
+        assertEq(IPositionManagerBindings(dependencies.positionManager).getPositionLiquidity(tokenId), liquidity);
         assertEq(IPositionManagerBindings(dependencies.positionManager).ownerOf(tokenId), market.lockedLpRecipient());
         assertEq(deployment.diamond.balance, diamondEthBefore);
         assertEq(claims.treasuryEthAvailable(), treasuryClaimBefore);
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
-        assertEq(sqrtPriceX96, config.initialTick == 0 ? 0 : market.marketConfig().sqrtPriceX96);
+        assertEq(sqrtPriceX96, market.marketConfig().sqrtPriceX96);
         (bytes32 storedPoolId,, bool launching, bool launched) = market.marketState();
         assertEq(storedPoolId, poolId);
         assertFalse(launching);
@@ -310,28 +312,41 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
 
         uint256 treasuryPotatoBefore = potato.balanceOf(config.treasuryRecipient);
         uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 keeperEthBefore = keeper.balance;
         vm.recordLogs();
         vm.prank(keeper);
         uint256 boughtBack = buybacks.buyback();
-        assertGt(boughtBack, 0);
-        assertGt(potato.balanceOf(config.treasuryRecipient), treasuryPotatoBefore);
-        assertLe(buybacks.buybackReserveEth(), reserveBefore);
+        Vm.Log[] memory buybackLogs = vm.getRecordedLogs();
+        (uint256 grossSlice, uint256 ethSpent, uint256 loggedBought, uint256 callerReward, uint256 reserveAfter) =
+            _buybackAccounting(buybackLogs);
+        assertEq(boughtBack, loggedBought);
+        assertEq(grossSlice, reserveBefore);
+        assertEq(keeper.balance - keeperEthBefore, callerReward);
+        assertEq(potato.balanceOf(config.treasuryRecipient) - treasuryPotatoBefore, boughtBack);
+        assertEq(reserveAfter, grossSlice - callerReward - ethSpent);
+        assertEq(buybacks.buybackReserveEth(), reserveAfter);
         assertFalse(hook.externalBuysEnabled());
-        assertEq(_hookFeeCount(vm.getRecordedLogs()), 0);
+        assertEq(_hookFeeCount(buybackLogs), 0);
         assertEq(potato.transientPoolManagerAllowance(), 0);
 
         uint256 sellAmount = 1 ether;
+        uint256 carolPotatoBefore = potato.balanceOf(carol);
         uint256 carolEthBefore = carol.balance;
         uint256 treasuryEthBefore = config.treasuryRecipient.balance;
+        (uint160 sellPriceBefore,,,) = poolManager.getSlot0(key.toId());
         vm.recordLogs();
         uint256 soldOut = _routerSell(carol, CAROL_KEY, sellAmount);
         Vm.Log[] memory sellLogs = vm.getRecordedLogs();
-        assertGt(soldOut, 0);
+        assertEq(carolPotatoBefore - potato.balanceOf(carol), sellAmount);
         assertEq(carol.balance - carolEthBefore, soldOut);
         (uint256 sellNativeFee, uint256 sellPotatoFee, address sellSender) = _hookFee(sellLogs);
         assertEq(sellSender, dependencies.universalRouter);
         assertEq(sellPotatoFee, 0);
+        assertEq(sellNativeFee, (soldOut + sellNativeFee) * hook.feeBps() / 10_000);
         assertEq(config.treasuryRecipient.balance - treasuryEthBefore, sellNativeFee);
+        (uint160 sellPriceAfter,,,) = poolManager.getSlot0(key.toId());
+        assertGt(sellPriceAfter, sellPriceBefore);
+        _assertTradeSender(sellLogs);
         assertEq(potato.transientPoolManagerAllowance(), 0);
 
         _timelockCall(
@@ -349,16 +364,20 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertEq(buyNativeFee, 0);
         assertEq(buyPotatoFee, (userBought + buyPotatoFee) * hook.feeBps() / 10_000);
         assertGt(config.treasuryRecipient.balance, treasuryEthBefore);
+        _assertTradeSender(buyLogs);
         assertEq(potato.transientPoolManagerAllowance(), 0);
 
         treasuryEthBefore = config.treasuryRecipient.balance;
+        uint256 secondSellAmount = userBought / 2;
         vm.recordLogs();
-        uint256 secondSellOut = _routerSell(alice, ALICE_KEY, userBought / 2);
+        uint256 secondSellOut = _routerSell(alice, ALICE_KEY, secondSellAmount);
         Vm.Log[] memory secondSellLogs = vm.getRecordedLogs();
         (uint256 secondSellFee,, address secondSellSender) = _hookFee(secondSellLogs);
         assertEq(secondSellSender, dependencies.universalRouter);
+        assertEq(secondSellFee, (secondSellOut + secondSellFee) * hook.feeBps() / 10_000);
         assertGt(secondSellOut, 0);
         assertEq(config.treasuryRecipient.balance - treasuryEthBefore, secondSellFee);
+        _assertTradeSender(secondSellLogs);
         assertEq(potato.transientPoolManagerAllowance(), 0);
         assertGe(dependencies.poolManager.balance, poolManagerEthBefore);
         assertEq(dependencies.universalRouter.balance, routerEthBefore);
@@ -425,12 +444,48 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertGe(amountOut, minimumOut);
     }
 
+    function test_Permit2PermitFrontRunDoesNotBlockRouterSell() public {
+        _deployCanonicalBurntato();
+        _completeGameRecoveryAndRewards();
+        market.launchMarket();
+        vm.prank(keeper);
+        buybacks.buyback();
+
+        uint256 amountIn = 1 ether;
+        vm.prank(carol);
+        potato.approve(dependencies.permit2, type(uint256).max);
+        (,, uint48 nonce) = permit2.allowance(carol, deployment.diamond, dependencies.universalRouter);
+        IAllowanceTransfer.PermitSingle memory permitSingle = _permitSingle(amountIn, nonce);
+        bytes memory signature = getPermitSignature(permitSingle, CAROL_KEY, permit2.DOMAIN_SEPARATOR());
+        permit2.permit(carol, permitSingle, signature);
+
+        uint128 minimumOut = _quote(false, uint128(amountIn));
+        assertGt(_executeRouterSell(carol, permitSingle, signature, uint128(amountIn), minimumOut), 0);
+    }
+
+    function _permitSingle(uint256 amountIn, uint48 nonce)
+        private
+        view
+        returns (IAllowanceTransfer.PermitSingle memory permitSingle)
+    {
+        permitSingle = IAllowanceTransfer.PermitSingle({
+            details: IAllowanceTransfer.PermitDetails({
+                token: deployment.diamond,
+                amount: uint160(amountIn),
+                expiration: uint48(block.timestamp + 20 minutes),
+                nonce: nonce
+            }),
+            spender: dependencies.universalRouter,
+            sigDeadline: block.timestamp + 20 minutes
+        });
+    }
+
     function _expectRouterBuyDisabled(address buyer, uint128 amountIn) private {
         bytes[] memory inputs = new bytes[](1);
         inputs[0] = _swapPlan(true, amountIn, 1);
         vm.prank(buyer);
         vm.expectRevert();
-        router.execute{value: amountIn}(abi.encodePacked(V4_SWAP), inputs, block.timestamp + 1 minutes);
+        router.execute{value: amountIn}(abi.encodePacked(V4_SWAP), inputs, block.timestamp + 1 days);
     }
 
     function _routerSell(address seller, uint256 sellerKey, uint256 amountIn) private returns (uint256 amountOut) {
@@ -439,29 +494,30 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         vm.prank(seller);
         potato.approve(dependencies.permit2, type(uint256).max);
         (,, uint48 nonce) = permit2.allowance(seller, deployment.diamond, dependencies.universalRouter);
-        IAllowanceTransfer.PermitSingle memory permitSingle = IAllowanceTransfer.PermitSingle({
-            details: IAllowanceTransfer.PermitDetails({
-                token: deployment.diamond,
-                amount: exactAmount,
-                expiration: uint48(block.timestamp + 20 minutes),
-                nonce: nonce
-            }),
-            spender: dependencies.universalRouter,
-            sigDeadline: block.timestamp + 20 minutes
-        });
+        IAllowanceTransfer.PermitSingle memory permitSingle = _permitSingle(amountIn, nonce);
         bytes memory signature = getPermitSignature(permitSingle, sellerKey, permit2.DOMAIN_SEPARATOR());
+        amountOut = _executeRouterSell(seller, permitSingle, signature, exactAmount, minimumOut);
+    }
+
+    function _executeRouterSell(
+        address seller,
+        IAllowanceTransfer.PermitSingle memory permitSingle,
+        bytes memory signature,
+        uint128 exactAmount,
+        uint128 minimumOut
+    ) private returns (uint256 amountOut) {
         bytes[] memory inputs = new bytes[](2);
         inputs[0] = abi.encode(permitSingle, signature);
         inputs[1] = _swapPlan(false, exactAmount, minimumOut);
         uint256 beforeBalance = seller.balance;
         vm.prank(seller);
-        router.execute(abi.encodePacked(PERMIT2_PERMIT, V4_SWAP), inputs, block.timestamp + 1 minutes);
+        router.execute(abi.encodePacked(PERMIT2_PERMIT_ALLOW_REVERT, V4_SWAP), inputs, block.timestamp + 1 days);
         amountOut = seller.balance - beforeBalance;
         assertGe(amountOut, minimumOut);
         (uint160 remaining,, uint48 nextNonce) =
             permit2.allowance(seller, deployment.diamond, dependencies.universalRouter);
         assertEq(remaining, 0);
-        assertEq(nextNonce, nonce + 1);
+        assertGe(nextNonce, permitSingle.details.nonce + 1);
     }
 
     function _swapPlan(bool zeroForOne, uint128 amountIn, uint128 minimumOut) private view returns (bytes memory) {
@@ -486,10 +542,7 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         return plan.encode();
     }
 
-    function _hookFee(Vm.Log[] memory logs)
-        private
-        returns (uint256 nativeFee, uint256 potatoFee, address sender)
-    {
+    function _hookFee(Vm.Log[] memory logs) private returns (uint256 nativeFee, uint256 potatoFee, address sender) {
         bytes32 topic = keccak256("HookFee(bytes32,address,uint128,uint128)");
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].topics.length != 3) continue;
@@ -504,6 +557,31 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
             }
         }
         fail("HookFee not emitted");
+    }
+
+    function _buybackAccounting(Vm.Log[] memory logs)
+        private
+        returns (uint256 gross, uint256 spent, uint256 bought, uint256 reward, uint256 reserve)
+    {
+        bytes32 topic = keccak256("BuybackExecuted(address,address,uint256,uint256,uint256,uint256,uint256)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == deployment.diamond && logs[i].topics[0] == topic) {
+                return abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
+            }
+        }
+        fail("BuybackExecuted not emitted");
+    }
+
+    function _assertTradeSender(Vm.Log[] memory logs) private {
+        bytes32 topic = keccak256("Trade(bytes32,address,int128,int128)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter != deployment.hook || logs[i].topics.length != 3 || logs[i].topics[0] != topic) {
+                continue;
+            }
+            address sender = address(uint160(uint256(logs[i].topics[2])));
+            if (sender == dependencies.universalRouter) return;
+        }
+        fail("Trade not emitted");
     }
 
     function _hookFeeCount(Vm.Log[] memory logs) private view returns (uint256 count) {

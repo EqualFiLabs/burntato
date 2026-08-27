@@ -14,7 +14,7 @@ contract DeployBurntatoLocalFork is DeployBurntato {
     string internal constant OUTPUT_PATH = "artifacts/robinhood-local/deployment.json";
 
     function runLocalFork() external returns (BurntatoDeployment memory deployment) {
-        CanonicalV4Dependencies memory dependencies = _localForkPreflight();
+        CanonicalV4Dependencies memory dependencies = _localForkPreflight(true);
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
         GenesisConfig memory config = _environmentConfig();
@@ -29,10 +29,18 @@ contract DeployBurntatoLocalFork is DeployBurntato {
     }
 
     function preflightLocalFork() external returns (CanonicalV4Dependencies memory dependencies) {
-        return _localForkPreflight();
+        return _localForkPreflight(true);
     }
 
-    function _localForkPreflight() internal virtual returns (CanonicalV4Dependencies memory dependencies) {
+    function preflightDeployedLocalFork() external returns (CanonicalV4Dependencies memory dependencies) {
+        return _localForkPreflight(false);
+    }
+
+    function _localForkPreflight(bool requireExactBlock)
+        internal
+        virtual
+        returns (CanonicalV4Dependencies memory dependencies)
+    {
         if (block.chainid != RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
             revert InvalidLocalForkChain(block.chainid);
         }
@@ -40,17 +48,13 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         if (nodeInfo.length == 0) revert InvalidLocalForkRpc();
 
         dependencies = RobinhoodDeploymentConfig.load();
-        if (block.number < dependencies.forkBlock) {
+        if (block.number < dependencies.forkBlock || (requireExactBlock && block.number != dependencies.forkBlock)) {
             revert InvalidLocalForkBlock(dependencies.forkBlock, block.number);
         }
-        if (block.number == dependencies.forkBlock) {
-            bytes32 actualBlockHash;
-            assembly ("memory-safe") {
-                actualBlockHash := mload(add(nodeInfo, 0x40))
-            }
-            if (actualBlockHash != dependencies.forkBlockHash) {
-                revert InvalidLocalForkBlockHash(dependencies.forkBlockHash, actualBlockHash);
-            }
+        string memory pinnedBlock = vm.rpcJson("eth_getBlockByNumber", "[\"0x2b23aa7\",false]");
+        bytes32 actualBlockHash = vm.parseJsonBytes32(pinnedBlock, ".hash");
+        if (actualBlockHash != dependencies.forkBlockHash) {
+            revert InvalidLocalForkBlockHash(dependencies.forkBlockHash, actualBlockHash);
         }
         RobinhoodDeploymentConfig.validate(dependencies);
     }
@@ -58,6 +62,7 @@ contract DeployBurntatoLocalFork is DeployBurntato {
     function _writeDeployment(BurntatoDeployment memory deployment, CanonicalV4Dependencies memory dependencies)
         internal
     {
+        vm.createDir("artifacts/robinhood-local", true);
         string memory object = "robinhoodLocal";
         vm.serializeUint(object, "chainId", dependencies.chainId);
         vm.serializeUint(object, "forkBlock", dependencies.forkBlock);

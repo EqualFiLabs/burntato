@@ -216,6 +216,10 @@ contract DeployBurntato is Script {
         return BurntatoDeploymentConfig.localDefaults();
     }
 
+    function environmentConfig() external view returns (GenesisConfig memory config) {
+        return _environmentConfig();
+    }
+
     function _environmentConfig() internal view returns (GenesisConfig memory config) {
         config = BurntatoDeploymentConfig.localDefaults();
         config.deployer = vm.envOr("BURNTATO_DEPLOYER", config.deployer);

@@ -29,6 +29,7 @@ library RobinhoodDeploymentConfig {
     error InvalidCanonicalCodeHash(address dependency, bytes32 expected, bytes32 actual);
     error InvalidCanonicalBinding(bytes32 binding, address expected, address actual);
 
+    error InvalidCanonicalManifest();
     uint256 internal constant ROBINHOOD_MAINNET_CHAIN_ID = 4663;
     string internal constant MANIFEST_PATH = "deployments/robinhood-chain-4663.json";
 
@@ -63,7 +64,15 @@ library RobinhoodDeploymentConfig {
         dependencies.wethCodeHash = vm.parseJsonBytes32(manifest, ".contracts.weth.runtimeCodeHash");
     }
 
+    function requireManifest(CanonicalV4Dependencies memory dependencies) internal view {
+        CanonicalV4Dependencies memory expected = load();
+        if (keccak256(abi.encode(dependencies)) != keccak256(abi.encode(expected))) {
+            revert InvalidCanonicalManifest();
+        }
+    }
+
     function validate(CanonicalV4Dependencies memory dependencies) internal view {
+        requireManifest(dependencies);
         if (block.chainid != dependencies.chainId || dependencies.chainId != ROBINHOOD_MAINNET_CHAIN_ID) {
             revert InvalidCanonicalChain(dependencies.chainId, block.chainid);
         }

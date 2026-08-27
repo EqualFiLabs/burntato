@@ -3,8 +3,16 @@ name: Robinhood qualification
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: robinhood-qualification
+  cancel-in-progress: false
+
 jobs:
   local:
+    if: github.ref == 'refs/heads/main'
     name: Local release categories
     runs-on: ubuntu-latest
     steps:
@@ -21,6 +29,7 @@ jobs:
       - run: forge test --match-path 'test/deployment/*.t.sol' -j 1
 
   fork:
+    if: github.ref == 'refs/heads/main'
     name: Pinned Robinhood fork
     needs: local
     runs-on: ubuntu-latest

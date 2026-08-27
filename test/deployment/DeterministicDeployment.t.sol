@@ -65,9 +65,15 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
     }
 
-    function test_CanonicalDependenciesDeployOnlyOwnedContractsAndVerify() public {
-        uint256 forkId = vm.createSelectFork(vm.envString("ROBINHOOD_MAINNET"), 45_234_856);
+    function _selectRobinhoodFork() internal {
+        string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
+        if (bytes(rpc).length == 0) vm.skip(true, "ROBINHOOD_MAINNET is not configured");
+        uint256 forkId = vm.createSelectFork(rpc, 45_234_856);
         vm.rollFork(forkId, 45_234_855);
+    }
+
+    function test_CanonicalDependenciesDeployOnlyOwnedContractsAndVerify() public {
+        _selectRobinhoodFork();
         DeployBurntato canonicalDeployScript = new DeployBurntato();
         BurntatoDeploymentVerifier canonicalVerifier = new BurntatoDeploymentVerifier();
         CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
@@ -85,22 +91,14 @@ contract DeterministicDeploymentTest is Test {
     }
 
     function test_CanonicalDependencyHashDriftFailsBeforeBurntatoDeployment() public {
-        uint256 forkId = vm.createSelectFork(vm.envString("ROBINHOOD_MAINNET"), 45_234_856);
-        vm.rollFork(forkId, 45_234_855);
+        _selectRobinhoodFork();
         DeployBurntato canonicalDeployScript = new DeployBurntato();
         CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
         dependencies.poolManagerCodeHash = bytes32(uint256(dependencies.poolManagerCodeHash) ^ 1);
         GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
         uint256 deployScriptNonceBefore = vm.getNonce(address(canonicalDeployScript));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                RobinhoodDeploymentConfig.InvalidCanonicalCodeHash.selector,
-                dependencies.poolManager,
-                dependencies.poolManagerCodeHash,
-                dependencies.poolManager.codehash
-            )
-        );
+        vm.expectRevert(RobinhoodDeploymentConfig.InvalidCanonicalManifest.selector);
         canonicalDeployScript.deployWithDependencies(canonicalConfig, address(canonicalDeployScript), dependencies);
 
         assertEq(vm.getNonce(address(canonicalDeployScript)), deployScriptNonceBefore);
