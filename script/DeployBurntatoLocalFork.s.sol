@@ -40,15 +40,17 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         if (nodeInfo.length == 0) revert InvalidLocalForkRpc();
 
         dependencies = RobinhoodDeploymentConfig.load();
-        string memory nodeInfoJson = string(nodeInfo);
-        uint256 forkBlock = vm.parseJsonUint(nodeInfoJson, ".forkConfig.forkBlockNumber");
-        if (forkBlock != dependencies.forkBlock) {
-            revert InvalidLocalForkBlock(dependencies.forkBlock, forkBlock);
+        if (block.number < dependencies.forkBlock) {
+            revert InvalidLocalForkBlock(dependencies.forkBlock, block.number);
         }
-        bytes memory pinnedBlock = vm.rpc("eth_getBlockByNumber", "[\"0x2b23aa7\",false]");
-        bytes32 actualBlockHash = vm.parseJsonBytes32(string(pinnedBlock), ".hash");
-        if (actualBlockHash != dependencies.forkBlockHash) {
-            revert InvalidLocalForkBlockHash(dependencies.forkBlockHash, actualBlockHash);
+        if (block.number == dependencies.forkBlock) {
+            bytes32 actualBlockHash;
+            assembly ("memory-safe") {
+                actualBlockHash := mload(add(nodeInfo, 0x40))
+            }
+            if (actualBlockHash != dependencies.forkBlockHash) {
+                revert InvalidLocalForkBlockHash(dependencies.forkBlockHash, actualBlockHash);
+            }
         }
         RobinhoodDeploymentConfig.validate(dependencies);
     }

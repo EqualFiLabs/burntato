@@ -12,7 +12,7 @@ bytecode_hash = "none"
 via_ir = true
 fs_permissions = [
     { access = "read", path = "./deployments" },
-    { access = "read-write", path = "./artifacts/robinhood-local" },
+    { access = "read-write", path = "./artifacts" },
 ]
 
 [fmt]

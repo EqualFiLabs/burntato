@@ -119,6 +119,26 @@ finalization. Disabling buys does not disable exact-input POTATO sells. The
 Diamond's canonical buyback is the sole privileged buy path and pays no hook
 fee.
 
+### Robinhood production-compatible routing
+
+For the persistent fork, consume
+`artifacts/robinhood-local/deployment.json`. The committed manifest pins the
+canonical Universal Router at `0x8876789976dEcBfCbBbe364623C63652db8C0904`
+and Permit2 at `0x000000000022D473030F116dDEE9F6B43aC78BA3`.
+
+External buys remain closed after deployment. Once hook governance enables
+them, native ETH-to-POTATO exact-input buys use the Universal Router `V4_SWAP`
+command with `SWAP_EXACT_IN_SINGLE`, `SETTLE_ALL`, and `TAKE_ALL`. POTATO sells
+prepend an exact-amount Permit2 `PermitSingle` and the `PERMIT2_PERMIT` command.
+Robinhood's pinned Router single-hop payload includes `minHopPriceX36`; do not
+encode the older five-field v4 router struct. Obtain a canonical Quoter result
+first and use a nonzero slippage-adjusted `amountOutMinimum`.
+
+For router traffic, `HookFee.sender` and `Trade.sender` are the Universal Router,
+not the user's wallet. User identity comes from the submitted transaction and
+Permit2 owner. Successful transactions must leave the Permit2 exact allowance
+and POTATO transient PoolManager allowance at zero.
+
 ## Permissionless buyback
 
 Call `IBuyback.buyback()` without parameters after market launch. It selects the

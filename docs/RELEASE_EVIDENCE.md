@@ -263,3 +263,45 @@ and changing the tuple-based configuration selector is not an in-place upgrade
 or migration path for a pre-change deployed Diamond. This is local Foundry and
 internal changed-scope audit evidence; it is not fork, testnet, live-network,
 remote-CI, or independent third-party proof.
+
+## Robinhood mainnet fork qualification
+
+Date: August 26, 2026
+
+Candidate before operational documentation: `a42ce1f8ae103952f3bfce76a7ecedf4ddd1c1b8`.
+The committed trust root pins chain 4663 block `45234855` with hash
+`0xd65b81057261cc49ef60573d9f500ec9563257d673e10f1ff8d3d7c6ce33670d`.
+Official Uniswap deployment documentation identified the eight v4 contracts;
+Robinhood documentation identified canonical WETH. The pinned fork validated
+all nine runtime hashes and every exposed manager/Permit2/descriptor/WETH
+binding.
+
+| Scope | Command or method | Result |
+| --- | --- | --- |
+| Optional gate | `env -u ROBINHOOD_MAINNET -u REQUIRE_ROBINHOOD_FORK forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | One setup skip, successful exit |
+| Strict missing-RPC gate | `env -u ROBINHOOD_MAINNET REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | Failed with `Robinhood fork required` |
+| Strict pinned fork | `ROBINHOOD_FORK_BLOCK=45234855 REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the private archive RPC | 2 passed |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 39 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 52 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 8,000 runs |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 10 properties, 128,000 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` with the private archive RPC | 18 passed |
+| Persistent fork | `scripts/start-robinhood-fork.sh`, guarded `DeployBurntatoLocalFork`, and `VerifyBurntatoLocalFork` | Broadcast succeeded; verifier returned true |
+| Frontend artifact | `jq -e '.chainId == 4663 and .forkBlock == 45234855 and (.diamond | length == 42) and (.hook | length == 42)' artifacts/robinhood-local/deployment.json` | `true` |
+| EIP-1153 boundary | Hook-impersonated authorization transaction followed by a separate `transientPoolManagerAllowance()` call | Returned `0` |
+
+The fork lifecycle deployed a fresh Burntato without mutating canonical
+infrastructure; verified Diamond selectors, governance, hook permissions and
+ownership; exercised diminishing game rounds, unequal Recovery commitments and
+exact remainder payout in both orders, Treasury reward scheduling/cancellation,
+single-sided PositionManager launch, closed-gate buyback, a canonical
+Permit2-backed sell, timelock buy enablement, a Universal Router buy, and a
+second signed sell. Quoter-derived nonzero minimums, direct bilateral Treasury
+fees, router-indexed hook events, consumed Permit2 allowances, and zero POTATO
+transient allowance were observed.
+
+This is reproducible pinned-fork and local-Anvil evidence, not a Robinhood
+public-network deployment. The manually dispatched GitHub workflow remains an
+external gate; no run URL is recorded until it is actually dispatched with the
+protected RPC secret. The audit section below records only the subsequent
+committed-candidate review and any confirmed remediation.

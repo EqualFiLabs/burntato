@@ -13,6 +13,19 @@ does not renounce either owner and does not disable the PoolManager protocol-fee
 controller surface. The hook starts with the configured Treasury fee recipient
 and bilateral fee. External buys start disabled.
 
+## Deployment modes
+
+| Mode | Dependencies | Swap proof | Ownership boundary |
+| --- | --- | --- | --- |
+| Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | Burntato timelock owns the local PoolManager and hook |
+| Robinhood fork | Pinned chain-4663 contracts from `deployments/robinhood-chain-4663.json` | Canonical Universal Router and Permit2 | Burntato timelock owns only the Diamond authority and Burntato hook |
+
+The committed manifest pins block `45234855`, its block hash, and exact runtime
+hashes for all nine canonical dependencies. Addresses and hashes are not
+environment-overridable. Canonical deployment validates code plus PoolManager,
+Permit2, PositionDescriptor, and WETH bindings before deploying any Burntato
+contract.
+
 ## Local defaults
 
 | Setting | Default |
@@ -116,6 +129,44 @@ Then run:
 forge script script/VerifyBurntato.s.sol:VerifyBurntato \
   --rpc-url http://127.0.0.1:8545
 ```
+
+## Persistent Robinhood fork
+
+Use an archive-capable RPC privately. The launcher does not print the URL:
+
+```bash
+ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" scripts/start-robinhood-fork.sh
+```
+
+The process stays in the foreground and serves chain `4663` on
+`http://127.0.0.1:8545` until stopped. Never point the broadcast commands below
+at a public Robinhood endpoint; they are guarded for Anvil and intentionally
+use a localhost fork account.
+
+```bash
+PRIVATE_KEY="$ANVIL_PRIVATE_KEY" \
+forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
+  --sig 'runLocalFork()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
+
+forge script script/VerifyBurntatoLocalFork.s.sol:VerifyBurntatoLocalFork \
+  --rpc-url http://127.0.0.1:8545 -vv
+```
+
+The public-only frontend handoff is
+`artifacts/robinhood-local/deployment.json`. It contains the fork identity,
+Diamond, timelock, hook, facets, initializer, and canonical dependency
+addresses. It never contains the RPC URL or private key.
+
+Fork tests skip when `ROBINHOOD_MAINNET` is absent. Release mode fails instead:
+
+```bash
+REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 \
+ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
+forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv
+```
+
+Frontends connect to chain ID `4663` at `http://127.0.0.1:8545` and read the
+persisted artifact rather than scraping script output.
 
 ## Verification checks
 

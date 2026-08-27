@@ -1,0 +1,47 @@
+name: Robinhood qualification
+
+on:
+  workflow_dispatch:
+
+jobs:
+  local:
+    name: Local release categories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.7.1
+      - run: forge test --match-path 'test/unit/*.t.sol' -j 1
+      - run: forge test --match-path 'test/integration/*.t.sol' -j 1
+      - run: forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1
+      - run: forge test --match-path 'test/invariant/*.t.sol' -j 1
+      - run: forge test --match-path 'test/deployment/*.t.sol' -j 1
+
+  fork:
+    name: Pinned Robinhood fork
+    needs: local
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.7.1
+      - name: Require protected RPC secret
+        env:
+          ROBINHOOD_MAINNET: ${{ secrets.ROBINHOOD_MAINNET }}
+        run: |
+          if [[ -z "$ROBINHOOD_MAINNET" ]]; then
+            echo 'ROBINHOOD_MAINNET secret is required'
+            exit 1
+          fi
+      - name: Run strict fork qualification
+        env:
+          ROBINHOOD_MAINNET: ${{ secrets.ROBINHOOD_MAINNET }}
+          ROBINHOOD_FORK_BLOCK: '45234855'
+          REQUIRE_ROBINHOOD_FORK: 'true'
+        run: forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv
