@@ -157,7 +157,9 @@ The public-only frontend handoff is
 Diamond, timelock, hook, facets, initializer, and canonical dependency
 addresses. It never contains the RPC URL or private key.
 
-Fork tests skip when `ROBINHOOD_MAINNET` is absent. Release mode fails instead:
+Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
+instead. Run archive-RPC qualification locally; it is intentionally excluded
+from CI so pull-request code never receives the RPC credential:
 
 ```bash
 REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 \

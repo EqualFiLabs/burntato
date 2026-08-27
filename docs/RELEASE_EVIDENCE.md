@@ -301,10 +301,9 @@ fees, router-indexed hook events, consumed Permit2 allowances, and zero POTATO
 transient allowance were observed.
 
 This is reproducible pinned-fork and local-Anvil evidence, not a Robinhood
-public-network deployment. The manually dispatched GitHub workflow remains an
-external gate; no run URL is recorded until it is actually dispatched with the
-protected RPC secret. The audit section below records only the subsequent
-committed-candidate review and any confirmed remediation.
+public-network deployment. Archive-RPC qualification remains an explicitly
+executed local release gate and is intentionally excluded from CI. Pull-request
+CI runs only the secret-free local categories.
 
 The committed candidate `df43213` received parallel checklist review across
 
@@ -326,12 +325,11 @@ Confirmed release-scope findings were remediated before final qualification:
   input/fee/price direction, router-indexed `Trade` events, and residual state;
 - Permit2 sells use the Router allow-revert permit command so a copied permit
   submitted first does not block the subsequent exact-allowance swap; and
-- the manual secret-bearing job is restricted to the default branch with
-  read-only repository permissions.
+- pull-request CI runs only secret-free local categories and never receives the
+  archive RPC.
 
 The existing permissionless buyback's lack of quote/TWAP/minimum output remains
 an explicitly accepted FWA-compatible product boundary already documented
 above. Mutable GitHub Action major tags remain the repository-standard workflow
-choice; the workflow limits permissions and secret-bearing execution to `main`,
-but this is not equivalent to full-SHA action pinning or an environment with
-required reviewers.
+choice; read-only repository permissions limit their access, but this is not
+equivalent to full-SHA action pinning.

@@ -1,18 +1,20 @@
-name: Robinhood qualification
+name: Burntato CI
 
 on:
-  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
 
 concurrency:
-  group: robinhood-qualification
-  cancel-in-progress: false
+  group: burntato-ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   local:
-    if: github.ref == 'refs/heads/main'
     name: Local release categories
     runs-on: ubuntu-latest
     steps:
@@ -27,30 +29,3 @@ jobs:
       - run: forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1
       - run: forge test --match-path 'test/invariant/*.t.sol' -j 1
       - run: forge test --match-path 'test/deployment/*.t.sol' -j 1
-
-  fork:
-    if: github.ref == 'refs/heads/main'
-    name: Pinned Robinhood fork
-    needs: local
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-      - uses: foundry-rs/foundry-toolchain@v1
-        with:
-          version: 1.7.1
-      - name: Require protected RPC secret
-        env:
-          ROBINHOOD_MAINNET: ${{ secrets.ROBINHOOD_MAINNET }}
-        run: |
-          if [[ -z "$ROBINHOOD_MAINNET" ]]; then
-            echo 'ROBINHOOD_MAINNET secret is required'
-            exit 1
-          fi
-      - name: Run strict fork qualification
-        env:
-          ROBINHOOD_MAINNET: ${{ secrets.ROBINHOOD_MAINNET }}
-          ROBINHOOD_FORK_BLOCK: '45234855'
-          REQUIRE_ROBINHOOD_FORK: 'true'
-        run: forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv
