@@ -306,9 +306,8 @@ external gate; no run URL is recorded until it is actually dispatched with the
 protected RPC secret. The audit section below records only the subsequent
 committed-candidate review and any confirmed remediation.
 
-### Committed-candidate audit and remediation
+The committed candidate `df43213` received parallel checklist review across
 
-The committed candidate `b8612d4` received parallel checklist review across
 Recovery precision, general deployment safety, Diamond/proxy storage, AMM and
 router integration, Permit2 signatures/ERC-20 restrictions, Robinhood
 chain/assembly assumptions, governance/access control, and operational DoS.
