@@ -29,7 +29,8 @@ rpc_url=${ROBINHOOD_TESTNET_RPC_URL:?ROBINHOOD_TESTNET_RPC_URL is required}
 if [[ "$mode" == "--deploy" ]]; then
   : "${PRIVATE_KEY:?PRIVATE_KEY is required}"
   forge script script/DeployBurntatoRobinhoodTestnet.s.sol:DeployBurntatoRobinhoodTestnet \
-    --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" --broadcast --slow -vv
+    --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" --broadcast --slow \
+    --gas-estimate-multiplier 200 -vv
   exit 0
 fi
 
@@ -57,4 +58,5 @@ case "$method" in
   execute) signature='executeExternalBuys()' ;;
 esac
 forge script script/FinalizeBurntatoRobinhoodTestnet.s.sol:FinalizeBurntatoRobinhoodTestnet \
-  --sig "$signature" --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" --broadcast --slow -vv
+  --sig "$signature" --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" --broadcast --slow \
+  --gas-estimate-multiplier 200 -vv
