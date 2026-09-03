@@ -38,7 +38,10 @@ contract BurntatoDeploymentVerifier {
     error VerificationFailed(bytes32 check);
 
     function verify(GenesisConfig memory config, BurntatoDeployment memory deployment) external view returns (bool) {
-        _check(config.operatorRewardShareBps == 0, "OPERATOR_CANONICAL_REQUIRED");
+        _check(
+            config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0,
+            "OPERATOR_CANONICAL_REQUIRED"
+        );
         _verifyCommon(config, deployment);
         _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
         return true;
@@ -49,7 +52,10 @@ contract BurntatoDeploymentVerifier {
         BurntatoDeployment memory deployment,
         CanonicalV4Dependencies memory dependencies
     ) external view returns (bool) {
-        _check(config.operatorRewardShareBps == 0, "OPERATOR_DEPENDENCIES_REQUIRED");
+        _check(
+            config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0,
+            "OPERATOR_DEPENDENCIES_REQUIRED"
+        );
         RobinhoodDeploymentConfig.validate(dependencies);
         _verifyCanonicalAddresses(deployment, dependencies);
         _verifyCommon(config, deployment);
@@ -62,7 +68,9 @@ contract BurntatoDeploymentVerifier {
         CanonicalV4Dependencies memory dependencies,
         StaticsOperatorDependencies memory operatorDependencies
     ) external view returns (bool) {
-        _check(config.operatorRewardShareBps != 0, "OPERATOR_REWARDS_REQUIRED");
+        _check(
+            config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0, "OPERATOR_REWARDS_REQUIRED"
+        );
         RobinhoodDeploymentConfig.validate(dependencies);
         StaticsOperatorDeploymentConfig.validate(operatorDependencies);
         _verifyCanonicalAddresses(deployment, dependencies);
@@ -163,6 +171,7 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.recoveryBps == expected.recoveryBps, "RECOVERY_BPS");
         _check(protocol.treasuryBps == expected.treasuryBps, "TREASURY_BPS");
         _check(protocol.buybackBps == expected.buybackBps, "BUYBACK_BPS");
+        _check(protocol.operatorPurchaseBps == expected.operatorPurchaseBps, "OPERATOR_PURCHASE_BPS");
         _check(protocol.recoveryBurnBps == expected.recoveryBurnBps, "RECOVERY_BURN_BPS");
         _check(protocol.recoveryTreasuryBps == expected.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
@@ -183,6 +192,7 @@ contract BurntatoDeploymentVerifier {
         _check(buyback.buybackReserveEth() == 0, "BUYBACK_RESERVE");
         _check(buyback.lastBuybackBlock() == 0, "BUYBACK_LAST_BLOCK");
         _check(game.currentRoundId() == 0, "ROUND_NOT_STARTED");
+        _check(game.purchaseOperatorRewardsRouter() == deployment.operatorRewardsRouter, "PURCHASE_OPERATOR_ROUTER");
         Round memory emptyRound = game.getRound(0);
         _check(emptyRound.roundId == 0 && emptyRound.remainingEmission == 0, "EMPTY_GENESIS_ROUND");
     }
@@ -223,7 +233,7 @@ contract BurntatoDeploymentVerifier {
         _check(address(hook.poolManager()) == deployment.poolManager, "HOOK_POOL_MANAGER");
         _check(hook.deploymentBlock() == 0, "HOOK_POOL_UNINITIALIZED");
         _check(!hook.externalBuysEnabled(), "EXTERNAL_BUYS_DISABLED");
-        if (config.operatorRewardShareBps == 0) {
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
             _check(deployment.operatorRewardsRouter == address(0), "OPERATOR_ROUTER_DISABLED");
         } else {
             BurntatoOperatorRewardsRouter router =
@@ -260,7 +270,7 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
         _check(
             uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
-                == Constants.BPS,
+                    + protocol.operatorPurchaseBps == Constants.BPS,
             "PURCHASE_SPLIT_DOMAIN"
         );
         _check(

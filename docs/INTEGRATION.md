@@ -128,6 +128,11 @@ dependencies are the Operators NFT
 `0xad5E9F96A91D1A6F550580b157af2068A0e8F0BE` and Activation Registry
 `0xfC62e99CaE93878f83801f3d6Bb4f1762E720B30`.
 
+Both the hook and `buyPotato()` send native revenue to this one router. Clients
+can read the fixed Diamond binding through `purchaseOperatorRewardsRouter()`;
+purchase routing emits `OperatorPurchaseRevenueQueued` after the internal
+Winner, Recovery, Treasury, and buyback obligations have been recorded.
+
 - `register(operatorId)` is current-owner-only and starts at the current
   `multiplierBps` without historical rewards.
 - `sync(operatorId)` is permissionless. Higher weights apply only after old

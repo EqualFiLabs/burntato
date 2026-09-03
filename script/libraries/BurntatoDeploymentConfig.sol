@@ -35,6 +35,7 @@ library BurntatoDeploymentConfig {
                 recoveryBps: 4_000,
                 treasuryBps: 2_500,
                 buybackBps: 1_000,
+                operatorPurchaseBps: 0,
                 recoveryBurnBps: 9_000,
                 recoveryTreasuryBps: 1_000,
                 roundTimeoutDecay: 5 minutes,

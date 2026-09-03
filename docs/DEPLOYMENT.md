@@ -2,8 +2,8 @@
 
 `DeployBurntato.s.sol` deploys a complete local system in this order: timelock,
 timelock-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
-PositionManager, Diamond and facets, initializer, optional immutable Operator
-rewards router, CREATE2 hook deployer, and mined-address canonical hook. It
+PositionManager, Diamond shell and facets, optional immutable Operator rewards
+router, initializer, CREATE2 hook deployer, and mined-address canonical hook. It
 installs the selector manifest, configures the market, enables the initial
 Treasury distributor, configures buybacks, appoints the reward allocator and
 guardian, and transfers Diamond authority to the timelock.
@@ -43,7 +43,7 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 | Round emission budget | 100,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 120 seconds |
-| Purchase split | 2,500 / 4,000 / 2,500 / 1,000 BPS |
+| Purchase split | 2,500 / 4,000 / 2,500 / 1,000 / 0 BPS |
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |
 | Operator share of hook fee | Disabled locally; required Robinhood input |
@@ -86,6 +86,7 @@ BURNTATO_WINNER_BPS
 BURNTATO_RECOVERY_BPS
 BURNTATO_TREASURY_BPS
 BURNTATO_BUYBACK_BPS
+BURNTATO_OPERATOR_PURCHASE_BPS
 BURNTATO_RECOVERY_BURN_BPS
 BURNTATO_RECOVERY_TREASURY_BPS
 BURNTATO_BUYBACK_MAX_SPEND

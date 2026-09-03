@@ -53,13 +53,17 @@ abstract contract DiamondTestSetup is Test {
         _install(address(new TreasuryRewardsFacet()), _treasuryRewardSelectors());
 
         FoundationInit initializer = new FoundationInit();
+        ProtocolConfig memory initialConfig = _initialConfig();
+        address operatorRewardsRouter = _operatorRewardsRouterForInit();
         FacetCut[] memory noCuts = new FacetCut[](0);
         vm.prank(authority);
         IDiamondCut(address(diamond))
             .diamondCut(
                 noCuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_defaultConfig(), treasury, GENESIS_MARKET_SUPPLY))
+                abi.encodeCall(
+                    FoundationInit.initialize, (initialConfig, treasury, operatorRewardsRouter, GENESIS_MARKET_SUPPLY)
+                )
             );
         vm.prank(authority);
         IGovernance(address(diamond)).setGuardian(guardian);
@@ -69,6 +73,14 @@ abstract contract DiamondTestSetup is Test {
         IBuyback(address(diamond)).setBuybackConfig(_defaultBuybackConfig());
         vm.prank(authority);
         ITreasuryRewards(address(diamond)).setRewardAllocator(treasury);
+    }
+
+    function _initialConfig() internal view virtual returns (ProtocolConfig memory config) {
+        return _defaultConfig();
+    }
+
+    function _operatorRewardsRouterForInit() internal virtual returns (address) {
+        return address(0);
     }
 
     function _install(address facet, bytes4[] memory selectors) internal {
@@ -90,6 +102,7 @@ abstract contract DiamondTestSetup is Test {
             recoveryBps: 4_000,
             treasuryBps: 2_500,
             buybackBps: 1_000,
+            operatorPurchaseBps: 0,
             recoveryBurnBps: 9_000,
             recoveryTreasuryBps: 1_000,
             roundTimeoutDecay: 5 minutes,
@@ -178,12 +191,13 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _gameSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](5);
+        selectors = new bytes4[](6);
         selectors[0] = IGame.buyPotato.selector;
         selectors[1] = IGame.materializeMaturedEmission.selector;
         selectors[2] = IGame.currentRoundId.selector;
         selectors[3] = IGame.getRound.selector;
         selectors[4] = IGame.currentEarnedEmission.selector;
+        selectors[5] = IGame.purchaseOperatorRewardsRouter.selector;
     }
 
     function _recoverySelectors() internal pure returns (bytes4[] memory selectors) {

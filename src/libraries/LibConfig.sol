@@ -14,9 +14,11 @@ library LibConfig {
                 || config.priceIncreaseBps > Constants.BPS || config.emissionStepBps > Constants.BPS
                 || config.winnerBps > Constants.BPS || config.recoveryBps > Constants.BPS
                 || config.treasuryBps > Constants.BPS || config.buybackBps > Constants.BPS
-                || config.recoveryBurnBps > Constants.BPS || config.recoveryTreasuryBps > Constants.BPS
+                || config.operatorPurchaseBps > Constants.BPS || config.recoveryBurnBps > Constants.BPS
+                || config.recoveryTreasuryBps > Constants.BPS
                 || uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps + config.buybackBps
-                    != Constants.BPS || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
+                        + config.operatorPurchaseBps != Constants.BPS
+                || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
         ) revert Errors.InvalidProtocolConfig();
     }
 
@@ -31,6 +33,7 @@ library LibConfig {
         target.recoveryBps = config.recoveryBps;
         target.treasuryBps = config.treasuryBps;
         target.buybackBps = config.buybackBps;
+        target.operatorPurchaseBps = config.operatorPurchaseBps;
         target.recoveryBurnBps = config.recoveryBurnBps;
         target.recoveryTreasuryBps = config.recoveryTreasuryBps;
         target.roundTimeoutDecay = config.roundTimeoutDecay;

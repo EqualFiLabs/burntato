@@ -67,6 +67,9 @@ contract GovernanceFacet is IGovernance {
 
     function setProtocolConfig(ProtocolConfig calldata config) external onlyAuthority {
         LibConfig.validate(config);
+        if (config.operatorPurchaseBps != 0 && LibProtocolStorage.operatorRevenue().router == address(0)) {
+            revert Errors.InvalidProtocolConfig();
+        }
         LibProtocolStorage.game().config = config;
         emit ProtocolConfigUpdated(config);
     }

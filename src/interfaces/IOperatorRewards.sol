@@ -46,6 +46,7 @@ interface IOperatorRewards {
     );
     event TreasuryRewardClaimed(address indexed receiver, uint256 amount);
 
+    function burntato() external view returns (address);
     function register(uint256 operatorId) external;
     function sync(uint256 operatorId) external returns (SyncResult result);
     function claim(uint256 operatorId, address receiver) external returns (uint256 amount);

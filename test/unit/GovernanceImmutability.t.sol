@@ -51,7 +51,7 @@ contract GovernanceAdministrationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, 1 ether))
+                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether))
             );
 
         vm.startPrank(bootstrap);
@@ -124,7 +124,25 @@ contract GovernanceAdministrationTest is Test {
         _expectInvalidConfig(config);
 
         config = _config(0.02 ether, 1_000);
+        config.operatorPurchaseBps = 10_001;
+        config.treasuryBps = 0;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
+        config.operatorPurchaseBps = 1;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
         config.recoveryTreasuryBps = 999;
+        _expectInvalidConfig(config);
+    }
+
+    function test_ProtocolConfigurationCannotEnablePurchaseRewardsWithoutRouter() public {
+        ProtocolConfig memory config = _config(0.02 ether, 1_000);
+        config.recoveryBps = 3_000;
+        config.treasuryBps = 2_000;
+        config.operatorPurchaseBps = 1_500;
+
         _expectInvalidConfig(config);
     }
 
@@ -244,7 +262,7 @@ contract GovernanceAdministrationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, 1 ether))
+                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether))
             );
     }
 
@@ -260,6 +278,7 @@ contract GovernanceAdministrationTest is Test {
             recoveryBps: 4_000,
             treasuryBps: 2_500,
             buybackBps: 1_000,
+            operatorPurchaseBps: 0,
             recoveryBurnBps: 9_000,
             recoveryTreasuryBps: 1_000,
             roundTimeoutDecay: 5 minutes,

@@ -72,7 +72,9 @@ contract DeployBurntato is Script {
         returns (BurntatoDeployment memory deployment)
     {
         _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps != 0) revert InvalidGenesisConfiguration();
+        if (config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0) {
+            revert InvalidGenesisConfiguration();
+        }
         _deployTimelock(config, deployment);
         _deployUniswap(deployment);
         StaticsOperatorDependencies memory operatorDependencies;
@@ -85,7 +87,9 @@ contract DeployBurntato is Script {
         CanonicalV4Dependencies memory dependencies
     ) public returns (BurntatoDeployment memory deployment) {
         _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps != 0) revert InvalidGenesisConfiguration();
+        if (config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0) {
+            revert InvalidGenesisConfiguration();
+        }
         RobinhoodDeploymentConfig.validate(dependencies);
         _populateCanonicalDependencies(dependencies, deployment);
         _deployTimelock(config, deployment);
@@ -100,7 +104,9 @@ contract DeployBurntato is Script {
         StaticsOperatorDependencies memory operatorDependencies
     ) public returns (BurntatoDeployment memory deployment) {
         _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps == 0) revert InvalidGenesisConfiguration();
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
+            revert InvalidGenesisConfiguration();
+        }
         RobinhoodDeploymentConfig.validate(dependencies);
         StaticsOperatorDeploymentConfig.validate(operatorDependencies);
         _populateCanonicalDependencies(dependencies, deployment);
@@ -114,8 +120,9 @@ contract DeployBurntato is Script {
         BurntatoDeployment memory deployment,
         StaticsOperatorDependencies memory operatorDependencies
     ) private {
-        _deployDiamond(config, bootstrapAuthority, deployment);
+        _deployDiamondShellAndFacets(bootstrapAuthority, deployment);
         _deployOperatorRewards(config, deployment, operatorDependencies);
+        _initializeDiamond(config, deployment);
         _deployHook(config, deployment);
         _configureProtocol(config, deployment);
     }
@@ -125,7 +132,7 @@ contract DeployBurntato is Script {
         BurntatoDeployment memory deployment,
         StaticsOperatorDependencies memory operatorDependencies
     ) private {
-        if (config.operatorRewardShareBps == 0) return;
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) return;
         deployment.operatorRewardsRouter = address(
             new BurntatoOperatorRewardsRouter(
                 deployment.diamond, operatorDependencies.operatorsNft, operatorDependencies.activationRegistry
@@ -174,11 +181,7 @@ contract DeployBurntato is Script {
         deployment.universalRouter = dependencies.universalRouter;
     }
 
-    function _deployDiamond(
-        GenesisConfig memory config,
-        address bootstrapAuthority,
-        BurntatoDeployment memory deployment
-    ) private {
+    function _deployDiamondShellAndFacets(address bootstrapAuthority, BurntatoDeployment memory deployment) private {
         deployment.diamondCutFacet = address(new DiamondCutFacet());
         deployment.diamond = address(new BurntatoDiamond(bootstrapAuthority, deployment.diamondCutFacet));
         deployment.diamondLoupeFacet = address(new DiamondLoupeFacet());
@@ -192,13 +195,16 @@ contract DeployBurntato is Script {
         deployment.claimsFacet = address(new ClaimsFacet());
         deployment.treasuryRewardsFacet = address(new TreasuryRewardsFacet());
         deployment.foundationInit = address(new FoundationInit());
+    }
 
+    function _initializeDiamond(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         IDiamondCut(deployment.diamond)
             .diamondCut(
                 _initialCut(deployment),
                 deployment.foundationInit,
                 abi.encodeCall(
-                    FoundationInit.initialize, (config.protocol, config.treasuryRecipient, config.potatoSeed)
+                    FoundationInit.initialize,
+                    (config.protocol, config.treasuryRecipient, deployment.operatorRewardsRouter, config.potatoSeed)
                 )
             );
     }
@@ -299,6 +305,9 @@ contract DeployBurntato is Script {
         config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
         );
+        config.protocol.operatorPurchaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_PURCHASE_BPS", uint256(config.protocol.operatorPurchaseBps))
+        );
         config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
         );
@@ -396,11 +405,11 @@ contract DeployBurntato is Script {
                 || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
                 || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
                 || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
-                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
-                || config.hookFeeBps > Constants.BPS || config.operatorRewardShareBps > Constants.BPS
-                || config.buyback.callerRewardBps > Constants.BPS
+                || protocol.operatorPurchaseBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
+                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
+                || config.operatorRewardShareBps > Constants.BPS || config.buyback.callerRewardBps > Constants.BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
-                    != Constants.BPS
+                        + protocol.operatorPurchaseBps != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower < TickMath.MIN_TICK || config.tickUpper >= TickMath.MAX_TICK

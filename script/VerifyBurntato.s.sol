@@ -43,7 +43,7 @@ contract VerifyBurntato is Script {
 
         BurntatoDeploymentVerifier verifier = new BurntatoDeploymentVerifier();
         bool verified;
-        if (config.operatorRewardShareBps == 0) {
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
             verified = verifier.verify(config, deployment);
         } else {
             CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
@@ -93,6 +93,9 @@ contract VerifyBurntato is Script {
         );
         config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
+        );
+        config.protocol.operatorPurchaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_PURCHASE_BPS", uint256(config.protocol.operatorPurchaseBps))
         );
         config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
         config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(

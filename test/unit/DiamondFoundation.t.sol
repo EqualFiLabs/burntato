@@ -90,7 +90,9 @@ contract DiamondFoundationTest is Test {
         vm.prank(authority);
         IDiamondCut(address(diamond))
             .diamondCut(
-                cuts, address(initializer), abi.encodeCall(FoundationInit.initialize, (_config(), treasury, 1 ether))
+                cuts,
+                address(initializer),
+                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), 1 ether))
             );
     }
 
@@ -106,6 +108,7 @@ contract DiamondFoundationTest is Test {
             recoveryBps: 4_000,
             treasuryBps: 2_500,
             buybackBps: 1_000,
+            operatorPurchaseBps: 0,
             recoveryBurnBps: 9_000,
             recoveryTreasuryBps: 1_000,
             roundTimeoutDecay: 5 minutes,
