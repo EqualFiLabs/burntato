@@ -1,0 +1,21 @@
+{
+  "network": "Robinhood Chain Testnet",
+  "chainId": 46630,
+  "finalizedBlock": 112319205,
+  "finalizedBlockHash": "0xb83b43789675c524ae7b199d0db335fe747ac1c9c01337d35234ece4e711984b",
+  "source": {
+    "repository": "EqualFiLabs/statics",
+    "pullRequest": 76,
+    "genesisArtifact": "artifacts/genesis-testnet/20260903T140518Z-1803/genesis.json"
+  },
+  "contracts": {
+    "operatorsNft": {
+      "address": "0x8BB2E39abAE7346293Ff084fd4D104b064BEbC71",
+      "runtimeCodeHash": "0x1936fea857cba3bd5a0be77324733afdc46ab600aa129aab50ee6f337ccdcc54"
+    },
+    "activationRegistry": {
+      "address": "0xcE4D413915B4C6dE7DfD486d233596Da35c5cFbD",
+      "runtimeCodeHash": "0x391050e3ac7f7175ab9df6432f73ebb2b0acc06fe2dde824e76e936c2a1cc06b"
+    }
+  }
+}

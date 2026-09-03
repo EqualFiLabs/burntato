@@ -17,13 +17,15 @@ library StaticsOperatorDeploymentConfig {
     error StaticsLaunchNotFinalized();
 
     uint256 internal constant ROBINHOOD_MAINNET_CHAIN_ID = 4663;
-    string internal constant MANIFEST_PATH = "deployments/statics-operators-robinhood-4663.json";
+    uint256 internal constant ROBINHOOD_TESTNET_CHAIN_ID = 46_630;
+    string internal constant MAINNET_MANIFEST_PATH = "deployments/statics-operators-robinhood-4663.json";
+    string internal constant TESTNET_MANIFEST_PATH = "deployments/statics-operators-robinhood-testnet-46630.json";
 
     address private constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
     Vm private constant vm = Vm(VM_ADDRESS);
 
     function load() internal view returns (StaticsOperatorDependencies memory dependencies) {
-        string memory manifest = vm.readFile(MANIFEST_PATH);
+        string memory manifest = vm.readFile(_manifestPath());
         dependencies.chainId = vm.parseJsonUint(manifest, ".chainId");
         dependencies.finalizedBlock = vm.parseJsonUint(manifest, ".finalizedBlock");
         dependencies.finalizedBlockHash = vm.parseJsonBytes32(manifest, ".finalizedBlockHash");
@@ -40,7 +42,7 @@ library StaticsOperatorDeploymentConfig {
 
     function validate(StaticsOperatorDependencies memory dependencies) internal view {
         requireManifest(dependencies);
-        if (block.chainid != dependencies.chainId || dependencies.chainId != ROBINHOOD_MAINNET_CHAIN_ID) {
+        if (block.chainid != dependencies.chainId || !_isSupportedChain(dependencies.chainId)) {
             revert InvalidStaticsChain(dependencies.chainId, block.chainid);
         }
         if (block.number < dependencies.finalizedBlock) {
@@ -73,5 +75,15 @@ library StaticsOperatorDeploymentConfig {
 
     function _validateBinding(bytes32 binding, address expected, address actual) private pure {
         if (actual != expected) revert InvalidStaticsBinding(binding, expected, actual);
+    }
+
+    function _manifestPath() private view returns (string memory) {
+        if (block.chainid == ROBINHOOD_MAINNET_CHAIN_ID) return MAINNET_MANIFEST_PATH;
+        if (block.chainid == ROBINHOOD_TESTNET_CHAIN_ID) return TESTNET_MANIFEST_PATH;
+        revert InvalidStaticsChain(ROBINHOOD_MAINNET_CHAIN_ID, block.chainid);
+    }
+
+    function _isSupportedChain(uint256 chainId) private pure returns (bool) {
+        return chainId == ROBINHOOD_MAINNET_CHAIN_ID || chainId == ROBINHOOD_TESTNET_CHAIN_ID;
     }
 }

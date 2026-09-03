@@ -10,6 +10,7 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
 import {DeployBurntatoLocalFork} from "../../script/DeployBurntatoLocalFork.s.sol";
+import {DeployBurntatoRobinhoodTestnet} from "../../script/DeployBurntatoRobinhoodTestnet.s.sol";
 import {BurntatoHookDeployer} from "../../script/helpers/BurntatoHookDeployer.sol";
 import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
 import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
@@ -92,7 +93,68 @@ contract DeterministicDeploymentTest is Test {
     function _selectStaticsFork() internal {
         string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
         if (bytes(rpc).length == 0) vm.skip(true, "ROBINHOOD_MAINNET is not configured");
-        vm.createSelectFork(rpc, StaticsOperatorDeploymentConfig.load().finalizedBlock);
+        vm.createSelectFork(rpc);
+        vm.rollFork(StaticsOperatorDeploymentConfig.load().finalizedBlock);
+    }
+
+    function _selectRobinhoodTestnetFork() internal {
+        string memory rpc = vm.envOr("ROBINHOOD_TESTNET", string(""));
+        if (bytes(rpc).length == 0) vm.skip(true, "ROBINHOOD_TESTNET is not configured");
+        vm.createSelectFork(rpc);
+    }
+
+    function test_RobinhoodTestnetProfilePinsApprovedEconomicsAndRoles() public {
+        address deployer = makeAddr("testnet-deployer");
+        GenesisConfig memory testnet = (new DeployBurntatoRobinhoodTestnet()).testnetConfig(deployer);
+
+        assertEq(testnet.deployer, deployer);
+        assertEq(testnet.proposer, deployer);
+        assertEq(testnet.guardian, deployer);
+        assertEq(testnet.treasuryRecipient, deployer);
+        assertEq(testnet.rewardAllocator, deployer);
+        assertEq(testnet.timelockDelay, 120 seconds);
+        assertEq(testnet.protocol.winnerBps, 2_500);
+        assertEq(testnet.protocol.recoveryBps, 3_000);
+        assertEq(testnet.protocol.treasuryBps, 2_000);
+        assertEq(testnet.protocol.buybackBps, 1_000);
+        assertEq(testnet.protocol.operatorPurchaseBps, 1_500);
+        assertEq(testnet.hookFeeBps, 100);
+        assertEq(testnet.operatorRewardShareBps, 4_000);
+    }
+
+    function test_RobinhoodTestnetManifestsMatchLiveDependencies() public {
+        _selectRobinhoodTestnetFork();
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
+
+        RobinhoodDeploymentConfig.validate(dependencies);
+        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        assertEq(dependencies.chainId, 46_630);
+        assertEq(operatorDependencies.operatorsNft, 0x8BB2E39abAE7346293Ff084fd4D104b064BEbC71);
+        assertEq(operatorDependencies.activationRegistry, 0xcE4D413915B4C6dE7DfD486d233596Da35c5cFbD);
+    }
+
+    function test_RobinhoodTestnetProfileDeploysAndLaunchesNativeMarket() public {
+        _selectRobinhoodTestnetFork();
+        DeployBurntatoRobinhoodTestnet testnetScript = new DeployBurntatoRobinhoodTestnet();
+        GenesisConfig memory testnetConfig = testnetScript.testnetConfig(address(testnetScript));
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
+
+        BurntatoDeployment memory testnetDeployment = testnetScript.deployWithDependencies(
+            testnetConfig, address(testnetScript), dependencies, operatorDependencies
+        );
+        assertTrue(
+            (new BurntatoDeploymentVerifier())
+            .verifyCanonical(testnetConfig, testnetDeployment, dependencies, operatorDependencies)
+        );
+        (bytes32 poolId, uint128 liquidity) = IMarket(testnetDeployment.diamond).launchMarket();
+        (bytes32 actualPoolId,, bool launching, bool launched) = IMarket(testnetDeployment.diamond).marketState();
+
+        assertEq(actualPoolId, poolId);
+        assertGt(liquidity, 0);
+        assertFalse(launching);
+        assertTrue(launched);
     }
 
     function test_CanonicalDependenciesDeployOnlyOwnedContractsAndVerify() public {

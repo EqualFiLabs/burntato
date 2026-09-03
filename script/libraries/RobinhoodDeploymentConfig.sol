@@ -31,13 +31,16 @@ library RobinhoodDeploymentConfig {
 
     error InvalidCanonicalManifest();
     uint256 internal constant ROBINHOOD_MAINNET_CHAIN_ID = 4663;
-    string internal constant MANIFEST_PATH = "deployments/robinhood-chain-4663.json";
+    uint256 internal constant ROBINHOOD_TESTNET_CHAIN_ID = 46_630;
+    address internal constant ROBINHOOD_TESTNET_PERIPHERY_WETH = 0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73;
+    string internal constant MAINNET_MANIFEST_PATH = "deployments/robinhood-chain-4663.json";
+    string internal constant TESTNET_MANIFEST_PATH = "deployments/robinhood-chain-testnet-46630.json";
 
     address private constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
     Vm private constant vm = Vm(VM_ADDRESS);
 
     function load() internal view returns (CanonicalV4Dependencies memory dependencies) {
-        string memory manifest = vm.readFile(MANIFEST_PATH);
+        string memory manifest = vm.readFile(_manifestPath());
         dependencies.chainId = vm.parseJsonUint(manifest, ".chainId");
         dependencies.forkBlock = vm.parseJsonUint(manifest, ".forkBlock");
         dependencies.forkBlockHash = vm.parseJsonBytes32(manifest, ".forkBlockHash");
@@ -73,7 +76,7 @@ library RobinhoodDeploymentConfig {
 
     function validate(CanonicalV4Dependencies memory dependencies) internal view {
         requireManifest(dependencies);
-        if (block.chainid != dependencies.chainId || dependencies.chainId != ROBINHOOD_MAINNET_CHAIN_ID) {
+        if (block.chainid != dependencies.chainId || !_isSupportedChain(dependencies.chainId)) {
             revert InvalidCanonicalChain(dependencies.chainId, block.chainid);
         }
         if (block.number < dependencies.forkBlock) revert InvalidCanonicalBlock(dependencies.forkBlock, block.number);
@@ -99,14 +102,16 @@ library RobinhoodDeploymentConfig {
         _validateBinding("PM_POOL", dependencies.poolManager, positionManager.poolManager());
         _validateBinding("PM_PERMIT2", dependencies.permit2, positionManager.permit2());
         _validateBinding("PM_DESCRIPTOR", dependencies.positionDescriptor, positionManager.tokenDescriptor());
-        _validateBinding("PM_WETH", dependencies.weth, positionManager.WETH9());
+        address peripheryWeth =
+            dependencies.chainId == ROBINHOOD_TESTNET_CHAIN_ID ? ROBINHOOD_TESTNET_PERIPHERY_WETH : dependencies.weth;
+        _validateBinding("PM_WETH", peripheryWeth, positionManager.WETH9());
         _validateBinding(
             "DESCRIPTOR_POOL",
             dependencies.poolManager,
             address(IPositionDescriptor(dependencies.positionDescriptor).poolManager())
         );
         _validateBinding(
-            "DESCRIPTOR_WETH", dependencies.weth, IPositionDescriptor(dependencies.positionDescriptor).wrappedNative()
+            "DESCRIPTOR_WETH", peripheryWeth, IPositionDescriptor(dependencies.positionDescriptor).wrappedNative()
         );
         _validateBinding("QUOTER_POOL", dependencies.poolManager, address(IV4Quoter(dependencies.quoter).poolManager()));
         _validateBinding(
@@ -127,5 +132,15 @@ library RobinhoodDeploymentConfig {
 
     function _validateBinding(bytes32 binding, address expected, address actual) private pure {
         if (actual != expected) revert InvalidCanonicalBinding(binding, expected, actual);
+    }
+
+    function _manifestPath() private view returns (string memory) {
+        if (block.chainid == ROBINHOOD_MAINNET_CHAIN_ID) return MAINNET_MANIFEST_PATH;
+        if (block.chainid == ROBINHOOD_TESTNET_CHAIN_ID) return TESTNET_MANIFEST_PATH;
+        revert InvalidCanonicalChain(ROBINHOOD_MAINNET_CHAIN_ID, block.chainid);
+    }
+
+    function _isSupportedChain(uint256 chainId) private pure returns (bool) {
+        return chainId == ROBINHOOD_MAINNET_CHAIN_ID || chainId == ROBINHOOD_TESTNET_CHAIN_ID;
     }
 }

@@ -59,7 +59,7 @@ contract DeployBurntato is Script {
     uint256 internal constant POSITION_MANAGER_UNSUBSCRIBE_GAS_LIMIT = 100_000;
     bytes32 internal constant NATIVE_CURRENCY_LABEL = "ETH";
 
-    function run() external returns (BurntatoDeployment memory deployment) {
+    function run() external virtual returns (BurntatoDeployment memory deployment) {
         GenesisConfig memory config = _environmentConfig();
         vm.startBroadcast(config.deployer);
         deployment = deploy(config, config.deployer);

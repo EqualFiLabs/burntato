@@ -21,6 +21,7 @@ External buys start disabled.
 | --- | --- | --- | --- |
 | Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | Burntato timelock owns the local PoolManager and hook |
 | Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | Burntato timelock owns only the Diamond authority and Burntato hook |
+| Robinhood testnet | Pinned chain-46630 v4 contracts plus a fresh standalone Statics Genesis replica | Live market launch against the canonical PoolManager and PositionManager | 120-second Burntato timelock owns the Diamond authority and Burntato hook |
 
 The committed manifest pins block `45234855`, its block hash, and exact runtime
 hashes for all nine canonical dependencies. Addresses and hashes are not
@@ -183,6 +184,42 @@ forge test --match-path test/fork/OperatorRewardsRobinhoodFork.t.sol -j 1 -vv
 
 Frontends connect to chain ID `4663` at `http://127.0.0.1:8545` and read the
 persisted artifact rather than scraping script output.
+
+## Robinhood testnet launch
+
+The chain-selected testnet manifests pin all canonical v4 bytecode and the
+fresh Statics Genesis Operator NFT plus Activation Registry. Robinhood
+testnet's PositionManager and descriptor report the absent mainnet WETH
+address; the validator pins that observed binding explicitly while separately
+validating the deployed testnet WETH. Burntato's market is native/POTATO and
+does not route through either wrapped-native address.
+
+The testnet profile is fixed in code: the deployer holds proposer, guardian,
+Treasury, and reward-allocator roles; timelock delay is 120 seconds; purchase
+revenue is split 25% Winner, 30% Recovery, 20% Treasury, 10% buyback, and 15%
+Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent to the
+same Operator rewards router (0.4% of swap volume) and 60% sent to Treasury.
+
+Use the phased wrapper so deployment verification occurs before market launch,
+and so the timelock delay remains visible rather than hidden inside one command:
+
+```bash
+export ROBINHOOD_TESTNET_RPC_URL="$ROBINHOOD_TESTNET"
+export PRIVATE_KEY="$PRIVATE_KEY"
+
+scripts/deploy-robinhood-testnet.sh --deploy
+scripts/deploy-robinhood-testnet.sh --verify
+scripts/deploy-robinhood-testnet.sh --launch
+scripts/deploy-robinhood-testnet.sh --schedule
+# Wait until the reported timelock timestamp.
+scripts/deploy-robinhood-testnet.sh --execute
+scripts/deploy-robinhood-testnet.sh --check
+```
+
+The ignored `artifacts/robinhood-testnet/deployment.json` file is the local
+machine-readable handoff. It contains only public addresses and launch
+configuration; deployment transaction hashes and final live readback belong in
+the checked-in testnet deployment record.
 
 ## Verification checks
 
