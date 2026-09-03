@@ -47,6 +47,7 @@ The local genesis defaults are:
 | Winner / Recovery / Treasury / buyback split | 25% / 40% / 25% / 10% |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
+| Operator share of hook fee | Disabled; required for Robinhood deployment |
 | Maximum buyback slice | 2 ETH |
 | Buyback caller reward | 0.5% |
 | Buyback delay | 1 block |
@@ -164,16 +165,32 @@ Buybacks subsequently supply ETH-side demand while external buys remain closed;
 POTATO holders can sell into that liquidity immediately after ETH has entered
 the pool.
 
-The hook's governed `feeBps` applies bilaterally:
+The hook's governed `feeBps` applies bilaterally. Its separately governed
+`operatorRewardShareBps` splits that existing fee without increasing it:
+
+```text
+operatorAmount = floor(realizedNativeFee * operatorRewardShareBps / 10_000)
+treasuryAmount = realizedNativeFee - operatorAmount
+```
 
 - buys retain the configured fraction of gross POTATO output, sell it once to
-  ETH without recursively charging the internal conversion, and send all ETH
-  directly to `feeAddress`;
-- sells retain the configured fraction of gross ETH output and send it directly
-  to `feeAddress`.
+  ETH without recursively charging the internal conversion, and split the
+  realized ETH; and
+- sells retain the configured fraction of gross ETH output and split that ETH
+  identically.
 
 Hook revenue never enters the Diamond, is not launch reserve accounting, and is
-not auto-compounded. The default fee is 1%, while 0% through 100% are valid.
+not auto-compounded. The Treasury remainder, including split dust, goes to
+`feeAddress`; the Operator portion goes to the standalone rewards router. The
+default fee is 1%, while 0% through 100% are valid.
+
+Registered Statics Operators share router revenue by their stored activation
+multiplier. Registration and higher-tier synchronization are prospective.
+Ownership changes or a lower observed multiplier invalidate the registration;
+its entire unpaid whole and fractional entitlement is redistributed over the
+remaining registered weight. With no remaining weight, or when revenue arrives
+with no registrations, the amount is claimable by Burntato's current Treasury
+recipient. A new owner must register explicitly.
 
 ## Treasury buybacks and external-buy gate
 

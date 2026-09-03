@@ -2,29 +2,33 @@
 
 `DeployBurntato.s.sol` deploys a complete local system in this order: timelock,
 timelock-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
-PositionManager, Diamond and facets, initializer, CREATE2 hook deployer, and
-mined-address canonical hook. It installs the selector manifest, configures the
-market, enables the initial Treasury distributor, configures buybacks, appoints
-the reward allocator and guardian, and transfers Diamond authority to the
-timelock.
+PositionManager, Diamond and facets, initializer, optional immutable Operator
+rewards router, CREATE2 hook deployer, and mined-address canonical hook. It
+installs the selector manifest, configures the market, enables the initial
+Treasury distributor, configures buybacks, appoints the reward allocator and
+guardian, and transfers Diamond authority to the timelock.
 
 The hook and PoolManager are independently owned by the timelock. Deployment
 does not renounce either owner and does not disable the PoolManager protocol-fee
 controller surface. The hook starts with the configured Treasury fee recipient
-and bilateral fee. External buys start disabled.
+and bilateral fee. Self-contained local deployment keeps Operator rewards
+disabled. Robinhood deployment requires an explicit nonzero Operator share.
+External buys start disabled.
 
 ## Deployment modes
 
 | Mode | Dependencies | Swap proof | Ownership boundary |
 | --- | --- | --- | --- |
 | Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | Burntato timelock owns the local PoolManager and hook |
-| Robinhood fork | Pinned chain-4663 contracts from `deployments/robinhood-chain-4663.json` | Canonical Universal Router and Permit2 | Burntato timelock owns only the Diamond authority and Burntato hook |
+| Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | Burntato timelock owns only the Diamond authority and Burntato hook |
 
 The committed manifest pins block `45234855`, its block hash, and exact runtime
 hashes for all nine canonical dependencies. Addresses and hashes are not
 environment-overridable. Canonical deployment validates code plus PoolManager,
 Permit2, PositionDescriptor, and WETH bindings before deploying any Burntato
-contract.
+contract. `deployments/statics-operators-robinhood-4663.json` separately pins
+the finalized Statics integration at block `47690599`, including the Operators
+NFT and Activation Registry hashes and their reciprocal bindings.
 
 ## Local defaults
 
@@ -42,6 +46,7 @@ contract.
 | Purchase split | 2,500 / 4,000 / 2,500 / 1,000 BPS |
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |
+| Operator share of hook fee | Disabled locally; required Robinhood input |
 | Buyback cap / reward / delay | 2 ETH / 50 BPS / 1 block |
 | Tick spacing | 60 |
 | Initial tick | 92,100 |
@@ -87,6 +92,7 @@ BURNTATO_BUYBACK_MAX_SPEND
 BURNTATO_BUYBACK_CALLER_REWARD_BPS
 BURNTATO_BUYBACK_DELAY_BLOCKS
 BURNTATO_HOOK_FEE_BPS
+BURNTATO_OPERATOR_REWARD_SHARE_BPS
 BURNTATO_INITIAL_TICK
 BURNTATO_TICK_SPACING
 BURNTATO_TICK_LOWER
@@ -121,6 +127,7 @@ BURNTATO_POOL_MANAGER
 BURNTATO_POSITION_MANAGER
 BURNTATO_PERMIT2
 BURNTATO_HOOK
+BURNTATO_OPERATOR_REWARDS_ROUTER
 ```
 
 Then run:
@@ -145,6 +152,7 @@ use a localhost fork account.
 
 ```bash
 PRIVATE_KEY="$ANVIL_PRIVATE_KEY" \
+BURNTATO_OPERATOR_REWARD_SHARE_BPS="<required-bps>" \
 forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
   --sig 'runLocalFork()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
 
@@ -154,8 +162,9 @@ forge script script/VerifyBurntatoLocalFork.s.sol:VerifyBurntatoLocalFork \
 
 The public-only frontend handoff is
 `artifacts/robinhood-local/deployment.json`. It contains the fork identity,
-Diamond, timelock, hook, facets, initializer, and canonical dependency
-addresses. It never contains the RPC URL or private key.
+Diamond, timelock, hook, Operator router/share, Statics dependencies, facets,
+initializer, and canonical dependency addresses. It never contains the RPC URL
+or private key.
 
 Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
 instead. Run archive-RPC qualification locally; it is intentionally excluded
@@ -165,6 +174,10 @@ from CI so pull-request code never receives the RPC credential:
 REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 \
 ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv
+
+REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
+ROBINHOOD_OPERATOR_FORK_BLOCK=47690599 \
+forge test --match-path test/fork/OperatorRewardsRobinhoodFork.t.sol -j 1 -vv
 ```
 
 Frontends connect to chain ID `4663` at `http://127.0.0.1:8545` and read the
@@ -178,7 +191,8 @@ timelock delay and roles, Diamond authority, guardian and pause state,
 timelock-owned hook and PoolManager, hook token/fee/tick configuration, exact
 uninitialized PoolKey, PositionManager dependencies, the configured genesis
 POTATO supply and Diamond reservation, empty initial round state, disabled
-external buys, the initial Treasury distributor, independently configured
+external buys, the exact Operator router/share and immutable Statics bindings,
+the initial Treasury distributor, independently configured
 reward allocator with zero reward escrow, and zeroed buyback state with the
 configured execution defaults.
 

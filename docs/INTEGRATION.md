@@ -32,8 +32,9 @@ initial timeout; after the configured floor is reached, later purchases keep
 resetting to that floor.
 
 The canonical hook is a separate administered contract. Read `owner()`,
-`token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`, and
-`deploymentBlock()`, and `externalBuysEnabled()` from the hook itself.
+`token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`,
+`operatorRewardsRouter()`, `operatorRewardShareBps()`, `deploymentBlock()`, and
+`externalBuysEnabled()` from the hook itself.
 
 ## POTATO behavior
 
@@ -101,23 +102,49 @@ The hook follows FWA.fun's bilateral revenue-capture path:
 - [FWA hook fee mechanics](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol#L205-L302)
 - [FWA initialization-squatting regression](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWATokenHookSquat.t.sol)
 
-Buy fees are taken in POTATO, internally converted once, and the realized ETH is
-sent directly to `feeAddress`. Sell fees are taken in ETH and sent directly to
-the same address. `HookFee` and `Trade` are hook events; `MarketConfigured` and
-`MarketLaunched` are Diamond events. There is no Diamond hook-revenue receiver
-or hook-fee claim.
+Buy fees are taken in POTATO and internally converted once; sell fees are taken
+in ETH. Both realized native fees are split between the standalone Operator
+router and `feeAddress`, with division dust assigned to `feeAddress`. `HookFee`,
+`HookFeeAllocated`, and `Trade` are hook events. There is no Diamond hook-fee
+claim.
 
-Hook ownership may update `feeAddress` and `feeBps` before or after launch and
-before or after Diamond finalization. The fee is bounded to 10,000 BPS. Market
-frontends should read it from the hook instead of assuming the 1% genesis
-default. The receiver cannot be zero, the hook, POTATO Diamond, or PoolManager;
-those are system sinks, not Treasury destinations.
+Hook ownership may update `feeAddress`, `feeBps`, and the atomic Operator router
+and share configuration before or after launch and Diamond finalization. Both
+BPS values are bounded to 10,000. The Operator path is disabled only as
+`(address(0), 0)`; an enabled router must be deployed and distinct from known
+system and Treasury destinations.
 
 External buys are disabled by default. `setExternalBuysEnabled(bool)` is an
 owner-only hook control that remains repeatable after launch and Diamond
 finalization. Disabling buys does not disable exact-input POTATO sells. The
 Diamond's canonical buyback is the sole privileged buy path and pays no hook
 fee.
+
+## Statics Operator rewards router
+
+`BurntatoOperatorRewardsRouter` is a standalone, immutable integration contract;
+it does not modify or custody funds inside Statics. Its fixed Robinhood
+dependencies are the Operators NFT
+`0xad5E9F96A91D1A6F550580b157af2068A0e8F0BE` and Activation Registry
+`0xfC62e99CaE93878f83801f3d6Bb4f1762E720B30`.
+
+- `register(operatorId)` is current-owner-only and starts at the current
+  `multiplierBps` without historical rewards.
+- `sync(operatorId)` is permissionless. Higher weights apply only after old
+  weight accrual settles.
+- `claim(operatorId, receiver)` is current-owner-only and permits an explicit
+  receiver.
+- `accrue()` recognizes queued and force-sent native revenue.
+- `claimTreasury()` pays zero-registration and sole-forfeiture revenue to the
+  Diamond's current Treasury recipient.
+
+If `ownerOf` differs from the registered owner, or the canonical multiplier is
+lower than the stored weight, synchronization invalidates the registration and
+redistributes all unpaid value to the remaining registered Operators. It pays
+nothing to the new owner, who must register explicitly. Because settlement is
+lazy, transfer away and back to the original owner followed by restoration of
+the exact stored tier before any router read cannot be distinguished from no
+transfer; Statics' transfer reset and reactivation cost bound this edge case.
 
 ### Robinhood production-compatible routing
 
