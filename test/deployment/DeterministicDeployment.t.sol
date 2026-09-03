@@ -72,6 +72,16 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
     }
 
+    function test_GenericVerifierRejectsOperatorRewardsWithoutCanonicalDependencies() public {
+        config.operatorRewardShareBps = 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("OPERATOR_CANONICAL_REQUIRED")
+            )
+        );
+        verifier.verify(config, deployment);
+    }
+
     function _selectRobinhoodFork() internal {
         string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
         if (bytes(rpc).length == 0) vm.skip(true, "ROBINHOOD_MAINNET is not configured");

@@ -38,6 +38,7 @@ contract BurntatoDeploymentVerifier {
     error VerificationFailed(bytes32 check);
 
     function verify(GenesisConfig memory config, BurntatoDeployment memory deployment) external view returns (bool) {
+        _check(config.operatorRewardShareBps == 0, "OPERATOR_CANONICAL_REQUIRED");
         _verifyCommon(config, deployment);
         _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
         return true;
@@ -48,6 +49,7 @@ contract BurntatoDeploymentVerifier {
         BurntatoDeployment memory deployment,
         CanonicalV4Dependencies memory dependencies
     ) external view returns (bool) {
+        _check(config.operatorRewardShareBps == 0, "OPERATOR_DEPENDENCIES_REQUIRED");
         RobinhoodDeploymentConfig.validate(dependencies);
         _verifyCanonicalAddresses(deployment, dependencies);
         _verifyCommon(config, deployment);
@@ -60,6 +62,7 @@ contract BurntatoDeploymentVerifier {
         CanonicalV4Dependencies memory dependencies,
         StaticsOperatorDependencies memory operatorDependencies
     ) external view returns (bool) {
+        _check(config.operatorRewardShareBps != 0, "OPERATOR_REWARDS_REQUIRED");
         RobinhoodDeploymentConfig.validate(dependencies);
         StaticsOperatorDeploymentConfig.validate(operatorDependencies);
         _verifyCanonicalAddresses(deployment, dependencies);
