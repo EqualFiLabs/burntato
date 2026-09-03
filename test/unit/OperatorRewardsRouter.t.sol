@@ -144,6 +144,19 @@ contract OperatorRewardsRouterTest is Test {
         assertEq(address(router).balance, 0);
     }
 
+    function test_RegistersEverySupportedActivationTier() public {
+        uint16[5] memory weights = [uint16(10_000), 11_000, 11_500, 12_000, 12_500];
+        for (uint256 i; i < weights.length; ++i) {
+            uint256 operatorId = 10 + i;
+            address owner = makeAddr(string.concat("tier-owner-", vm.toString(i)));
+            operators.setOwner(operatorId, owner);
+            registry.setWeight(operatorId, weights[i]);
+            _register(operatorId, owner);
+            assertEq(router.registrationOf(operatorId).weight, weights[i]);
+        }
+        assertEq(router.totalRegisteredWeight(), 57_000);
+    }
+
     function test_RegistrationDoesNotReceiveHistoricalRevenue() public {
         _sendRevenue(3 ether);
         _register(ALICE_OPERATOR, alice);

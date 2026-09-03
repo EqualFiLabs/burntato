@@ -14,6 +14,7 @@ import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
 import {Vm} from "forge-std/Vm.sol";
 
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
+import {BurntatoOperatorRewardsRouter} from "../../src/rewards/BurntatoOperatorRewardsRouter.sol";
 import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
@@ -58,6 +59,27 @@ contract FalseApproveFacet {
 
 contract NativeFeeReceiver {
     receive() external payable {}
+}
+
+contract IntegrationOperatorCollection {
+    address public activationRegistry;
+    bool public constant launchFinalized = true;
+    mapping(uint256 operatorId => address owner) public ownerOf;
+
+    function configure(address registry, uint256 operatorId, address owner) external {
+        activationRegistry = registry;
+        ownerOf[operatorId] = owner;
+    }
+}
+
+contract IntegrationActivationRegistry {
+    address public genesisCollection;
+    mapping(uint256 operatorId => uint16 weight) public multiplierBps;
+
+    function configure(address collection, uint256 operatorId, uint16 weight) external {
+        genesisCollection = collection;
+        multiplierBps[operatorId] = weight;
+    }
 }
 
 contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
@@ -283,6 +305,57 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(sellTreasuryAmount, sellNativeFee - sellOperatorAmount);
         assertEq(address(operatorRouter).balance - operatorBefore, sellOperatorAmount);
         assertEq(treasury.balance - treasuryBefore, sellTreasuryAmount);
+        assertEq(address(hook).balance, 0);
+    }
+
+    function test_RealSwapsFundRouterAndRegisteredOperatorClaims() public {
+        uint256 operatorId = 1;
+        IntegrationOperatorCollection operators = new IntegrationOperatorCollection();
+        IntegrationActivationRegistry registry = new IntegrationActivationRegistry();
+        operators.configure(address(registry), operatorId, alice);
+        registry.configure(address(operators), operatorId, 12_500);
+        BurntatoOperatorRewardsRouter rewards =
+            new BurntatoOperatorRewardsRouter(address(diamond), address(operators), address(registry));
+
+        vm.prank(alice);
+        rewards.register(operatorId);
+        vm.prank(authority);
+        hook.setOperatorRewards(address(rewards), 4_000);
+        _createTreasuryInventory();
+        market.launchMarket();
+        _setExternalBuys(true);
+
+        uint256 treasuryBefore = treasury.balance;
+        vm.recordLogs();
+        uint256 bought = _buy(alice, 0.0001 ether);
+        (uint256 buyNativeFee, uint256 buyOperatorAmount, uint256 buyTreasuryAmount) =
+            _feeAllocation(vm.getRecordedLogs());
+        assertGt(buyNativeFee, 0);
+        assertEq(address(rewards).balance, buyOperatorAmount);
+        assertEq(rewards.pendingRevenue(), buyOperatorAmount);
+        assertEq(treasury.balance - treasuryBefore, buyTreasuryAmount);
+
+        vm.prank(authority);
+        hook.setOperatorRewards(address(rewards), 10_000);
+        vm.prank(alice);
+        potato.approve(address(swapRouter), bought);
+        treasuryBefore = treasury.balance;
+        vm.recordLogs();
+        _sell(alice, bought / 2);
+        (uint256 sellNativeFee, uint256 sellOperatorAmount, uint256 sellTreasuryAmount) =
+            _feeAllocation(vm.getRecordedLogs());
+        assertGt(sellNativeFee, 0);
+        assertEq(sellOperatorAmount, sellNativeFee);
+        assertEq(sellTreasuryAmount, 0);
+        assertEq(treasury.balance, treasuryBefore);
+        assertEq(address(rewards).balance, buyOperatorAmount + sellOperatorAmount);
+
+        uint256 bobBefore = bob.balance;
+        vm.prank(alice);
+        assertEq(rewards.claim(operatorId, bob), buyOperatorAmount + sellOperatorAmount);
+        assertEq(bob.balance - bobBefore, buyOperatorAmount + sellOperatorAmount);
+        assertEq(address(rewards).balance, 0);
+        assertEq(rewards.totalOperatorClaimed(), buyOperatorAmount + sellOperatorAmount);
         assertEq(address(hook).balance, 0);
     }
 
