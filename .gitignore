@@ -5,4 +5,5 @@ cache/
 out/
 deployments/*
 !deployments/robinhood-chain-4663.json
+!deployments/statics-operators-robinhood-4663.json
 artifacts/

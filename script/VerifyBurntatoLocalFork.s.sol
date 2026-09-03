@@ -7,8 +7,14 @@ import {IDiamondLoupe} from "../src/interfaces/IDiamondLoupe.sol";
 import {BurntatoDeploymentVerifier} from "./BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "./DeployBurntato.s.sol";
 import {DeployBurntatoLocalFork} from "./DeployBurntatoLocalFork.s.sol";
-import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "./DeploymentTypes.sol";
+import {
+    BurntatoDeployment,
+    CanonicalV4Dependencies,
+    GenesisConfig,
+    StaticsOperatorDependencies
+} from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
+import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
 contract VerifyBurntatoLocalFork is Script {
     string internal constant OUTPUT_PATH = "artifacts/robinhood-local/deployment.json";
@@ -17,10 +23,12 @@ contract VerifyBurntatoLocalFork is Script {
         CanonicalV4Dependencies memory dependencies = (new DeployBurntatoLocalFork()).preflightDeployedLocalFork();
         DeployBurntato configLoader = new DeployBurntato();
         GenesisConfig memory config = configLoader.environmentConfig();
+        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
         BurntatoDeployment memory deployment = _readDeployment(dependencies);
         _loadFacets(deployment);
 
-        verified = (new BurntatoDeploymentVerifier()).verifyCanonical(config, deployment, dependencies);
+        verified =
+            (new BurntatoDeploymentVerifier()).verifyCanonical(config, deployment, dependencies, operatorDependencies);
         console2.log("Burntato local fork deployment verified", verified);
     }
 
@@ -34,6 +42,7 @@ contract VerifyBurntatoLocalFork is Script {
         deployment.timelock = vm.parseJsonAddress(json, ".timelock");
         deployment.hook = vm.parseJsonAddress(json, ".hook");
         deployment.hookDeployer = vm.parseJsonAddress(json, ".hookDeployer");
+        deployment.operatorRewardsRouter = vm.parseJsonAddress(json, ".operatorRewardsRouter");
         deployment.foundationInit = vm.parseJsonAddress(json, ".foundationInit");
         deployment.poolManager = dependencies.poolManager;
         deployment.positionDescriptor = dependencies.positionDescriptor;

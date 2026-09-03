@@ -3,13 +3,13 @@ set -euo pipefail
 
 : "${ROBINHOOD_MAINNET:?ROBINHOOD_MAINNET is required}"
 
-manifest_block="$(jq -er '.forkBlock' deployments/robinhood-chain-4663.json)"
-if [[ "$manifest_block" != "45234855" ]]; then
-  printf 'Committed manifest fork block is not 45234855\n' >&2
+manifest_block="$(jq -er '.finalizedBlock' deployments/statics-operators-robinhood-4663.json)"
+if [[ "$manifest_block" != "47690599" ]]; then
+  printf 'Committed Statics finalization block is not 47690599\n' >&2
   exit 1
 fi
-if [[ -n "${ROBINHOOD_FORK_BLOCK:-}" && "$ROBINHOOD_FORK_BLOCK" != "$manifest_block" ]]; then
-  printf 'ROBINHOOD_FORK_BLOCK must equal %s\n' "$manifest_block" >&2
+if [[ -n "${ROBINHOOD_OPERATOR_FORK_BLOCK:-}" && "$ROBINHOOD_OPERATOR_FORK_BLOCK" != "$manifest_block" ]]; then
+  printf 'ROBINHOOD_OPERATOR_FORK_BLOCK must equal %s\n' "$manifest_block" >&2
   exit 1
 fi
 

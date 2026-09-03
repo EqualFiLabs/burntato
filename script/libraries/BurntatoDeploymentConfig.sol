@@ -42,6 +42,7 @@ library BurntatoDeploymentConfig {
             }),
             buyback: BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1}),
             hookFeeBps: 100,
+            operatorRewardShareBps: 0,
             initialTick: DEFAULT_INITIAL_TICK,
             tickSpacing: DEFAULT_TICK_SPACING,
             tickLower: TickMath.minUsableTick(DEFAULT_TICK_SPACING),

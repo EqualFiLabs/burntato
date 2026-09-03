@@ -13,11 +13,22 @@ struct GenesisConfig {
     ProtocolConfig protocol;
     BuybackConfig buyback;
     uint16 hookFeeBps;
+    uint16 operatorRewardShareBps;
     int24 initialTick;
     int24 tickSpacing;
     int24 tickLower;
     int24 tickUpper;
     uint256 potatoSeed;
+}
+
+struct StaticsOperatorDependencies {
+    uint256 chainId;
+    uint256 finalizedBlock;
+    bytes32 finalizedBlockHash;
+    address operatorsNft;
+    bytes32 operatorsNftCodeHash;
+    address activationRegistry;
+    bytes32 activationRegistryCodeHash;
 }
 
 struct CanonicalV4Dependencies {
@@ -66,6 +77,7 @@ struct BurntatoDeployment {
     address positionManager;
     address hookDeployer;
     address hook;
+    address operatorRewardsRouter;
     address quoter;
     address stateView;
     address reservesLens;

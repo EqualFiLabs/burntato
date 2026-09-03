@@ -56,6 +56,10 @@ contract FalseApproveFacet {
     }
 }
 
+contract NativeFeeReceiver {
+    receive() external payable {}
+}
+
 contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     int24 internal constant TICK_SPACING = 60;
@@ -84,13 +88,14 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
             Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
                 | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
         );
-        bytes memory constructorArgs =
-            abi.encode(manager, authority, address(diamond), treasury, uint16(100), int24(TICK_SPACING));
+        bytes memory constructorArgs = abi.encode(
+            manager, authority, address(diamond), treasury, uint16(100), address(0), uint16(0), int24(TICK_SPACING)
+        );
         (address hookAddress, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(BurntatoSwapFeeHook).creationCode, constructorArgs);
         vm.prank(CREATE2_DEPLOYER);
         hook = new BurntatoSwapFeeHook{salt: salt}(
-            IPoolManager(address(manager)), authority, address(diamond), treasury, 100, TICK_SPACING
+            IPoolManager(address(manager)), authority, address(diamond), treasury, 100, address(0), 0, TICK_SPACING
         );
         assertEq(address(hook), hookAddress);
 
@@ -240,6 +245,47 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(positionManager.nextTokenId(), 2);
     }
 
+    function test_RealBuyAndSellSplitExistingFeeWithOperatorRouter() public {
+        NativeFeeReceiver operatorRouter = new NativeFeeReceiver();
+        vm.prank(authority);
+        hook.setOperatorRewards(address(operatorRouter), 4_000);
+        _createTreasuryInventory();
+        market.launchMarket();
+        _setExternalBuys(true);
+
+        uint256 operatorBefore = address(operatorRouter).balance;
+        uint256 treasuryBefore = treasury.balance;
+        uint256 buybackOperatorBefore = address(operatorRouter).balance;
+        vm.prank(keeper);
+        assertGt(buybacks.buyback(), 0);
+        assertEq(address(operatorRouter).balance, buybackOperatorBefore);
+
+        vm.recordLogs();
+        uint256 bought = _buy(alice, 0.0001 ether);
+        (uint256 buyNativeFee, uint256 buyOperatorAmount, uint256 buyTreasuryAmount) =
+            _feeAllocation(vm.getRecordedLogs());
+        assertGt(buyNativeFee, 0);
+        assertEq(buyOperatorAmount, buyNativeFee * 4_000 / 10_000);
+        assertEq(buyTreasuryAmount, buyNativeFee - buyOperatorAmount);
+        assertEq(address(operatorRouter).balance - operatorBefore, buyOperatorAmount);
+        assertEq(treasury.balance - treasuryBefore, buyTreasuryAmount);
+
+        vm.prank(alice);
+        potato.approve(address(swapRouter), bought);
+        operatorBefore = address(operatorRouter).balance;
+        treasuryBefore = treasury.balance;
+        vm.recordLogs();
+        _sell(alice, bought / 2);
+        (uint256 sellNativeFee, uint256 sellOperatorAmount, uint256 sellTreasuryAmount) =
+            _feeAllocation(vm.getRecordedLogs());
+        assertGt(sellNativeFee, 0);
+        assertEq(sellOperatorAmount, sellNativeFee * 4_000 / 10_000);
+        assertEq(sellTreasuryAmount, sellNativeFee - sellOperatorAmount);
+        assertEq(address(operatorRouter).balance - operatorBefore, sellOperatorAmount);
+        assertEq(treasury.balance - treasuryBefore, sellTreasuryAmount);
+        assertEq(address(hook).balance, 0);
+    }
+
     function test_ConfiguredReservesCannotBeClaimedAndStillLaunchAfterExcessClaims() public {
         _createTreasuryInventory();
         assertEq(claims.treasuryEthAvailable(), 0.005 ether);
@@ -315,6 +361,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     }
 
     function test_OnlyHookOwnerCanConfigureRevenueCapture() public {
+        NativeFeeReceiver operatorRouter = new NativeFeeReceiver();
         vm.prank(alice);
         vm.expectRevert();
         hook.setFeeAddress(alice);
@@ -324,6 +371,9 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(alice);
         vm.expectRevert();
         hook.setExternalBuysEnabled(true);
+        vm.prank(alice);
+        vm.expectRevert();
+        hook.setOperatorRewards(address(operatorRouter), 4_000);
 
         vm.prank(authority);
         vm.expectRevert(Errors.InvalidBps.selector);
@@ -340,6 +390,31 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(authority);
         vm.expectRevert(Errors.InvalidAddress.selector);
         hook.setFeeAddress(address(manager));
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidBps.selector);
+        hook.setOperatorRewards(address(operatorRouter), 10_001);
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setOperatorRewards(address(0), 1);
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setOperatorRewards(address(operatorRouter), 0);
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setOperatorRewards(alice, 1);
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setOperatorRewards(treasury, 1);
+
+        vm.prank(authority);
+        hook.setOperatorRewards(address(operatorRouter), 10_000);
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setFeeAddress(address(operatorRouter));
+        vm.prank(authority);
+        hook.setOperatorRewards(address(0), 0);
+        assertEq(hook.operatorRewardsRouter(), address(0));
+        assertEq(hook.operatorRewardShareBps(), 0);
     }
 
     function test_ConfigurationRejectsTickSpacingOutsidePoolManagerDomain() public {
@@ -744,6 +819,19 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(hook) && logs[i].topics[0] == feeTopic) {
                 (nativeFee, potatoFee) = abi.decode(logs[i].data, (uint128, uint128));
+            }
+        }
+    }
+
+    function _feeAllocation(Vm.Log[] memory logs)
+        internal
+        view
+        returns (uint256 nativeFee, uint256 operatorAmount, uint256 treasuryAmount)
+    {
+        bytes32 topic = keccak256("HookFeeAllocated(bytes32,uint128,uint128,uint128)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == address(hook) && logs[i].topics[0] == topic) {
+                return abi.decode(logs[i].data, (uint128, uint128, uint128));
             }
         }
     }

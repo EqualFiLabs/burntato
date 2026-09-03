@@ -21,9 +21,13 @@ contract BurntatoHookDeployer {
         address token,
         address feeAddress,
         uint16 feeBps,
+        address operatorRewardsRouter,
+        uint16 operatorRewardShareBps,
         int24 tickSpacing
     ) external returns (BurntatoSwapFeeHook hook) {
         if (msg.sender != authorizedDeployer) revert UnauthorizedDeployer(msg.sender);
-        hook = new BurntatoSwapFeeHook{salt: salt}(poolManager, owner, token, feeAddress, feeBps, tickSpacing);
+        hook = new BurntatoSwapFeeHook{salt: salt}(
+            poolManager, owner, token, feeAddress, feeBps, operatorRewardsRouter, operatorRewardShareBps, tickSpacing
+        );
     }
 }

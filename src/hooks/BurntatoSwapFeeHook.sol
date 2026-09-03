@@ -26,14 +26,20 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     int24 public immutable tickSpacing;
     address public feeAddress;
     uint16 public feeBps;
+    address public operatorRewardsRouter;
+    uint16 public operatorRewardShareBps;
     uint64 public deploymentBlock;
     bool public externalBuysEnabled;
 
     event FeeAddressSet(address indexed feeAddress);
     event FeeBpsSet(uint16 feeBps);
+    event OperatorRewardsSet(
+        address indexed previousRouter, address indexed newRouter, uint16 previousShareBps, uint16 newShareBps
+    );
     event ExternalBuysEnabledSet(bool enabled);
     event PoolLaunched(bytes32 indexed poolId, uint256 deploymentBlock);
     event HookFee(bytes32 indexed poolId, address indexed sender, uint128 nativeFee, uint128 potatoFee);
+    event HookFeeAllocated(bytes32 indexed poolId, uint128 nativeFee, uint128 operatorAmount, uint128 treasuryAmount);
     event Trade(bytes32 indexed poolId, address indexed sender, int128 nativeDelta, int128 potatoDelta);
 
     constructor(
@@ -42,6 +48,8 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         address token_,
         address feeAddress_,
         uint16 feeBps_,
+        address operatorRewardsRouter_,
+        uint16 operatorRewardShareBps_,
         int24 tickSpacing_
     ) BaseHook(manager) {
         if (owner_ == address(0) || token_ == address(0)) {
@@ -49,15 +57,19 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         }
         _validateFeeAddress(feeAddress_, token_, address(manager));
         if (feeBps_ > Constants.BPS) revert Errors.InvalidBps();
+        _validateOperatorRewards(operatorRewardsRouter_, operatorRewardShareBps_, feeAddress_, token_, address(manager));
         _initializeOwner(owner_);
         token = token_;
         feeAddress = feeAddress_;
         feeBps = feeBps_;
+        operatorRewardsRouter = operatorRewardsRouter_;
+        operatorRewardShareBps = operatorRewardShareBps_;
         tickSpacing = tickSpacing_;
     }
 
     function setFeeAddress(address newFeeAddress) external onlyOwner {
         _validateFeeAddress(newFeeAddress, token, address(poolManager));
+        if (newFeeAddress == operatorRewardsRouter) revert Errors.InvalidAddress();
         feeAddress = newFeeAddress;
         emit FeeAddressSet(newFeeAddress);
     }
@@ -66,6 +78,15 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         if (newFeeBps > Constants.BPS) revert Errors.InvalidBps();
         feeBps = newFeeBps;
         emit FeeBpsSet(newFeeBps);
+    }
+
+    function setOperatorRewards(address newRouter, uint16 newShareBps) external onlyOwner {
+        _validateOperatorRewards(newRouter, newShareBps, feeAddress, token, address(poolManager));
+        address previousRouter = operatorRewardsRouter;
+        uint16 previousShareBps = operatorRewardShareBps;
+        operatorRewardsRouter = newRouter;
+        operatorRewardShareBps = newShareBps;
+        emit OperatorRewardsSet(previousRouter, newRouter, previousShareBps, newShareBps);
     }
 
     function setExternalBuysEnabled(bool enabled) external onlyOwner {
@@ -173,7 +194,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         emit HookFee(PoolId.unwrap(key.toId()), sender, 0, uint128(fee));
 
         uint256 nativeReceived = _swapPotatoToNative(key, fee);
-        if (nativeReceived != 0) SafeTransferLib.forceSafeTransferETH(feeAddress, nativeReceived);
+        if (nativeReceived != 0) _allocateNativeFee(PoolId.unwrap(key.toId()), nativeReceived);
         return int128(uint128(fee));
     }
 
@@ -187,7 +208,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
 
         poolManager.take(key.currency0, address(this), fee);
         emit HookFee(PoolId.unwrap(key.toId()), sender, uint128(fee), 0);
-        SafeTransferLib.forceSafeTransferETH(feeAddress, fee);
+        _allocateNativeFee(PoolId.unwrap(key.toId()), fee);
         return int128(uint128(fee));
     }
 
@@ -227,6 +248,32 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         if (candidate == address(0) || candidate == address(this) || candidate == token_ || candidate == manager_) {
             revert Errors.InvalidAddress();
         }
+    }
+
+    function _allocateNativeFee(bytes32 poolId, uint256 nativeFee) private {
+        uint256 operatorAmount = nativeFee * operatorRewardShareBps / Constants.BPS;
+        uint256 treasuryAmount = nativeFee - operatorAmount;
+        if (operatorAmount != 0) SafeTransferLib.forceSafeTransferETH(operatorRewardsRouter, operatorAmount);
+        if (treasuryAmount != 0) SafeTransferLib.forceSafeTransferETH(feeAddress, treasuryAmount);
+        emit HookFeeAllocated(poolId, uint128(nativeFee), uint128(operatorAmount), uint128(treasuryAmount));
+    }
+
+    function _validateOperatorRewards(
+        address candidate,
+        uint16 shareBps,
+        address feeAddress_,
+        address token_,
+        address manager_
+    ) private view {
+        if (shareBps > Constants.BPS) revert Errors.InvalidBps();
+        if (candidate == address(0)) {
+            if (shareBps != 0) revert Errors.InvalidAddress();
+            return;
+        }
+        if (
+            shareBps == 0 || candidate.code.length == 0 || candidate == address(this) || candidate == token_
+                || candidate == manager_ || candidate == feeAddress_
+        ) revert Errors.InvalidAddress();
     }
 
     receive() external payable {}

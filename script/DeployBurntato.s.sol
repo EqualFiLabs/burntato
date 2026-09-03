@@ -28,6 +28,7 @@ import {RecoveryFacet} from "../src/facets/RecoveryFacet.sol";
 import {SettlementFacet} from "../src/facets/SettlementFacet.sol";
 import {TreasuryRewardsFacet} from "../src/facets/TreasuryRewardsFacet.sol";
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
+import {BurntatoOperatorRewardsRouter} from "../src/rewards/BurntatoOperatorRewardsRouter.sol";
 import {FoundationInit} from "../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../src/interfaces/IDiamondCut.sol";
 import {IBuyback} from "../src/interfaces/IBuyback.sol";
@@ -37,13 +38,19 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
-import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "./DeploymentTypes.sol";
+import {
+    BurntatoDeployment,
+    CanonicalV4Dependencies,
+    GenesisConfig,
+    StaticsOperatorDependencies
+} from "./DeploymentTypes.sol";
 import {BurntatoHookDeployer} from "./helpers/BurntatoHookDeployer.sol";
 import {LocalPermit2} from "./helpers/LocalPermit2.sol";
 import {LocalWETH9} from "./helpers/LocalWETH9.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
+import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
 contract DeployBurntato is Script {
     error InvalidGenesisConfiguration();
@@ -65,9 +72,11 @@ contract DeployBurntato is Script {
         returns (BurntatoDeployment memory deployment)
     {
         _validateConfig(config, bootstrapAuthority);
+        if (config.operatorRewardShareBps != 0) revert InvalidGenesisConfiguration();
         _deployTimelock(config, deployment);
         _deployUniswap(deployment);
-        _deployOwnedContracts(config, bootstrapAuthority, deployment);
+        StaticsOperatorDependencies memory operatorDependencies;
+        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
 
     function deployWithDependencies(
@@ -76,20 +85,52 @@ contract DeployBurntato is Script {
         CanonicalV4Dependencies memory dependencies
     ) public returns (BurntatoDeployment memory deployment) {
         _validateConfig(config, bootstrapAuthority);
+        if (config.operatorRewardShareBps != 0) revert InvalidGenesisConfiguration();
         RobinhoodDeploymentConfig.validate(dependencies);
         _populateCanonicalDependencies(dependencies, deployment);
         _deployTimelock(config, deployment);
-        _deployOwnedContracts(config, bootstrapAuthority, deployment);
+        StaticsOperatorDependencies memory operatorDependencies;
+        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
+    }
+
+    function deployWithDependencies(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        CanonicalV4Dependencies memory dependencies,
+        StaticsOperatorDependencies memory operatorDependencies
+    ) public returns (BurntatoDeployment memory deployment) {
+        _validateConfig(config, bootstrapAuthority);
+        if (config.operatorRewardShareBps == 0) revert InvalidGenesisConfiguration();
+        RobinhoodDeploymentConfig.validate(dependencies);
+        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        _populateCanonicalDependencies(dependencies, deployment);
+        _deployTimelock(config, deployment);
+        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
 
     function _deployOwnedContracts(
         GenesisConfig memory config,
         address bootstrapAuthority,
-        BurntatoDeployment memory deployment
+        BurntatoDeployment memory deployment,
+        StaticsOperatorDependencies memory operatorDependencies
     ) private {
         _deployDiamond(config, bootstrapAuthority, deployment);
+        _deployOperatorRewards(config, deployment, operatorDependencies);
         _deployHook(config, deployment);
         _configureProtocol(config, deployment);
+    }
+
+    function _deployOperatorRewards(
+        GenesisConfig memory config,
+        BurntatoDeployment memory deployment,
+        StaticsOperatorDependencies memory operatorDependencies
+    ) private {
+        if (config.operatorRewardShareBps == 0) return;
+        deployment.operatorRewardsRouter = address(
+            new BurntatoOperatorRewardsRouter(
+                deployment.diamond, operatorDependencies.operatorsNft, operatorDependencies.activationRegistry
+            )
+        );
     }
 
     function _deployTimelock(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
@@ -170,6 +211,8 @@ contract DeployBurntato is Script {
             deployment.diamond,
             config.treasuryRecipient,
             config.hookFeeBps,
+            deployment.operatorRewardsRouter,
+            config.operatorRewardShareBps,
             config.tickSpacing
         );
         (address expectedHook, bytes32 salt) = HookMiner.find(
@@ -184,6 +227,8 @@ contract DeployBurntato is Script {
                     deployment.diamond,
                     config.treasuryRecipient,
                     config.hookFeeBps,
+                    deployment.operatorRewardsRouter,
+                    config.operatorRewardShareBps,
                     config.tickSpacing
                 )
         );
@@ -267,6 +312,9 @@ contract DeployBurntato is Script {
         config.buyback.delayBlocks = vm.envOr("BURNTATO_BUYBACK_DELAY_BLOCKS", config.buyback.delayBlocks);
         config.hookFeeBps =
             BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
+        config.operatorRewardShareBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_REWARD_SHARE_BPS", uint256(config.operatorRewardShareBps))
+        );
         config.initialTick =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
         config.tickSpacing =
@@ -349,7 +397,8 @@ contract DeployBurntato is Script {
                 || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
                 || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
                 || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
-                || config.hookFeeBps > Constants.BPS || config.buyback.callerRewardBps > Constants.BPS
+                || config.hookFeeBps > Constants.BPS || config.operatorRewardShareBps > Constants.BPS
+                || config.buyback.callerRewardBps > Constants.BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
                     != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
@@ -375,6 +424,9 @@ contract DeployBurntato is Script {
         if (deployment.universalRouter != address(0)) console2.log("UniversalRouter", deployment.universalRouter);
         console2.log("BurntatoHookDeployer", deployment.hookDeployer);
         console2.log("BurntatoSwapFeeHook", deployment.hook);
+        if (deployment.operatorRewardsRouter != address(0)) {
+            console2.log("BurntatoOperatorRewardsRouter", deployment.operatorRewardsRouter);
+        }
         console2.log("DiamondCutFacet", deployment.diamondCutFacet);
         console2.log("DiamondLoupeFacet", deployment.diamondLoupeFacet);
         console2.log("GovernanceFacet", deployment.governanceFacet);

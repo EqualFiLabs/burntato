@@ -19,6 +19,7 @@ contract VerifyBurntato is Script {
         deployment.positionManager = vm.envAddress("BURNTATO_POSITION_MANAGER");
         deployment.permit2 = vm.envAddress("BURNTATO_PERMIT2");
         deployment.hook = vm.envAddress("BURNTATO_HOOK");
+        deployment.operatorRewardsRouter = vm.envOr("BURNTATO_OPERATOR_REWARDS_ROUTER", address(0));
 
         IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
         deployment.diamondCutFacet = loupe.facetAddress(BurntatoSelectors.diamondCut()[0]);
@@ -85,6 +86,9 @@ contract VerifyBurntato is Script {
         );
         config.hookFeeBps =
             BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
+        config.operatorRewardShareBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_REWARD_SHARE_BPS", uint256(config.operatorRewardShareBps))
+        );
         config.initialTick =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
         config.tickSpacing =

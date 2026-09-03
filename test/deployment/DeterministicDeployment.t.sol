@@ -13,7 +13,13 @@ import {DeployBurntatoLocalFork} from "../../script/DeployBurntatoLocalFork.s.so
 import {BurntatoHookDeployer} from "../../script/helpers/BurntatoHookDeployer.sol";
 import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
 import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
-import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "../../script/DeploymentTypes.sol";
+import {StaticsOperatorDeploymentConfig} from "../../script/libraries/StaticsOperatorDeploymentConfig.sol";
+import {
+    BurntatoDeployment,
+    CanonicalV4Dependencies,
+    GenesisConfig,
+    StaticsOperatorDependencies
+} from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
@@ -21,6 +27,7 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
+import {BurntatoOperatorRewardsRouter} from "../../src/rewards/BurntatoOperatorRewardsRouter.sol";
 import {Round} from "../../src/shared/Types.sol";
 
 interface IPoolManagerAuthority {
@@ -72,6 +79,12 @@ contract DeterministicDeploymentTest is Test {
         vm.rollFork(forkId, 45_234_855);
     }
 
+    function _selectStaticsFork() internal {
+        string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
+        if (bytes(rpc).length == 0) vm.skip(true, "ROBINHOOD_MAINNET is not configured");
+        vm.createSelectFork(rpc, StaticsOperatorDeploymentConfig.load().finalizedBlock);
+    }
+
     function test_CanonicalDependenciesDeployOnlyOwnedContractsAndVerify() public {
         _selectRobinhoodFork();
         DeployBurntato canonicalDeployScript = new DeployBurntato();
@@ -102,6 +115,35 @@ contract DeterministicDeploymentTest is Test {
         canonicalDeployScript.deployWithDependencies(canonicalConfig, address(canonicalDeployScript), dependencies);
 
         assertEq(vm.getNonce(address(canonicalDeployScript)), deployScriptNonceBefore);
+    }
+
+    function test_CanonicalOperatorDependenciesDeployRouterAndVerify() public {
+        _selectStaticsFork();
+        DeployBurntato canonicalDeployScript = new DeployBurntato();
+        BurntatoDeploymentVerifier canonicalVerifier = new BurntatoDeploymentVerifier();
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
+        GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
+        canonicalConfig.operatorRewardShareBps = 4_000;
+
+        BurntatoDeployment memory canonicalDeployment = canonicalDeployScript.deployWithDependencies(
+            canonicalConfig, address(canonicalDeployScript), dependencies, operatorDependencies
+        );
+        assertTrue(
+            canonicalVerifier.verifyCanonical(canonicalConfig, canonicalDeployment, dependencies, operatorDependencies)
+        );
+        BurntatoOperatorRewardsRouter router =
+            BurntatoOperatorRewardsRouter(payable(canonicalDeployment.operatorRewardsRouter));
+        assertEq(router.burntato(), canonicalDeployment.diamond);
+        assertEq(address(router.operators()), operatorDependencies.operatorsNft);
+        assertEq(address(router.activationRegistry()), operatorDependencies.activationRegistry);
+    }
+
+    function test_LocalDeploymentRejectsOperatorShareWithoutCanonicalDependencies() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.operatorRewardShareBps = 1;
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
     }
 
     function test_LocalForkEntrypointRejectsWrongChainBeforeRpcOrPrivateKey() public {
@@ -177,7 +219,9 @@ contract DeterministicDeploymentTest is Test {
         BurntatoHookDeployer hookDeployer = BurntatoHookDeployer(deployment.hookDeployer);
         vm.prank(buyer);
         vm.expectRevert(abi.encodeWithSelector(BurntatoHookDeployer.UnauthorizedDeployer.selector, buyer));
-        hookDeployer.deploy(bytes32(0), IPoolManager(address(0)), address(0), address(0), address(0), 0, 0);
+        hookDeployer.deploy(
+            bytes32(0), IPoolManager(address(0)), address(0), address(0), address(0), 0, address(0), 0, 0
+        );
     }
 
     function test_EnvironmentNarrowingHelpersRejectTruncation() public {

@@ -289,12 +289,12 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
                 | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
         );
         bytes memory constructorArgs =
-            abi.encode(manager, authority, address(diamond), treasury, uint16(100), int24(60));
+            abi.encode(manager, authority, address(diamond), treasury, uint16(100), address(0), uint16(0), int24(60));
         (address expected, bytes32 salt) =
             HookMiner.find(CREATE2_DEPLOYER, flags, type(BurntatoSwapFeeHook).creationCode, constructorArgs);
         vm.prank(CREATE2_DEPLOYER);
         hook = new BurntatoSwapFeeHook{salt: salt}(
-            IPoolManager(address(manager)), authority, address(diamond), treasury, 100, 60
+            IPoolManager(address(manager)), authority, address(diamond), treasury, 100, address(0), 0, 60
         );
         assertEq(address(hook), expected);
     }
