@@ -10,6 +10,10 @@ import {Round} from "../shared/Types.sol";
 
 contract GameFacet is IGame {
     function buyPotato() external payable {
+        LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
+        if (rs.status == 2) revert Errors.Reentrancy();
+        rs.status = 2;
+
         if (LibProtocolStorage.governance().purchasesPaused) revert Errors.PurchasesPaused();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = _currentOrStartRound(gs);
@@ -21,7 +25,8 @@ contract GameFacet is IGame {
         uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
         uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
         uint256 buybackShare = LibMath.mulBpsDown(msg.value, round.config.buybackBps);
-        uint256 treasuryShare = msg.value - winnerShare - recoveryShare - buybackShare;
+        uint256 operatorShare = LibMath.mulBpsDown(msg.value, round.config.operatorPurchaseBps);
+        uint256 treasuryShare = msg.value - winnerShare - recoveryShare - buybackShare - operatorShare;
         round.winnerPool += winnerShare;
         round.recoveryPool += recoveryShare;
         LibProtocolStorage.treasury().purchaseEth += treasuryShare;
@@ -50,6 +55,15 @@ contract GameFacet is IGame {
         emit PotatoPurchased(
             round.roundId, msg.sender, msg.value, round.purchaseIndex, round.holderMaxReward, round.deadline
         );
+
+        if (operatorShare != 0) {
+            address router = LibProtocolStorage.operatorRevenue().router;
+            if (router == address(0)) revert Errors.InvalidProtocolConfig();
+            emit OperatorPurchaseRevenueQueued(round.roundId, router, operatorShare);
+            (bool success,) = router.call{value: operatorShare}("");
+            if (!success) revert Errors.OperatorRevenueTransferFailed(router, operatorShare);
+        }
+        rs.status = 1;
     }
 
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {
@@ -82,6 +96,10 @@ contract GameFacet is IGame {
         treasuryEarned = LibMath.linearEarned(
             round.holderTreasuryMaxReward, block.timestamp - round.holderSince, round.config.emissionVestingDuration
         );
+    }
+
+    function purchaseOperatorRewardsRouter() external view returns (address) {
+        return LibProtocolStorage.operatorRevenue().router;
     }
 
     function _currentOrStartRound(LibProtocolStorage.GameStorage storage gs) private returns (Round storage round) {

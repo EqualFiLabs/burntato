@@ -31,6 +31,7 @@ struct ProtocolConfig {
     uint16 recoveryBurnBps;
     uint16 recoveryTreasuryBps;
     uint16 buybackBps;
+    uint16 operatorPurchaseBps;
     uint256 roundTimeoutDecay;
     uint256 minimumRoundTimeout;
 }
@@ -48,6 +49,7 @@ struct RoundConfig {
     uint16 recoveryBurnBps;
     uint16 recoveryTreasuryBps;
     uint16 buybackBps;
+    uint16 operatorPurchaseBps;
     uint256 roundTimeoutDecay;
     uint256 minimumRoundTimeout;
 }

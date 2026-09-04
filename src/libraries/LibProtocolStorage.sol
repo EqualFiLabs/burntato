@@ -13,6 +13,7 @@ library LibProtocolStorage {
     bytes32 internal constant BUYBACK_SLOT = keccak256("burntato.storage.buyback.v1");
     bytes32 internal constant REENTRANCY_SLOT = keccak256("burntato.storage.reentrancy.v1");
     bytes32 internal constant TREASURY_REWARDS_SLOT = keccak256("burntato.storage.treasury-rewards.v1");
+    bytes32 internal constant OPERATOR_REVENUE_SLOT = keccak256("burntato.storage.operator-revenue.v1");
 
     bytes32 internal constant POOL_MANAGER_ALLOWANCE_SLOT = keccak256("burntato.transient.pool-manager-allowance.v1");
     bytes32 internal constant PROTOCOL_MOVEMENT_SLOT = keccak256("burntato.transient.protocol-movement.v1");
@@ -37,6 +38,7 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) totalCommitments;
         mapping(uint256 => mapping(address => bool)) claimed;
         mapping(uint256 => uint256) recoveryPaid;
+        mapping(uint256 => uint256) claimedCommitments;
     }
 
     struct TreasuryStorage {
@@ -86,6 +88,10 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) perRoundDecrease;
         mapping(uint256 => uint256) firstRoundRemainder;
         mapping(uint256 => RewardSchedule) schedules;
+    }
+
+    struct OperatorRevenueStorage {
+        address router;
     }
 
     function game() internal pure returns (GameStorage storage s) {
@@ -146,6 +152,13 @@ library LibProtocolStorage {
 
     function treasuryRewards() internal pure returns (TreasuryRewardsStorage storage s) {
         bytes32 slot = TREASURY_REWARDS_SLOT;
+        assembly ("memory-safe") {
+            s.slot := slot
+        }
+    }
+
+    function operatorRevenue() internal pure returns (OperatorRevenueStorage storage s) {
+        bytes32 slot = OPERATOR_REVENUE_SLOT;
         assembly ("memory-safe") {
             s.slot := slot
         }

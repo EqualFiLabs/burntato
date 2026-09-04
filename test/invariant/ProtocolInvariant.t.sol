@@ -38,6 +38,7 @@ contract ProtocolHandler is Test {
     uint256 public forcedNative;
     uint256 public selfBurned;
     mapping(uint256 => uint256) public recoveryPaid;
+    mapping(uint256 => uint256) public recoveryClaimedCommitments;
     bool public transferBypass;
     bool public authorityBypass;
     bool public remainingIncreased;
@@ -132,10 +133,12 @@ contract ProtocolHandler is Test {
         if (current <= 1) return;
         uint256 roundId = bound(rawRound, 1, current - 1);
         address actor = actors[actorSeed % actors.length];
+        uint256 commitment = recovery.recoveryCommitment(roundId, actor);
         vm.prank(actor);
         try claims.claimRecovery(roundId, actor) returns (uint256 amount) {
             nativeOut += amount;
             recoveryPaid[roundId] += amount;
+            recoveryClaimedCommitments[roundId] += commitment;
         } catch {}
     }
 
@@ -261,7 +264,14 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         IGame game = IGame(address(diamond));
         uint256 current = game.currentRoundId();
         for (uint256 roundId = 1; roundId < current; ++roundId) {
-            assertLe(handler.recoveryPaid(roundId), game.getRound(roundId).recoveryPool);
+            Round memory round = game.getRound(roundId);
+            uint256 paid = handler.recoveryPaid(roundId);
+            uint256 claimedCommitments = handler.recoveryClaimedCommitments(roundId);
+            assertLe(paid, round.recoveryPool);
+            assertLe(claimedCommitments, round.totalCommitted);
+            if (round.settled && round.totalCommitted != 0 && claimedCommitments == round.totalCommitted) {
+                assertEq(paid, round.recoveryPool);
+            }
         }
     }
 

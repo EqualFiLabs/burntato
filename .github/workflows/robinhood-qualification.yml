@@ -1,0 +1,31 @@
+name: Burntato CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: burntato-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local:
+    name: Local release categories
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: 1.7.1
+      - run: forge test --match-path 'test/unit/*.t.sol' -j 1
+      - run: forge test --match-path 'test/integration/*.t.sol' -j 1
+      - run: forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1
+      - run: forge test --match-path 'test/invariant/*.t.sol' -j 1
+      - run: forge test --match-path 'test/deployment/*.t.sol' -j 1

@@ -58,16 +58,18 @@ selector-freeze, and one-time authority-lock APIs do not exist.
 ## Independently governed market components
 
 The timelock owns both the canonical `BurntatoSwapFeeHook` and the Uniswap v4
-PoolManager at genesis. Hook ownership controls `feeAddress`, `feeBps`, and the
-repeatable external-buy gate.
+PoolManager at genesis. Hook ownership controls `feeAddress`, `feeBps`, the
+atomic Operator rewards router/share pair, and the repeatable external-buy gate.
 PoolManager ownership retains the native v4 administrative surface, including
 the protocol-fee controller. Diamond finalization does not affect either owner.
 
 The PoolKey, token-only launch range, and reserved POTATO allocation may be
 corrected before launch. Once the pool launches, the PoolKey, PoolManager, hook,
 range, allocation, and locked LP are structurally fixed for that market.
-Post-launch fee recipient and hook fee
-administration remain available through hook ownership.
+Post-launch fee recipient, hook fee, and Operator allocation administration
+remain available through hook ownership. Rotating away from a router affects
+future fees only; its existing pull claims remain available because the router
+has no administrator or sweep function.
 Diamond authority may also change buyback cap, caller reward, and block delay
 before or after launch and finalization. Setting the cap to zero disables
 execution without changing accrued reserve accounting.
@@ -85,7 +87,8 @@ For a deployment, verify:
 - the timelock delay and roles equal deployment configuration;
 - `guardian()` and both pause bits match intended operations state;
 - the hook and PoolManager owners are the intended timelock;
-- `feeAddress()` and `feeBps()` match Treasury policy;
+- `feeAddress()`, `feeBps()`, `operatorRewardsRouter()`, and
+  `operatorRewardShareBps()` match Treasury policy;
 - `externalBuysEnabled()` matches current launch policy;
 - buyback split, cap, caller reward, delay, reserve, and last execution block
   match Treasury policy;

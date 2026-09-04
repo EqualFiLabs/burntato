@@ -1,5 +1,67 @@
 # Release qualification evidence
 
+## Statics Operator rewards router candidate
+
+Date: September 3, 2026
+
+Source candidate: `02027c9` on `feat/operator-rewards-router`, stacked on
+`test/robinhood-fork-qualification` at `597d337`.
+
+The candidate adds a standalone immutable router that reads the finalized
+Statics Operators NFT and Activation Registry without changing Statics. Owners
+opt in by token ID. Native hook revenue accrues over registered activation
+weight through a full-precision cumulative index, while registration and weight
+increases apply prospectively.
+
+An observed owner change or activation-weight decrease invalidates the
+registration and redistributes its entire unpaid whole and fractional
+entitlement over the remaining registered weight. If there is no remaining
+weight, or revenue arrives before any registration, that value becomes
+claimable by Burntato's current Treasury recipient. A new owner must register
+explicitly. Transfer away and back, followed by restoration of the exact stored
+tier before any router read, remains an explicit lazy-observation boundary.
+
+The existing bilateral hook fee is unchanged. A separately governed share
+splits each realized native fee between the rewards router and Treasury, with
+all division dust assigned to Treasury. Buyback-internal swaps remain fee-free.
+Enabled Robinhood deployments validate committed V4 and Statics manifests,
+runtime code hashes, reciprocal Statics bindings, and exact router immutables.
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Build | `forge build` | Passed; reviewed lint warnings only |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 54 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 54 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 1,000 runs each |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 13 properties, 166,400 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 18 passed, 3 archive-RPC skips |
+| Rewards security fuzz | `FOUNDRY_PROFILE=security forge test --match-path test/unit/OperatorRewardsRouter.t.sol -j 1` | 15 passed; reward conservation ran 5,000 cases |
+| Rewards security invariant | `FOUNDRY_PROFILE=security forge test --match-path test/invariant/OperatorRewardsInvariant.t.sol -j 1` | 3 properties, 98,304 calls, zero handler reverts |
+
+Focused flows cover every supported activation tier, prospective registration
+and activation, permissionless synchronization, transfer forfeiture,
+redistribution and Treasury fallback, fractional-wei conservation, forced ETH,
+reentrant and rejecting claim receivers, Treasury rotation, and a 100,000-gas
+hook payment. A real local PoolManager lifecycle routes buy and sell fees through
+the production router, exercises a 40% split and the 100% boundary, and completes
+an owner-authorized claim.
+
+The committed code received a changed-scope review using general Solidity,
+precision/math, Uniswap V4 and AMM, Diamond/proxy, ERC-721, denial-of-service,
+access-control, chain-specific, and low-level/assembly checklists. One
+Low-severity qualification defect was remediated in `02027c9`: generic verifier
+paths could accept Operator-enabled configuration without proving the pinned
+Statics dependencies. Enabled verification now requires the canonical V4 plus
+Statics path. No unresolved Critical, High, Medium, or Low finding remains in
+the reviewed scope.
+
+`OperatorRewardsRobinhoodFork.t.sol` skipped because `ROBINHOOD_MAINNET` was not
+configured. Its strict mode failed as intended with
+`ROBINHOOD_MAINNET is required`. Therefore this evidence proves local
+compilation, repository-owned execution, and internal changed-scope review. It
+does not prove the pinned historical fork, a deployed network, production
+configuration, remote CI, or an independent third-party audit.
+
 ## Single-sided genesis market candidate
 
 Date: August 17, 2026
@@ -263,3 +325,73 @@ and changing the tuple-based configuration selector is not an in-place upgrade
 or migration path for a pre-change deployed Diamond. This is local Foundry and
 internal changed-scope audit evidence; it is not fork, testnet, live-network,
 remote-CI, or independent third-party proof.
+
+## Robinhood mainnet fork qualification
+
+Date: August 26, 2026
+
+Candidate before operational documentation: `a42ce1f8ae103952f3bfce76a7ecedf4ddd1c1b8`.
+The committed trust root pins chain 4663 block `45234855` with hash
+`0xd65b81057261cc49ef60573d9f500ec9563257d673e10f1ff8d3d7c6ce33670d`.
+Official Uniswap deployment documentation identified the eight v4 contracts;
+Robinhood documentation identified canonical WETH. The pinned fork validated
+all nine runtime hashes and every exposed manager/Permit2/descriptor/WETH
+binding.
+
+| Scope | Command or method | Result |
+| --- | --- | --- |
+| Optional gate | `env -u ROBINHOOD_MAINNET -u REQUIRE_ROBINHOOD_FORK forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | One setup skip, successful exit |
+| Strict missing-RPC gate | `env -u ROBINHOOD_MAINNET REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | Failed with `Robinhood fork required` |
+| Strict pinned fork | `ROBINHOOD_FORK_BLOCK=45234855 REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the private archive RPC | 2 passed |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 39 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 52 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 8,000 runs |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 10 properties, 128,000 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` with the private archive RPC | 18 passed |
+| Persistent fork | `scripts/start-robinhood-fork.sh`, guarded `DeployBurntatoLocalFork`, and `VerifyBurntatoLocalFork` | Broadcast succeeded; verifier returned true |
+| Frontend artifact | `jq -e '.chainId == 4663 and .forkBlock == 45234855 and (.diamond | length == 42) and (.hook | length == 42)' artifacts/robinhood-local/deployment.json` | `true` |
+| EIP-1153 boundary | Hook-impersonated authorization transaction followed by a separate `transientPoolManagerAllowance()` call | Returned `0` |
+
+The fork lifecycle deployed a fresh Burntato without mutating canonical
+infrastructure; verified Diamond selectors, governance, hook permissions and
+ownership; exercised diminishing game rounds, unequal Recovery commitments and
+exact remainder payout in both orders, Treasury reward scheduling/cancellation,
+single-sided PositionManager launch, closed-gate buyback, a canonical
+Permit2-backed sell, timelock buy enablement, a Universal Router buy, and a
+second signed sell. Quoter-derived nonzero minimums, direct bilateral Treasury
+fees, router-indexed hook events, consumed Permit2 allowances, and zero POTATO
+transient allowance were observed.
+
+This is reproducible pinned-fork and local-Anvil evidence, not a Robinhood
+public-network deployment. Archive-RPC qualification remains an explicitly
+executed local release gate and is intentionally excluded from CI. Pull-request
+CI runs only the secret-free local categories.
+
+The committed candidate `df43213` received parallel checklist review across
+
+Recovery precision, general deployment safety, Diamond/proxy storage, AMM and
+router integration, Permit2 signatures/ERC-20 restrictions, Robinhood
+chain/assembly assumptions, governance/access control, and operational DoS.
+Confirmed release-scope findings were remediated before final qualification:
+
+- canonical dependency structs are now byte-for-byte bound to the committed
+  manifest before code/binding validation;
+- the broadcast entrypoint requires the exact pinned block, while the
+  post-broadcast verifier separately proves the pinned block hash through Anvil
+  RPC after deployment transactions advance the node;
+- artifact persistence creates its narrowly permitted parent directory;
+- verification reloads the same documented `BURNTATO_*` overrides as deploy;
+- local deployment tests skip RPC-dependent cases so the local CI job remains
+  self-contained;
+- the fork suite asserts live liquidity, exact buyback event accounting, sell
+  input/fee/price direction, router-indexed `Trade` events, and residual state;
+- Permit2 sells use the Router allow-revert permit command so a copied permit
+  submitted first does not block the subsequent exact-allowance swap; and
+- pull-request CI runs only secret-free local categories and never receives the
+  archive RPC.
+
+The existing permissionless buyback's lack of quote/TWAP/minimum output remains
+an explicitly accepted FWA-compatible product boundary already documented
+above. Mutable GitHub Action major tags remain the repository-standard workflow
+choice; read-only repository permissions limit their access, but this is not
+equivalent to full-SHA action pinning.

@@ -13,11 +13,11 @@ minimumRoundTimeout
 roundEmissionBudget
 emissionStepBps
 emissionVestingDuration
-winnerBps / recoveryBps / treasuryBps / buybackBps
+winnerBps / recoveryBps / treasuryBps / buybackBps / operatorPurchaseBps
 recoveryBurnBps / recoveryTreasuryBps
 ```
 
-The four purchase shares must sum to 10,000 BPS and the two Recovery shares
+The five purchase shares must sum to 10,000 BPS and the two Recovery shares
 must sum to 10,000 BPS. Every individual BPS value is bounded by 10,000.
 Starting price, round timeout, minimum round timeout, and emission vesting
 duration must be nonzero. Minimum round timeout cannot exceed the initial round
@@ -44,9 +44,10 @@ The local genesis defaults are:
 | Round emission budget | 100,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 120 seconds |
-| Winner / Recovery / Treasury / buyback split | 25% / 40% / 25% / 10% |
+| Winner / Recovery / Treasury / buyback / Operator split | 25% / 40% / 25% / 10% / 0% |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
+| Operator share of hook fee | Disabled; required for Robinhood deployment |
 | Maximum buyback slice | 2 ETH |
 | Buyback caller reward | 0.5% |
 | Buyback delay | 1 block |
@@ -61,7 +62,8 @@ resets the deadline, and calculates the next price:
 winnerShare   = floor(price * winnerBps / 10_000)
 recoveryShare = floor(price * recoveryBps / 10_000)
 buybackShare  = floor(price * buybackBps / 10_000)
-treasuryShare = price - winnerShare - recoveryShare - buybackShare
+operatorShare = floor(price * operatorPurchaseBps / 10_000)
+treasuryShare = price - winnerShare - recoveryShare - buybackShare - operatorShare
 
 priorPurchaseCount = purchaseIndex
 maximumReduction = roundTimeout - minimumRoundTimeout
@@ -80,7 +82,7 @@ deadline or elapsed time. Every successful purchase counts, including multiple
 purchases at one timestamp. Failed transactions do not count, and a new round
 starts again with the initial timeout.
 
-The Treasury receives deterministic split dust so the four allocations always
+The Treasury receives deterministic split dust so the five allocations always
 equal the purchase exactly. Buyback ETH is held in a dedicated reserve and is
 not Winner, Recovery, Treasury-claim, or launch-seed accounting. Purchase count
 and price progression do not consume POTATO emission. Purchase count also
@@ -139,9 +141,15 @@ treasuryPotato = floor(totalCommitted * recoveryTreasuryBps / 10_000)
 burnedPotato   = totalCommitted - treasuryPotato
 ```
 
-The burn-as-remainder rule consumes every committed base unit exactly once.
-Recovery ETH is claimable pro rata. If the target round has zero commitments,
-its Recovery ETH rolls into the next round; unused POTATO emission never does.
+The burn-as-remainder rule consumes every committed POTATO base unit exactly
+once. Recovery ETH claims are state-dependent. Each ordinary claimant receives
+`floor(recoveryPool * commitment / totalCommitted)`. The claimant whose weight
+completes `totalCommitted` receives the exact remaining
+`recoveryPool - recoveryPaid`, assigning all accumulated division dust to the
+final outstanding commitment. A valid ordinary claim may therefore pay zero;
+it still consumes its full weight so the eventual final claimant can close the
+pool exactly. If the target round has zero commitments, its Recovery ETH rolls
+into the next round; unused POTATO emission never does.
 
 ## Treasury and canonical market
 
@@ -158,16 +166,37 @@ Buybacks subsequently supply ETH-side demand while external buys remain closed;
 POTATO holders can sell into that liquidity immediately after ETH has entered
 the pool.
 
-The hook's governed `feeBps` applies bilaterally:
+The hook's governed `feeBps` applies bilaterally. Its separately governed
+`operatorRewardShareBps` splits that existing fee without increasing it:
+
+```text
+operatorAmount = floor(realizedNativeFee * operatorRewardShareBps / 10_000)
+treasuryAmount = realizedNativeFee - operatorAmount
+```
 
 - buys retain the configured fraction of gross POTATO output, sell it once to
-  ETH without recursively charging the internal conversion, and send all ETH
-  directly to `feeAddress`;
-- sells retain the configured fraction of gross ETH output and send it directly
-  to `feeAddress`.
+  ETH without recursively charging the internal conversion, and split the
+  realized ETH; and
+- sells retain the configured fraction of gross ETH output and split that ETH
+  identically.
 
 Hook revenue never enters the Diamond, is not launch reserve accounting, and is
-not auto-compounded. The default fee is 1%, while 0% through 100% are valid.
+not auto-compounded. The Treasury remainder, including split dust, goes to
+`feeAddress`; the Operator portion goes to the standalone rewards router. The
+default fee is 1%, while 0% through 100% are valid.
+
+The Robinhood launch profile uses a 25/30/20/10/15 purchase split for Winner,
+Recovery, nominal Treasury, buyback, and Operators. It also routes 40% of the
+existing 1% hook fee to Operators, equal to 0.4% of swap volume; Treasury
+receives the other 0.6% of volume. Both sources enter the same router.
+
+Registered Statics Operators share router revenue by their stored activation
+multiplier. Registration and higher-tier synchronization are prospective.
+Ownership changes or a lower observed multiplier invalidate the registration;
+its entire unpaid whole and fractional entitlement is redistributed over the
+remaining registered weight. With no remaining weight, or when revenue arrives
+with no registrations, the amount is claimable by Burntato's current Treasury
+recipient. A new owner must register explicitly.
 
 ## Treasury buybacks and external-buy gate
 

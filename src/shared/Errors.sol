@@ -43,6 +43,7 @@ library Errors {
     error PoolManagerAllowanceExceeded(uint256 available, uint256 required);
     error PurchasesPaused();
     error Reentrancy();
+    error OperatorRevenueTransferFailed(address router, uint256 amount);
     error RoundAlreadySettled();
     error RoundExpired();
     error RoundNotExpired();

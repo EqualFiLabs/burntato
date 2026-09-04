@@ -1,0 +1,92 @@
+{
+  "schemaVersion": 1,
+  "network": "Robinhood Chain Testnet",
+  "chainId": 46630,
+  "status": "live",
+  "source": {
+    "burntatoCommit": "07688de3193492aca399c8bbadc9321162e5f726",
+    "burntatoBaseCommit": "eede68f33d568998728a6a023459ae1c1749991d",
+    "staticsGenesisSourceCommit": "43018f109006aa2c2eef2808adc2aa74dfc9a6d4",
+    "staticsFaucetCommit": "b7379804f72522500d603e1ee414dec16af4b44c"
+  },
+  "roles": {
+    "deployer": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "proposer": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "guardian": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "treasury": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "rewardAllocator": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316"
+  },
+  "staticsGenesis": {
+    "epochEnd": 1789740317,
+    "statics": "0xcDe1F22F70DB6C42c7C0050e6F3B53d03a2006eD",
+    "poolId": "0xf31e4b5ca452b221f9fb5f3aff4b1b0c178e37cf179db73fe521ef59a55ae625",
+    "feeReceiver": "0x89805F4094e8f8326D6ce7c3715dA7331C3ce762",
+    "treasuryVesting": "0x7a96A1F6c28212aa2d6b3aee48956DbD7ebc0A69",
+    "activationRegistry": "0xcE4D413915B4C6dE7DfD486d233596Da35c5cFbD",
+    "genesis": "0x8BB2E39abAE7346293Ff084fd4D104b064BEbC71",
+    "genesisVault": "0xa5Cb1f90C70310Af1E5466DdFBB57f3F2353Ef58",
+    "genesisDistributor": "0xfE07863397a331b35B9D1fB5Ea14130eB870bA06",
+    "genesisRenderer": "0x2c2759f1bEB6f521C71343FD800d34cbC54aF9eD",
+    "avatarSVG": "0x2cC0Fb94aB1b1E4B8adB4bDea62122Ff5F2636e0",
+    "faucet": "0xd2e561B46a2de6713F53d954C0415447100d2955",
+    "faucetClaimAmount": "200000000000000000000000",
+    "faucetCooldownSeconds": 86400
+  },
+  "burntato": {
+    "diamond": "0x1FA9a3c895e802670b35a9d577D42d4dE20e4818",
+    "timelock": "0xCE71F6339F52016a90c0FD90e0617039c5AD47A1",
+    "hook": "0x5b7a45802d5a6076b510D2d9D9EC175a19EE2444",
+    "hookDeployer": "0x128bd3e4deFb4152225Dc16c0DF465474dc6D9eF",
+    "operatorRewardsRouter": "0x09ac7A514db0bBf0B2E3630ace9C30b17393E24D",
+    "diamondCutFacet": "0xaBD27Be5b58E35bC95B5EBAa6484244501ABaBf5",
+    "diamondLoupeFacet": "0xb0E14F8Cdd351e752721d63177212D9d36425C28",
+    "governanceFacet": "0x9a3d5Db35FEB415b531a55b2F4d21187Fbc8Ec21",
+    "marketFacet": "0x8114dF3C2Dcb5edfa0e2992CE2425e65B406E9FD",
+    "buybackFacet": "0x2b441a9D61417d3A8643fa2Ea77F618f9A03C1Bc",
+    "potatoTokenFacet": "0xD9763F55438455fd90ee221909eD1920036Dd806",
+    "gameFacet": "0xefeD99230427B8D90289b3Da563877A0a53Fc8A0",
+    "recoveryFacet": "0x583C5a2955895019B4bA65a007aa8D9ACbb7F355",
+    "settlementFacet": "0x1c1615C0b4fF2A7Eff1e9BE9ABBf44b82eEdC857",
+    "claimsFacet": "0x599bB26d1f97a81D61886bBac8a6d464d6f9b997",
+    "treasuryRewardsFacet": "0xC5867e736C0bB1fEFD6c70B09E97a995065D1deB",
+    "foundationInit": "0x0267D2E8347f23DAf0eDc1200D589581bC713a30",
+    "poolId": "0xd0bb2fb1266e97d81cf260a1b4d12d21eee323dd0189265483baf9b8987fd91b",
+    "lockedLiquidity": "1000400500818288116093059",
+    "externalBuysEnabled": true
+  },
+  "economics": {
+    "purchaseBps": {
+      "winner": 2500,
+      "recovery": 3000,
+      "treasury": 2000,
+      "buyback": 1000,
+      "operators": 1500
+    },
+    "hookFeeBps": 100,
+    "operatorShareOfHookFeeBps": 4000,
+    "timelockDelaySeconds": 120
+  },
+  "runtimeCodeHashes": {
+    "diamond": "0x08078332fcfc2680de45d406fe082dcbe5c11e2f23fa0a6798726756ff1b2be6",
+    "timelock": "0x67619a759b99cb677f29a2fc40a1251e78089b5b05d089a97de6cd95d7eee514",
+    "hook": "0xc49628039539be6fe931912065a60a44621614824628e4977d276aa5fedba6a0",
+    "operatorRewardsRouter": "0xb98c5ad1799a144721360730a5e41aaa0a1aac271215c67d2de746a6dd0b2a46"
+  },
+  "transactions": {
+    "staticsGenesisFinalization": "0x56598f22d6dcbfecb45ccdec561c8abdef72aac4e7f39f0e03d97ea0b3b954bf",
+    "faucetDeployment": "0xa5accdcfa86f549a918da7f2b1709126dd0a0ff6a55278ebb468b60c4b2cb60c",
+    "faucetFunding": "0x83111b8ffac0a92f15bb080a6595b315a346f832728640f7d8c569a45091d4e9",
+    "burntatoDiamondDeployment": "0x09c02882dd045c2bb7bbe1a6440a8b53aa347b2e452954fdea14167ec96bee9d",
+    "operatorRouterDeployment": "0x6935819d0b6f7a8b7a36d286e044b0dff785c92a03bb21aca94d22e6741e8ee2",
+    "hookDeployment": "0xfd5d5b850739708a3f90ff8b48d83e8fac965d6714672487278902fa23e19ce9",
+    "marketLaunch": "0xe85303502d976a7b4dfa021c072d628f59791b7754a203460fc6ebf2a6f8ec94",
+    "externalBuysSchedule": "0xf0ff976b413b4a626399f6b64ecc5a292d80111d3f62f332c507b2b4c387a996",
+    "externalBuysExecute": "0x27521097065e1376b5732f92d1007357d9bd445ad084cebd8e7714ca86f9c060"
+  },
+  "verification": {
+    "preLaunchVerifier": true,
+    "postLaunchFinalCheck": true,
+    "blockscoutVerifiedOwnedContracts": 16,
+    "timelockSourceVerification": "standard OpenZeppelin source submission blocked by local standard-json path resolution"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "network": "Robinhood Chain",
+  "chainId": 4663,
+  "finalizedBlock": 47690599,
+  "finalizedBlockHash": "0x4ca3ce6b00d4603804be596b721c738caf54c2a08515f84a8ca020f33613837b",
+  "finalizedAt": "2026-08-27T19:25:22Z",
+  "source": {
+    "repository": "https://github.com/EqualFiLabs/statics",
+    "launchSourceCommit": "43018f109006aa2c2eef2808adc2aa74dfc9a6d4",
+    "referenceManifest": "deployments/robinhood-mainnet-genesis.json"
+  },
+  "contracts": {
+    "operatorsNft": {
+      "address": "0xad5E9F96A91D1A6F550580b157af2068A0e8F0BE",
+      "runtimeCodeHash": "0x4999fbcee14596c8105be151c80a8f7f2ae2c75e48d869cd8f4003a59f7f8085"
+    },
+    "activationRegistry": {
+      "address": "0xfC62e99CaE93878f83801f3d6Bb4f1762E720B30",
+      "runtimeCodeHash": "0xfcbf8ede9f8f15ff097f344c24d0751d9a23d7b49856e16066ab44caa635bffa"
+    }
+  }
+}

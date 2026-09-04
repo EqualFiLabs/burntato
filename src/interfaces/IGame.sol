@@ -17,10 +17,12 @@ interface IGame {
         uint256 indexed roundId, address indexed holder, uint256 maxReward, uint256 earned, uint256 heldSeconds
     );
     event BuybackFunded(uint256 indexed roundId, uint256 amount, uint256 reserveEth);
+    event OperatorPurchaseRevenueQueued(uint256 indexed roundId, address indexed router, uint256 amount);
 
     function buyPotato() external payable;
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned);
     function currentRoundId() external view returns (uint256);
     function getRound(uint256 roundId) external view returns (Round memory);
     function currentEarnedEmission() external view returns (uint256 baseEarned, uint256 treasuryEarned);
+    function purchaseOperatorRewardsRouter() external view returns (address);
 }

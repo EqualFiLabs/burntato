@@ -2,16 +2,34 @@
 
 `DeployBurntato.s.sol` deploys a complete local system in this order: timelock,
 timelock-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
-PositionManager, Diamond and facets, initializer, CREATE2 hook deployer, and
-mined-address canonical hook. It installs the selector manifest, configures the
-market, enables the initial Treasury distributor, configures buybacks, appoints
-the reward allocator and guardian, and transfers Diamond authority to the
-timelock.
+PositionManager, Diamond shell and facets, optional immutable Operator rewards
+router, initializer, CREATE2 hook deployer, and mined-address canonical hook. It
+installs the selector manifest, configures the market, enables the initial
+Treasury distributor, configures buybacks, appoints the reward allocator and
+guardian, and transfers Diamond authority to the timelock.
 
 The hook and PoolManager are independently owned by the timelock. Deployment
 does not renounce either owner and does not disable the PoolManager protocol-fee
 controller surface. The hook starts with the configured Treasury fee recipient
-and bilateral fee. External buys start disabled.
+and bilateral fee. Self-contained local deployment keeps Operator rewards
+disabled. Robinhood deployment requires an explicit nonzero Operator share.
+External buys start disabled.
+
+## Deployment modes
+
+| Mode | Dependencies | Swap proof | Ownership boundary |
+| --- | --- | --- | --- |
+| Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | Burntato timelock owns the local PoolManager and hook |
+| Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | Burntato timelock owns only the Diamond authority and Burntato hook |
+| Robinhood testnet | Pinned chain-46630 v4 contracts plus a fresh standalone Statics Genesis replica | Live market launch against the canonical PoolManager and PositionManager | 120-second Burntato timelock owns the Diamond authority and Burntato hook |
+
+The committed manifest pins block `45234855`, its block hash, and exact runtime
+hashes for all nine canonical dependencies. Addresses and hashes are not
+environment-overridable. Canonical deployment validates code plus PoolManager,
+Permit2, PositionDescriptor, and WETH bindings before deploying any Burntato
+contract. `deployments/statics-operators-robinhood-4663.json` separately pins
+the finalized Statics integration at block `47690599`, including the Operators
+NFT and Activation Registry hashes and their reciprocal bindings.
 
 ## Local defaults
 
@@ -26,9 +44,10 @@ and bilateral fee. External buys start disabled.
 | Round emission budget | 100,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 120 seconds |
-| Purchase split | 2,500 / 4,000 / 2,500 / 1,000 BPS |
+| Purchase split | 2,500 / 4,000 / 2,500 / 1,000 / 0 BPS |
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |
+| Operator share of hook fee | Disabled locally; required Robinhood input |
 | Buyback cap / reward / delay | 2 ETH / 50 BPS / 1 block |
 | Tick spacing | 60 |
 | Initial tick | 92,100 |
@@ -68,12 +87,14 @@ BURNTATO_WINNER_BPS
 BURNTATO_RECOVERY_BPS
 BURNTATO_TREASURY_BPS
 BURNTATO_BUYBACK_BPS
+BURNTATO_OPERATOR_PURCHASE_BPS
 BURNTATO_RECOVERY_BURN_BPS
 BURNTATO_RECOVERY_TREASURY_BPS
 BURNTATO_BUYBACK_MAX_SPEND
 BURNTATO_BUYBACK_CALLER_REWARD_BPS
 BURNTATO_BUYBACK_DELAY_BLOCKS
 BURNTATO_HOOK_FEE_BPS
+BURNTATO_OPERATOR_REWARD_SHARE_BPS
 BURNTATO_INITIAL_TICK
 BURNTATO_TICK_SPACING
 BURNTATO_TICK_LOWER
@@ -108,6 +129,7 @@ BURNTATO_POOL_MANAGER
 BURNTATO_POSITION_MANAGER
 BURNTATO_PERMIT2
 BURNTATO_HOOK
+BURNTATO_OPERATOR_REWARDS_ROUTER
 ```
 
 Then run:
@@ -117,6 +139,88 @@ forge script script/VerifyBurntato.s.sol:VerifyBurntato \
   --rpc-url http://127.0.0.1:8545
 ```
 
+## Persistent Robinhood fork
+
+Use an archive-capable RPC privately. The launcher does not print the URL:
+
+```bash
+ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" scripts/start-robinhood-fork.sh
+```
+
+The process stays in the foreground and serves chain `4663` on
+`http://127.0.0.1:8545` until stopped. Never point the broadcast commands below
+at a public Robinhood endpoint; they are guarded for Anvil and intentionally
+use a localhost fork account.
+
+```bash
+PRIVATE_KEY="$ANVIL_PRIVATE_KEY" \
+BURNTATO_OPERATOR_REWARD_SHARE_BPS="<required-bps>" \
+forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
+  --sig 'runLocalFork()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
+
+forge script script/VerifyBurntatoLocalFork.s.sol:VerifyBurntatoLocalFork \
+  --rpc-url http://127.0.0.1:8545 -vv
+```
+
+The public-only frontend handoff is
+`artifacts/robinhood-local/deployment.json`. It contains the fork identity,
+Diamond, timelock, hook, Operator router/share, Statics dependencies, facets,
+initializer, and canonical dependency addresses. It never contains the RPC URL
+or private key.
+
+Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
+instead. Run archive-RPC qualification locally; it is intentionally excluded
+from CI so pull-request code never receives the RPC credential:
+
+```bash
+REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 \
+ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
+forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv
+
+REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
+ROBINHOOD_OPERATOR_FORK_BLOCK=47690599 \
+forge test --match-path test/fork/OperatorRewardsRobinhoodFork.t.sol -j 1 -vv
+```
+
+Frontends connect to chain ID `4663` at `http://127.0.0.1:8545` and read the
+persisted artifact rather than scraping script output.
+
+## Robinhood testnet launch
+
+The chain-selected testnet manifests pin all canonical v4 bytecode and the
+fresh Statics Genesis Operator NFT plus Activation Registry. Robinhood
+testnet's PositionManager and descriptor report the absent mainnet WETH
+address; the validator pins that observed binding explicitly while separately
+validating the deployed testnet WETH. Burntato's market is native/POTATO and
+does not route through either wrapped-native address.
+
+The testnet profile is fixed in code: the deployer holds proposer, guardian,
+Treasury, and reward-allocator roles; timelock delay is 120 seconds; purchase
+revenue is split 25% Winner, 30% Recovery, 20% Treasury, 10% buyback, and 15%
+Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent to the
+same Operator rewards router (0.4% of swap volume) and 60% sent to Treasury.
+
+Use the phased wrapper so deployment verification occurs before market launch,
+and so the timelock delay remains visible rather than hidden inside one command:
+
+```bash
+export ROBINHOOD_TESTNET_RPC_URL="$ROBINHOOD_TESTNET"
+export PRIVATE_KEY="$PRIVATE_KEY"
+
+scripts/deploy-robinhood-testnet.sh --deploy
+scripts/deploy-robinhood-testnet.sh --verify
+scripts/deploy-robinhood-testnet.sh --launch
+scripts/deploy-robinhood-testnet.sh --schedule
+# Wait until the reported timelock timestamp.
+scripts/deploy-robinhood-testnet.sh --execute
+scripts/deploy-robinhood-testnet.sh --check
+```
+
+The ignored `artifacts/robinhood-testnet/deployment.json` file is the local
+machine-readable handoff. It contains only public addresses and launch
+configuration; deployment transaction hashes and final live readback belong in
+the checked-in testnet deployment record.
+
 ## Verification checks
 
 The verifier checks code and selector routing, complete protocol configuration
@@ -125,7 +229,8 @@ timelock delay and roles, Diamond authority, guardian and pause state,
 timelock-owned hook and PoolManager, hook token/fee/tick configuration, exact
 uninitialized PoolKey, PositionManager dependencies, the configured genesis
 POTATO supply and Diamond reservation, empty initial round state, disabled
-external buys, the initial Treasury distributor, independently configured
+external buys, the exact Operator router/share and immutable Statics bindings,
+the initial Treasury distributor, independently configured
 reward allocator with zero reward escrow, and zeroed buyback state with the
 configured execution defaults.
 

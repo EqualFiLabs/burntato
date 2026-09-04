@@ -9,6 +9,7 @@ import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
+import {BurntatoOperatorRewardsRouter} from "../src/rewards/BurntatoOperatorRewardsRouter.sol";
 import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IClaims} from "../src/interfaces/IClaims.sol";
 import {IDiamondLoupe} from "../src/interfaces/IDiamondLoupe.sol";
@@ -19,8 +20,15 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {BuybackConfig, ProtocolConfig, Round} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
-import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
+import {
+    BurntatoDeployment,
+    CanonicalV4Dependencies,
+    GenesisConfig,
+    StaticsOperatorDependencies
+} from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
+import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
+import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
 interface IOwnedPoolManager {
     function owner() external view returns (address);
@@ -30,13 +38,71 @@ contract BurntatoDeploymentVerifier {
     error VerificationFailed(bytes32 check);
 
     function verify(GenesisConfig memory config, BurntatoDeployment memory deployment) external view returns (bool) {
+        _check(
+            config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0,
+            "OPERATOR_CANONICAL_REQUIRED"
+        );
+        _verifyCommon(config, deployment);
+        _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
+        return true;
+    }
+
+    function verifyCanonical(
+        GenesisConfig memory config,
+        BurntatoDeployment memory deployment,
+        CanonicalV4Dependencies memory dependencies
+    ) external view returns (bool) {
+        _check(
+            config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0,
+            "OPERATOR_DEPENDENCIES_REQUIRED"
+        );
+        RobinhoodDeploymentConfig.validate(dependencies);
+        _verifyCanonicalAddresses(deployment, dependencies);
+        _verifyCommon(config, deployment);
+        return true;
+    }
+
+    function verifyCanonical(
+        GenesisConfig memory config,
+        BurntatoDeployment memory deployment,
+        CanonicalV4Dependencies memory dependencies,
+        StaticsOperatorDependencies memory operatorDependencies
+    ) external view returns (bool) {
+        _check(
+            config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0, "OPERATOR_REWARDS_REQUIRED"
+        );
+        RobinhoodDeploymentConfig.validate(dependencies);
+        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        _verifyCanonicalAddresses(deployment, dependencies);
+        _verifyCommon(config, deployment);
+        BurntatoOperatorRewardsRouter router = BurntatoOperatorRewardsRouter(payable(deployment.operatorRewardsRouter));
+        _check(address(router.operators()) == operatorDependencies.operatorsNft, "OPERATOR_NFT");
+        _check(address(router.activationRegistry()) == operatorDependencies.activationRegistry, "ACTIVATION_REGISTRY");
+        return true;
+    }
+
+    function _verifyCommon(GenesisConfig memory config, BurntatoDeployment memory deployment) private view {
         _verifyConfigDomain(config);
         _verifyCode(deployment);
         _verifySelectors(deployment);
         _verifyAuthority(config, deployment);
         _verifyProtocolState(config, deployment);
         _verifyMarket(config, deployment);
-        return true;
+    }
+
+    function _verifyCanonicalAddresses(
+        BurntatoDeployment memory deployment,
+        CanonicalV4Dependencies memory dependencies
+    ) private pure {
+        _check(deployment.poolManager == dependencies.poolManager, "CANONICAL_POOL_MANAGER");
+        _check(deployment.positionDescriptor == dependencies.positionDescriptor, "CANONICAL_DESCRIPTOR");
+        _check(deployment.positionManager == dependencies.positionManager, "CANONICAL_POSITION_MANAGER");
+        _check(deployment.quoter == dependencies.quoter, "CANONICAL_QUOTER");
+        _check(deployment.stateView == dependencies.stateView, "CANONICAL_STATE_VIEW");
+        _check(deployment.reservesLens == dependencies.reservesLens, "CANONICAL_RESERVES_LENS");
+        _check(deployment.universalRouter == dependencies.universalRouter, "CANONICAL_ROUTER");
+        _check(deployment.permit2 == dependencies.permit2, "CANONICAL_PERMIT2");
+        _check(deployment.weth9 == dependencies.weth, "CANONICAL_WETH");
     }
 
     function _verifyCode(BurntatoDeployment memory deployment) private view {
@@ -46,6 +112,9 @@ contract BurntatoDeploymentVerifier {
         _check(deployment.positionManager.code.length != 0, "POSITION_MANAGER_CODE");
         _check(deployment.permit2.code.length != 0, "PERMIT2_CODE");
         _check(deployment.hook.code.length != 0, "HOOK_CODE");
+        if (deployment.operatorRewardsRouter != address(0)) {
+            _check(deployment.operatorRewardsRouter.code.length != 0, "OPERATOR_ROUTER_CODE");
+        }
     }
 
     function _verifySelectors(BurntatoDeployment memory deployment) private view {
@@ -68,7 +137,7 @@ contract BurntatoDeploymentVerifier {
         IGovernance governance = IGovernance(deployment.diamond);
         TimelockController timelock = TimelockController(payable(deployment.timelock));
         _check(governance.authority() == deployment.timelock, "DIAMOND_AUTHORITY");
-        _check(IOwnedPoolManager(deployment.poolManager).owner() == deployment.timelock, "POOL_MANAGER_OWNER");
+        _check(BurntatoSwapFeeHook(payable(deployment.hook)).owner() == deployment.timelock, "HOOK_OWNER");
         _check(timelock.getMinDelay() == config.timelockDelay, "TIMELOCK_DELAY");
         _check(timelock.hasRole(timelock.DEFAULT_ADMIN_ROLE(), deployment.timelock), "TIMELOCK_SELF_ADMIN");
         _check(timelock.hasRole(timelock.PROPOSER_ROLE(), config.proposer), "PROPOSER_ROLE");
@@ -102,6 +171,7 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.recoveryBps == expected.recoveryBps, "RECOVERY_BPS");
         _check(protocol.treasuryBps == expected.treasuryBps, "TREASURY_BPS");
         _check(protocol.buybackBps == expected.buybackBps, "BUYBACK_BPS");
+        _check(protocol.operatorPurchaseBps == expected.operatorPurchaseBps, "OPERATOR_PURCHASE_BPS");
         _check(protocol.recoveryBurnBps == expected.recoveryBurnBps, "RECOVERY_BURN_BPS");
         _check(protocol.recoveryTreasuryBps == expected.recoveryTreasuryBps, "RECOVERY_TREASURY_BPS");
         _check(claims.treasuryRecipient() == config.treasuryRecipient, "TREASURY_RECIPIENT");
@@ -122,6 +192,7 @@ contract BurntatoDeploymentVerifier {
         _check(buyback.buybackReserveEth() == 0, "BUYBACK_RESERVE");
         _check(buyback.lastBuybackBlock() == 0, "BUYBACK_LAST_BLOCK");
         _check(game.currentRoundId() == 0, "ROUND_NOT_STARTED");
+        _check(game.purchaseOperatorRewardsRouter() == deployment.operatorRewardsRouter, "PURCHASE_OPERATOR_ROUTER");
         Round memory emptyRound = game.getRound(0);
         _check(emptyRound.roundId == 0 && emptyRound.remainingEmission == 0, "EMPTY_GENESIS_ROUND");
     }
@@ -156,10 +227,22 @@ contract BurntatoDeploymentVerifier {
         _check(hook.token() == deployment.diamond, "HOOK_TOKEN");
         _check(hook.feeAddress() == config.treasuryRecipient, "HOOK_FEE_ADDRESS");
         _check(hook.feeBps() == config.hookFeeBps, "HOOK_FEE_BPS");
+        _check(hook.operatorRewardsRouter() == deployment.operatorRewardsRouter, "HOOK_OPERATOR_ROUTER");
+        _check(hook.operatorRewardShareBps() == config.operatorRewardShareBps, "HOOK_OPERATOR_SHARE");
         _check(hook.tickSpacing() == config.tickSpacing, "HOOK_TICK_SPACING");
         _check(address(hook.poolManager()) == deployment.poolManager, "HOOK_POOL_MANAGER");
         _check(hook.deploymentBlock() == 0, "HOOK_POOL_UNINITIALIZED");
         _check(!hook.externalBuysEnabled(), "EXTERNAL_BUYS_DISABLED");
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
+            _check(deployment.operatorRewardsRouter == address(0), "OPERATOR_ROUTER_DISABLED");
+        } else {
+            BurntatoOperatorRewardsRouter router =
+                BurntatoOperatorRewardsRouter(payable(deployment.operatorRewardsRouter));
+            _check(router.burntato() == deployment.diamond, "OPERATOR_ROUTER_BURNTATO");
+            _check(router.totalRegisteredWeight() == 0, "OPERATOR_ROUTER_WEIGHT");
+            _check(router.totalReceived() == 0, "OPERATOR_ROUTER_REVENUE");
+            _check(address(router).balance == 0, "OPERATOR_ROUTER_BALANCE");
+        }
         uint160 flags = uint160(
             Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
                 | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
@@ -187,13 +270,14 @@ contract BurntatoDeploymentVerifier {
         _check(protocol.emissionStepBps <= Constants.BPS, "EMISSION_BPS_DOMAIN");
         _check(
             uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
-                == Constants.BPS,
+                    + protocol.operatorPurchaseBps == Constants.BPS,
             "PURCHASE_SPLIT_DOMAIN"
         );
         _check(
             uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN"
         );
         _check(config.hookFeeBps <= Constants.BPS, "HOOK_FEE_DOMAIN");
+        _check(config.operatorRewardShareBps <= Constants.BPS, "OPERATOR_SHARE_DOMAIN");
         _check(config.buyback.callerRewardBps <= Constants.BPS, "BUYBACK_REWARD_DOMAIN");
         _check(
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,

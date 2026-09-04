@@ -42,8 +42,9 @@ contract ClaimsFacet is IClaims {
         if (rs.claimed[roundId][msg.sender]) revert Errors.AlreadyClaimed();
         uint256 committed = rs.commitments[roundId][msg.sender];
         if (committed == 0) revert Errors.NothingToClaim();
-        amount = _recoveryAmount(round, committed);
+        amount = _recoveryAmount(roundId, round, rs, committed);
         rs.claimed[roundId][msg.sender] = true;
+        rs.claimedCommitments[roundId] += committed;
         rs.recoveryPaid[roundId] += amount;
         _sendNative(recipient, amount);
         emit RecoveryClaimed(roundId, msg.sender, recipient, amount);
@@ -61,7 +62,7 @@ contract ClaimsFacet is IClaims {
         Round storage round = LibProtocolStorage.game().rounds[roundId];
         LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
         if (!round.settled || round.totalCommitted == 0 || rs.claimed[roundId][account]) return 0;
-        return _recoveryAmount(round, rs.commitments[roundId][account]);
+        return _recoveryAmount(roundId, round, rs, rs.commitments[roundId][account]);
     }
 
     function claimTreasury() external nonReentrant returns (uint256 amount) {
@@ -97,8 +98,15 @@ contract ClaimsFacet is IClaims {
         return ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
     }
 
-    function _recoveryAmount(Round storage round, uint256 committed) private view returns (uint256) {
+    function _recoveryAmount(
+        uint256 roundId,
+        Round storage round,
+        LibProtocolStorage.RecoveryStorage storage rs,
+        uint256 committed
+    ) private view returns (uint256) {
         if (committed == 0) return 0;
+        uint256 newClaimedCommitments = rs.claimedCommitments[roundId] + committed;
+        if (newClaimedCommitments == round.totalCommitted) return round.recoveryPool - rs.recoveryPaid[roundId];
         return Math.mulDiv(round.recoveryPool, committed, round.totalCommitted);
     }
 

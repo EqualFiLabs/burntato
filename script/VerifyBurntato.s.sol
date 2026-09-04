@@ -5,9 +5,16 @@ import {Script, console2} from "forge-std/Script.sol";
 
 import {IDiamondLoupe} from "../src/interfaces/IDiamondLoupe.sol";
 import {BurntatoDeploymentVerifier} from "./BurntatoDeploymentVerifier.sol";
-import {BurntatoDeployment, GenesisConfig} from "./DeploymentTypes.sol";
+import {
+    BurntatoDeployment,
+    CanonicalV4Dependencies,
+    GenesisConfig,
+    StaticsOperatorDependencies
+} from "./DeploymentTypes.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
+import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
+import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
 contract VerifyBurntato is Script {
     function run() external returns (bool) {
@@ -19,6 +26,7 @@ contract VerifyBurntato is Script {
         deployment.positionManager = vm.envAddress("BURNTATO_POSITION_MANAGER");
         deployment.permit2 = vm.envAddress("BURNTATO_PERMIT2");
         deployment.hook = vm.envAddress("BURNTATO_HOOK");
+        deployment.operatorRewardsRouter = vm.envOr("BURNTATO_OPERATOR_REWARDS_ROUTER", address(0));
 
         IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
         deployment.diamondCutFacet = loupe.facetAddress(BurntatoSelectors.diamondCut()[0]);
@@ -33,7 +41,21 @@ contract VerifyBurntato is Script {
         deployment.claimsFacet = loupe.facetAddress(BurntatoSelectors.claims()[0]);
         deployment.treasuryRewardsFacet = loupe.facetAddress(BurntatoSelectors.treasuryRewards()[0]);
 
-        bool verified = (new BurntatoDeploymentVerifier()).verify(config, deployment);
+        BurntatoDeploymentVerifier verifier = new BurntatoDeploymentVerifier();
+        bool verified;
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
+            verified = verifier.verify(config, deployment);
+        } else {
+            CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+            StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
+            deployment.positionDescriptor = dependencies.positionDescriptor;
+            deployment.quoter = dependencies.quoter;
+            deployment.stateView = dependencies.stateView;
+            deployment.reservesLens = dependencies.reservesLens;
+            deployment.universalRouter = dependencies.universalRouter;
+            deployment.weth9 = dependencies.weth;
+            verified = verifier.verifyCanonical(config, deployment, dependencies, operatorDependencies);
+        }
         console2.log("Burntato deployment verified", verified);
         return verified;
     }
@@ -72,6 +94,9 @@ contract VerifyBurntato is Script {
         config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
         );
+        config.protocol.operatorPurchaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_PURCHASE_BPS", uint256(config.protocol.operatorPurchaseBps))
+        );
         config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
         config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_BUYBACK_CALLER_REWARD_BPS", uint256(config.buyback.callerRewardBps))
@@ -85,6 +110,9 @@ contract VerifyBurntato is Script {
         );
         config.hookFeeBps =
             BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
+        config.operatorRewardShareBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_REWARD_SHARE_BPS", uint256(config.operatorRewardShareBps))
+        );
         config.initialTick =
             BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
         config.tickSpacing =

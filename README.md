@@ -62,8 +62,10 @@ the mechanism for relinquishing that role.
   integration.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — authority, guardian, market
   administration, and finalization.
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — local defaults, environment
-  configuration, deployment, and verification.
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — local defaults, self-contained
+  deployment, pinned Robinhood fork qualification, and persistent frontend setup.
+- [`docs/ROBINHOOD_TESTNET_DEPLOYMENT.md`](docs/ROBINHOOD_TESTNET_DEPLOYMENT.md)
+  — live chain-46630 addresses, economics, and deployment evidence.
 
 The implementation is licensed under BUSL-1.1. FWA.fun is reference precedent,
 not part of Burntato; see the pinned links in the integration guide.
