@@ -41,6 +41,7 @@ contract SettlementFacet is ISettlement {
         );
 
         uint256 nextRoundId = roundId + 1;
+        delete rs.stalledWithdrawalAt[nextRoundId];
         gs.currentRoundId = nextRoundId;
         LibGame.activateRound(nextRoundId, carry);
     }
