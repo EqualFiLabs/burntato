@@ -60,9 +60,11 @@ Starting price, round timeout, minimum round timeout, and emission vesting must
 remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
 safety. Minimum timeout cannot exceed the initial timeout, and timeout decay
 cannot exceed the initial timeout. Zero timeout decay is valid and produces
-fixed resets. BPS values are bounded to 10,000; the purchase and Recovery
-splits must each sum to 10,000. Zero price growth, emission step, emission
-budget, or hook fee is valid.
+fixed resets. Protocol and Operator-share BPS values are bounded to 10,000; the
+purchase and Recovery splits must each sum to 10,000. The bilateral hook fee
+has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
+narrower 0-to-100 BPS domain. Zero price growth, emission step, emission budget,
+or hook fee is valid.
 
 ## Environment
 
@@ -105,7 +107,11 @@ BURNTATO_POTATO_SEED
 Numeric values use base units. Narrow BPS and tick inputs are range-checked
 before conversion. Tick spacing must be inside the PoolManager domain; bounds
 must be aligned to spacing, and the initial tick must equal the upper bound so
-the locked genesis position starts entirely in POTATO.
+the locked genesis position starts entirely in POTATO. Deployment and
+verification both reject a hook fee above 200 BPS or buyback caller reward above
+100 BPS. `BURNTATO_OPERATOR_REWARD_SHARE_BPS` remains independently configurable
+through 10,000 BPS because it divides the already-capped hook fee rather than
+increasing the fee charged to traders.
 
 The CREATE2 hook helper accepts deployment only from the address that created
 it. This keeps the mined hook address available to the same local broadcast
@@ -226,14 +232,19 @@ the checked-in testnet deployment record.
 The verifier checks code and selector routing, complete protocol configuration
 including the diminishing timeout domain,
 timelock delay and roles, Diamond authority, guardian and pause state,
-timelock-owned hook and PoolManager, hook token/fee/tick configuration, exact
-uninitialized PoolKey, PositionManager dependencies, the configured genesis
-POTATO supply and Diamond reservation, empty initial round state, disabled
-external buys, the exact Operator router/share and immutable Statics bindings,
-the initial Treasury distributor, independently configured
-reward allocator with zero reward escrow, and zeroed buyback state with the
-configured execution defaults.
+timelock-owned hook, hook token/fee/tick configuration, exact uninitialized
+PoolKey, PositionManager dependencies, the configured genesis POTATO supply and
+Diamond reservation, empty initial round state, disabled external buys, the
+exact Operator router/share and immutable Statics bindings, the initial
+Treasury distributor, independently configured reward allocator with zero
+reward escrow, and zeroed buyback state with the configured execution defaults.
+Self-contained verification additionally requires the Burntato timelock to own
+its newly deployed PoolManager. Robinhood verification instead pins the
+external canonical PoolManager and its dependency bindings without asserting
+Burntato ownership.
 
 After deployment, operations should separately exercise a timelock call to the
-Diamond, a hook fee update, and a PoolManager owner function. Diamond
-finalization should be tested only when the intent is to end all future cuts.
+Diamond and a hook fee update. A PoolManager owner function belongs only in the
+self-contained qualification path; Robinhood deployments must validate the
+external owner's published operating process separately. Diamond finalization
+should be tested only when the intent is to end all future cuts.
