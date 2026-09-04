@@ -1,34 +1,31 @@
 # Robinhood testnet deployment
 
-This is the live Burntato and standalone Statics Genesis launch used for app
-integration on Robinhood Chain testnet, chain ID `46630`. The canonical
-machine-readable record is
-[`deployments/robinhood-testnet-46630-launch.json`](../deployments/robinhood-testnet-46630-launch.json).
+This is the current low-cost Burntato and standalone Statics Genesis launch
+used for app integration on Robinhood Chain testnet, chain ID `46630`. The
+canonical machine-readable record is
+[`deployments/robinhood-testnet-46630-low-cost-launch.json`](../deployments/robinhood-testnet-46630-low-cost-launch.json).
 
-> Compatibility note: this deployment was built from Burntato commit
-> `07688de3193492aca399c8bbadc9321162e5f726`. It predates the
-> `fix/economic-recovery-safety` candidate: the live contracts still use the
-> prior gross-slice caller reward, prior hook-fee domain, and three-selector
-> Recovery facet without stalled withdrawals. The candidate does not mutate or
-> redeploy this testnet instance and does not ship an in-place migration for
-> pre-existing commitments. It qualifies fresh deployments only. Clients must
-> not expose its new Recovery API against these addresses.
+The deployment was built from commit
+`1e3a49389baffd1aaff9c3bafbdf55e68d489200`, stacked on the economic and
+Recovery safety candidate at `7ecc58f16adec2873d2aaac232bfa6e4d08361a2`.
+It is a fresh deployment and exposes the five-selector Recovery API, including
+the 30-day stalled-round withdrawal path.
 
 ## Addresses
 
 | Component | Address |
 | --- | --- |
-| Burntato Diamond / POTATO | [`0x1FA9a3c895e802670b35a9d577D42d4dE20e4818`](https://explorer.testnet.chain.robinhood.com/address/0x1FA9a3c895e802670b35a9d577d42d4de20e4818) |
-| Burntato timelock | [`0xCE71F6339F52016a90c0FD90e0617039c5AD47A1`](https://explorer.testnet.chain.robinhood.com/address/0xce71f6339f52016a90c0fd90e0617039c5ad47a1) |
-| Burntato swap-fee hook | [`0x5b7a45802d5a6076b510D2d9D9EC175a19EE2444`](https://explorer.testnet.chain.robinhood.com/address/0x5b7a45802d5a6076b510d2d9d9ec175a19ee2444) |
-| Operator rewards router | [`0x09ac7A514db0bBf0B2E3630ace9C30b17393E24D`](https://explorer.testnet.chain.robinhood.com/address/0x09ac7a514db0bbf0b2e3630ace9c30b17393e24d) |
+| Burntato Diamond / POTATO | [`0x5e59B7d841199cD4316b0a081d6530fc7Ae4F28F`](https://explorer.testnet.chain.robinhood.com/address/0x5e59b7d841199cd4316b0a081d6530fc7ae4f28f) |
+| Burntato timelock | [`0x185036C5e7fA61067a4C8585De7cC09df11AB63A`](https://explorer.testnet.chain.robinhood.com/address/0x185036c5e7fa61067a4c8585de7cc09df11ab63a) |
+| Burntato swap-fee hook | [`0xe699242c924449e2CbD88919ED419Eb82f85A444`](https://explorer.testnet.chain.robinhood.com/address/0xe699242c924449e2cbd88919ed419eb82f85a444) |
+| Operator rewards router | [`0xd4F279C7DfA2756aF90933ac4632D61eBA7eEFF6`](https://explorer.testnet.chain.robinhood.com/address/0xd4f279c7dfa2756af90933ac4632d61eba7eeff6) |
 | Statics Genesis Operator NFT | [`0x8BB2E39abAE7346293Ff084fd4D104b064BEbC71`](https://explorer.testnet.chain.robinhood.com/address/0x8bb2e39abae7346293ff084fd4d104b064bebc71) |
 | Genesis Activation Registry | [`0xcE4D413915B4C6dE7DfD486d233596Da35c5cFbD`](https://explorer.testnet.chain.robinhood.com/address/0xce4d413915b4c6de7dfd486d233596da35c5cfbd) |
 | STATICS | [`0xcDe1F22F70DB6C42c7C0050e6F3B53d03a2006eD`](https://explorer.testnet.chain.robinhood.com/address/0xcde1f22f70db6c42c7c0050e6f3b53d03a2006ed) |
 | 200K STATICS faucet | [`0xd2e561B46a2de6713F53d954C0415447100d2955`](https://explorer.testnet.chain.robinhood.com/address/0xd2e561b46a2de6713f53d954c0415447100d2955) |
 
 The Burntato pool ID is
-`0xd0bb2fb1266e97d81cf260a1b4d12d21eee323dd0189265483baf9b8987fd91b`.
+`0xd2363660c269c9f06a7991a421e8fbd2f621d5030e03d56bb2e4938f917afe88`.
 The market launch permanently locked `1,000,400,500,818,288,116,093,059`
 liquidity units at the dead recipient.
 
@@ -41,19 +38,28 @@ are administered by the 120-second timelock. The broadcaster is proposer,
 guardian, Treasury recipient, and reward allocator. External buys were enabled
 through the timelock after market launch.
 
+Hot Potato purchases start at `0.00001 ETH` and increase by 1%. The first
+holder gets ten minutes; each later purchase shortens the reset by one minute
+until the one-minute floor. Every round retains a 100,000 POTATO base emission
+budget with 10% opportunities vesting over 120 seconds. Recovery remains 90%
+burn / 10% Treasury, while buybacks retain the 2 ETH maximum slice, 0.5%
+actual-spend caller reward, and one-block delay.
+
 The Statics Genesis epoch ends at Unix timestamp `1789740317`, 15 days after
 deployment. The faucet dispenses `200,000 STATICS` per wallet every 24 hours
 and was funded for one initial claim.
 
 ## Evidence
 
+- All 24 deployment receipts succeeded.
 - The exact-profile pre-launch verifier returned `true`.
 - The live post-launch check confirmed the pool is launched and external buys
   are enabled.
-- The Diamond, hook, Operator router, all eleven facets, initializer,
-  and hook deployer are source-verified on Blockscout. The standard
-  OpenZeppelin timelock is the only owned contract not source-verified; its
-  submission was blocked by local standard-JSON dependency path resolution.
+- The Diamond, hook, Operator router, all eleven facets, initializer, and hook
+  deployer are source-verified on Blockscout. The standard OpenZeppelin
+  timelock is the only owned contract not source-verified; its standard
+  submission was blocked by local standard-JSON dependency path resolution,
+  while flattening would change the configured metadata hash.
 - The live Operator router reads the fresh Genesis NFT and Activation Registry,
   and both purchase and hook revenue point to that same router.
 - The tracked runtime hashes and ceremony transaction hashes are recorded in
@@ -66,3 +72,11 @@ acquired 200K STATICS to the already-deployed faucet, unwrapped the WETH
 refund, and verified the final faucet balance and zero residual allowance. The
 reusable Statics script now consumes its full seeder allowance atomically and
 uses a doubled broadcast gas-estimation margin.
+
+## Superseded Burntato deployment
+
+The previous Burntato instance at `0x1FA9a3c895e802670b35a9d577D42d4dE20e4818`
+remains deployed and is preserved in
+[`robinhood-testnet-46630-launch.json`](../deployments/robinhood-testnet-46630-launch.json).
+It was built from `07688de` and must not be used by current clients because it
+predates the economic-safety and stalled-Recovery changes.

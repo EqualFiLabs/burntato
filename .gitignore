@@ -9,4 +9,5 @@ deployments/*
 !deployments/robinhood-chain-testnet-46630.json
 !deployments/statics-operators-robinhood-testnet-46630.json
 !deployments/robinhood-testnet-46630-launch.json
+!deployments/robinhood-testnet-46630-low-cost-launch.json
 artifacts/

@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "network": "Robinhood Chain Testnet",
+  "chainId": 46630,
+  "status": "live",
+  "source": {
+    "burntatoCommit": "1e3a49389baffd1aaff9c3bafbdf55e68d489200",
+    "economicSafetyCommit": "7ecc58f16adec2873d2aaac232bfa6e4d08361a2",
+    "mergedMainBaseCommit": "ef96689",
+    "staticsGenesisSourceCommit": "43018f109006aa2c2eef2808adc2aa74dfc9a6d4",
+    "staticsFaucetCommit": "b7379804f72522500d603e1ee414dec16af4b44c"
+  },
+  "blocks": {
+    "firstDeployment": 113055781,
+    "diamondDeployment": 113055786,
+    "lastDeployment": 113055825,
+    "marketLaunch": 113057149,
+    "externalBuysSchedule": 113057211,
+    "externalBuysExecute": 113058141
+  },
+  "timestamps": {
+    "firstDeployment": 1788557443,
+    "lastDeployment": 1788557448,
+    "marketLaunch": 1788557635,
+    "externalBuysSchedule": 1788557643,
+    "externalBuysReady": 1788557761,
+    "externalBuysExecute": 1788557769
+  },
+  "roles": {
+    "deployer": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "proposer": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "guardian": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "treasury": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316",
+    "rewardAllocator": "0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316"
+  },
+  "staticsGenesis": {
+    "epochEnd": 1789740317,
+    "statics": "0xcDe1F22F70DB6C42c7C0050e6F3B53d03a2006eD",
+    "poolId": "0xf31e4b5ca452b221f9fb5f3aff4b1b0c178e37cf179db73fe521ef59a55ae625",
+    "feeReceiver": "0x89805F4094e8f8326D6ce7c3715dA7331C3ce762",
+    "treasuryVesting": "0x7a96A1F6c28212aa2d6b3aee48956DbD7ebc0A69",
+    "activationRegistry": "0xcE4D413915B4C6dE7DfD486d233596Da35c5cFbD",
+    "genesis": "0x8BB2E39abAE7346293Ff084fd4D104b064BEbC71",
+    "genesisVault": "0xa5Cb1f90C70310Af1E5466DdFBB57f3F2353Ef58",
+    "genesisDistributor": "0xfE07863397a331b35B9D1fB5Ea14130eB870bA06",
+    "genesisRenderer": "0x2c2759f1bEB6f521C71343FD800d34cbC54aF9eD",
+    "avatarSVG": "0x2cC0Fb94aB1b1E4B8adB4bDea62122Ff5F2636e0",
+    "faucet": "0xd2e561B46a2de6713F53d954C0415447100d2955",
+    "faucetClaimAmount": "200000000000000000000000",
+    "faucetCooldownSeconds": 86400
+  },
+  "burntato": {
+    "diamond": "0x5e59B7d841199cD4316b0a081d6530fc7Ae4F28F",
+    "timelock": "0x185036C5e7fA61067a4C8585De7cC09df11AB63A",
+    "hook": "0xe699242c924449e2CbD88919ED419Eb82f85A444",
+    "hookDeployer": "0xF42A154905a25ddc8653c95623ba6dA8C46cb086",
+    "operatorRewardsRouter": "0xd4F279C7DfA2756aF90933ac4632D61eBA7eEFF6",
+    "diamondCutFacet": "0x75762C6Cf04dE7252b535972c4bbb5476c09E71C",
+    "diamondLoupeFacet": "0x14f06EC26c570E08FB0f17B33a963f9C80A930c5",
+    "governanceFacet": "0x9049B0dd64c2D8e71b532BfeB670C65dB7dbe893",
+    "marketFacet": "0x193b58B6C220cBDf6d00a124320FB5f564E9fFC0",
+    "buybackFacet": "0x45eEEf98b6E0549e63Ecfc83937e01cA202Ca91E",
+    "potatoTokenFacet": "0xAaCba55635B4a009e6a8cE3D1E54b8eEa05193aF",
+    "gameFacet": "0xB32fD76d94B2dfA1238f38D642C5fE2D713601E6",
+    "recoveryFacet": "0x21acB66663AA5f1eDc43D4D96c946c063029ffbF",
+    "settlementFacet": "0x85622D9405561427E42f924677C64538D814B994",
+    "claimsFacet": "0x59012429ec4A82d3e91b4BBfD6D9070c2627Ee9e",
+    "treasuryRewardsFacet": "0xF5965A121FE341349a5e86aFbefe770b8dB1B8E0",
+    "foundationInit": "0x86BcBE471331B3E0184878465e2BC16a8bbCbfDB",
+    "poolId": "0xd2363660c269c9f06a7991a421e8fbd2f621d5030e03d56bb2e4938f917afe88",
+    "lockedLiquidity": "1000400500818288116093059",
+    "treasuryLaunchDust": "15",
+    "externalBuysEnabled": true,
+    "protocolFinalized": false
+  },
+  "economics": {
+    "startingPriceWei": "10000000000000",
+    "priceIncreaseBps": 100,
+    "roundTimeoutSeconds": 600,
+    "roundTimeoutDecaySeconds": 60,
+    "minimumRoundTimeoutSeconds": 60,
+    "roundEmissionBudget": "100000000000000000000000",
+    "emissionStepBps": 1000,
+    "emissionVestingSeconds": 120,
+    "purchaseBps": {
+      "winner": 2500,
+      "recovery": 3000,
+      "treasury": 2000,
+      "buyback": 1000,
+      "operators": 1500
+    },
+    "recoveryBps": {
+      "burn": 9000,
+      "treasury": 1000
+    },
+    "stalledRecoveryDelaySeconds": 2592000,
+    "buyback": {
+      "maxSpendWei": "2000000000000000000",
+      "callerRewardBps": 50,
+      "delayBlocks": 1
+    },
+    "hookFeeBps": 100,
+    "operatorShareOfHookFeeBps": 4000,
+    "timelockDelaySeconds": 120,
+    "market": {
+      "potatoSeed": "100000000000000000000000000",
+      "initialTick": 92100,
+      "tickSpacing": 60,
+      "tickLower": -887220,
+      "tickUpper": 92100
+    }
+  },
+  "runtimeCodeHashes": {
+    "diamond": "0x08078332fcfc2680de45d406fe082dcbe5c11e2f23fa0a6798726756ff1b2be6",
+    "timelock": "0x67619a759b99cb677f29a2fc40a1251e78089b5b05d089a97de6cd95d7eee514",
+    "hook": "0xc4fabd919e1e30bedec7d03505fb32088974c19613e05f8566a6f7105155ffde",
+    "operatorRewardsRouter": "0x587dc35fe719016a02962c94a8d164d15c4fd9e85ddff8c5bcf129cf175f2fa2"
+  },
+  "transactions": {
+    "deploymentTransactionCount": 24,
+    "allDeploymentReceiptsSucceeded": true,
+    "timelockDeployment": "0x8e1384cc39d5239bb113bddaaa4bf3dc8aacddd83654afa383585f87d99bcd01",
+    "diamondDeployment": "0x738139fa150280a6b997a7fb934d9db2d91970666363ee026396520b4ff46dbc",
+    "operatorRouterDeployment": "0x8f67512c827474b884bb3ab3bd0acb384e9422d50a9c46165462938e311c456d",
+    "hookDeployerDeployment": "0x7a885d18425fecc30940fe2a5df419d7b549f04ba0fe17ef981c06903aee9422",
+    "hookDeployment": "0x58a4737922f860c8e6472cea05cb71096f9975176003903d3a118fac6a3282d0",
+    "finalDeploymentConfiguration": "0x89259291dac7fa9c58633e41bd2feebdcdabd056fb174b2ff162d4c26aad1a73",
+    "marketLaunch": "0xf5f6d644c6414dce8989c73966a3a92ca6a1067f50671ffb919a152b45beed73",
+    "externalBuysSchedule": "0xb17c8fe6ba993c928e10294ea7b96cdf7f4a96479876035931971e52e1bdcff2",
+    "externalBuysExecute": "0xab4679e2cb637623de32b7329662db33467e19528fd48322a8ed4d8b5ddf0687"
+  },
+  "verification": {
+    "deterministicDeploymentTestsPassed": 26,
+    "preLaunchVerifier": true,
+    "postLaunchFinalCheck": true,
+    "blockscoutVerifiedOwnedContracts": 16,
+    "timelockSourceVerification": "standard OpenZeppelin source submission blocked by local standard-json path resolution; flattened submission is incompatible with bytecode_hash=none"
+  }
+}

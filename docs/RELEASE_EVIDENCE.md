@@ -1,5 +1,46 @@
 # Release qualification evidence
 
+## Low-cost Robinhood testnet deployment
+
+Date: September 4, 2026
+
+Source: `1e3a49389baffd1aaff9c3bafbdf55e68d489200` on
+`deploy/robinhood-testnet-low-cost`, stacked on the economic-safety candidate
+at `7ecc58f16adec2873d2aaac232bfa6e4d08361a2`.
+
+The fresh chain-46630 deployment uses a `0.00001 ETH` starting purchase, 1%
+price growth, and a ten-minute timer that decays by one minute per purchase to
+a one-minute floor. All reviewed emission, purchase split, Recovery, hook,
+Operator, buyback, and genesis-market values remain unchanged.
+
+| Scope | Command or phase | Result |
+| --- | --- | --- |
+| Deployment tests | `forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1` | 26 passed |
+| Exact-chain deployment and market simulation | Two RPC-enabled Robinhood testnet cases | 2 passed |
+| Burntato deployment | `scripts/deploy-robinhood-testnet.sh --deploy` | 24 of 24 receipts succeeded |
+| Pre-launch verifier | `scripts/deploy-robinhood-testnet.sh --verify` | Returned `true` |
+| Market launch | `scripts/deploy-robinhood-testnet.sh --launch` | Pool launched; LP permanently locked |
+| External-buy governance | `--schedule`, wait 120 seconds, `--execute` | Both transactions succeeded |
+| Final live check | `scripts/deploy-robinhood-testnet.sh --check` | Returned `true` |
+| Blockscout source publication | Burntato-owned deployment set | 16 contracts verified; OpenZeppelin timelock excluded |
+
+The live Diamond is `0x5e59B7d841199cD4316b0a081d6530fc7Ae4F28F` and
+the pool ID is
+`0xd2363660c269c9f06a7991a421e8fbd2f621d5030e03d56bb2e4938f917afe88`.
+Readback confirmed the complete protocol configuration, timelock-owned hook,
+Statics Operator bindings, shared router, 1% fee, 40% Operator fee share,
+launched state, and enabled external buys. The one-shot token-only launch left
+15 base units of expected Treasury POTATO rounding dust.
+
+The pre-launch verifier intentionally cannot be reused after launch because it
+asserts the unconsumed genesis reservation. Post-launch state is qualified by
+the dedicated final check and direct readback. The OpenZeppelin timelock has
+the expected runtime code hash and roles but remains the only owned contract
+without explorer source: Foundry could not resolve the dependency for standard
+JSON, and flattened verification is incompatible with `bytecode_hash = none`.
+This is live testnet evidence, not mainnet qualification or an independent
+third-party audit.
+
 ## Economic and Recovery safety candidate
 
 Date: September 4, 2026
@@ -67,11 +108,13 @@ The following boundaries remain deliberate and visible:
   `protocolFinalized()` is true, while the standalone hook's 200 BPS ceiling is
   fixed in its deployed bytecode.
 
-The private RPC runs are pinned fork evidence, not live transactions. This
-candidate does not redeploy or mutate the existing Robinhood testnet instance,
-which remains on commit `07688de` and is explicitly marked incompatible with
-the new Recovery API. This evidence does not prove remote CI, a production
-deployment, or an independent third-party audit.
+The private RPC runs in this section are pinned fork evidence, not live
+transactions. At the time this candidate evidence was recorded, the existing
+Robinhood testnet instance remained on commit `07688de`. The low-cost testnet
+release documented above subsequently deployed this candidate as a fresh
+instance; it did not upgrade or mutate the superseded address. This section
+does not prove remote CI, a production deployment, or an independent
+third-party audit.
 
 ## Statics Operator rewards router candidate
 
