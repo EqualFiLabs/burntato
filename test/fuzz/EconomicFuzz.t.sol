@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
+
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 import {IGame} from "../../src/interfaces/IGame.sol";
@@ -112,6 +114,22 @@ contract EconomicFuzzTest is DiamondTestSetup {
         (uint256 burned, uint256 treasuryPotato) = LibMath.splitRecovery(amount, 1_000);
         assertEq(treasuryPotato, amount * 1_000 / 10_000);
         assertEq(burned + treasuryPotato, amount);
+    }
+
+    function testFuzz_BuybackActualSpendAndRewardStayWithinGross(
+        uint256 rawGross,
+        uint256 rawRewardBps,
+        uint256 rawSpent
+    ) public pure {
+        uint256 gross = bound(rawGross, 1, uint256(type(int256).max));
+        uint256 rewardBps = bound(rawRewardBps, 0, 100);
+        uint256 requestedInput = Math.mulDiv(gross, 10_000, 10_000 + rewardBps);
+        uint256 actualSpent = bound(rawSpent, 0, requestedInput);
+        uint256 callerReward = LibMath.mulBpsDown(actualSpent, rewardBps);
+        uint256 restoredReserve = gross - actualSpent - callerReward;
+
+        assertLe(actualSpent + callerReward, gross);
+        assertEq(restoredReserve + actualSpent + callerReward, gross);
     }
 
     function testFuzz_FourWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {

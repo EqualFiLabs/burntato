@@ -321,9 +321,10 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
             _buybackAccounting(buybackLogs);
         assertEq(boughtBack, loggedBought);
         assertEq(grossSlice, reserveBefore);
+        assertEq(callerReward, ethSpent * config.buyback.callerRewardBps / 10_000);
         assertEq(keeper.balance - keeperEthBefore, callerReward);
         assertEq(potato.balanceOf(config.treasuryRecipient) - treasuryPotatoBefore, boughtBack);
-        assertEq(reserveAfter, grossSlice - callerReward - ethSpent);
+        assertEq(reserveAfter, reserveBefore - ethSpent - callerReward);
         assertEq(buybacks.buybackReserveEth(), reserveAfter);
         assertFalse(hook.externalBuysEnabled());
         assertEq(_hookFeeCount(buybackLogs), 0);

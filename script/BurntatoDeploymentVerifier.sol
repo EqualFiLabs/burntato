@@ -276,9 +276,9 @@ contract BurntatoDeploymentVerifier {
         _check(
             uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps == Constants.BPS, "RECOVERY_SPLIT_DOMAIN"
         );
-        _check(config.hookFeeBps <= Constants.BPS, "HOOK_FEE_DOMAIN");
+        _check(config.hookFeeBps <= Constants.MAX_HOOK_FEE_BPS, "HOOK_FEE_DOMAIN");
         _check(config.operatorRewardShareBps <= Constants.BPS, "OPERATOR_SHARE_DOMAIN");
-        _check(config.buyback.callerRewardBps <= Constants.BPS, "BUYBACK_REWARD_DOMAIN");
+        _check(config.buyback.callerRewardBps <= Constants.MAX_BUYBACK_CALLER_REWARD_BPS, "BUYBACK_REWARD_DOMAIN");
         _check(
             config.tickSpacing >= TickMath.MIN_TICK_SPACING && config.tickSpacing <= TickMath.MAX_TICK_SPACING,
             "TICK_SPACING_DOMAIN"
