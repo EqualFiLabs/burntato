@@ -113,13 +113,31 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.treasuryRecipient, deployer);
         assertEq(testnet.rewardAllocator, deployer);
         assertEq(testnet.timelockDelay, 120 seconds);
+        assertEq(testnet.protocol.startingPrice, 0.00001 ether);
+        assertEq(testnet.protocol.priceIncreaseBps, 100);
+        assertEq(testnet.protocol.roundTimeout, 10 minutes);
+        assertEq(testnet.protocol.roundTimeoutDecay, 1 minutes);
+        assertEq(testnet.protocol.minimumRoundTimeout, 1 minutes);
+        assertEq(testnet.protocol.roundEmissionBudget, 100_000 ether);
+        assertEq(testnet.protocol.emissionStepBps, 1_000);
+        assertEq(testnet.protocol.emissionVestingDuration, 120 seconds);
         assertEq(testnet.protocol.winnerBps, 2_500);
         assertEq(testnet.protocol.recoveryBps, 3_000);
         assertEq(testnet.protocol.treasuryBps, 2_000);
         assertEq(testnet.protocol.buybackBps, 1_000);
         assertEq(testnet.protocol.operatorPurchaseBps, 1_500);
+        assertEq(testnet.protocol.recoveryBurnBps, 9_000);
+        assertEq(testnet.protocol.recoveryTreasuryBps, 1_000);
+        assertEq(testnet.buyback.maxSpend, 2 ether);
+        assertEq(testnet.buyback.callerRewardBps, 50);
+        assertEq(testnet.buyback.delayBlocks, 1);
         assertEq(testnet.hookFeeBps, 100);
         assertEq(testnet.operatorRewardShareBps, 4_000);
+        assertEq(testnet.initialTick, 92_100);
+        assertEq(testnet.tickSpacing, 60);
+        assertEq(testnet.tickLower, -887_220);
+        assertEq(testnet.tickUpper, 92_100);
+        assertEq(testnet.potatoSeed, 100_000_000 ether);
     }
 
     function test_RobinhoodTestnetManifestsMatchLiveDependencies() public {

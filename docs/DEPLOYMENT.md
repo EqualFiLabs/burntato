@@ -205,6 +205,10 @@ Treasury, and reward-allocator roles; timelock delay is 120 seconds; purchase
 revenue is split 25% Winner, 30% Recovery, 20% Treasury, 10% buyback, and 15%
 Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent to the
 same Operator rewards router (0.4% of swap volume) and 60% sent to Treasury.
+Hot Potato purchases start at 0.00001 ETH and grow by 1%. The first holder in a
+round receives a ten-minute timer; each later purchase reduces the reset by one
+minute until the one-minute floor. Emission, Recovery, buyback, and market
+settings retain the reviewed release defaults.
 
 Use the phased wrapper so deployment verification occurs before market launch,
 and so the timelock delay remains visible rather than hidden inside one command:
@@ -223,9 +227,9 @@ scripts/deploy-robinhood-testnet.sh --check
 ```
 
 The ignored `artifacts/robinhood-testnet/deployment.json` file is the local
-machine-readable handoff. It contains only public addresses and launch
-configuration; deployment transaction hashes and final live readback belong in
-the checked-in testnet deployment record.
+machine-readable handoff. It contains only public addresses and the complete
+launch configuration; deployment transaction hashes and final live readback
+belong in the checked-in testnet deployment record.
 
 ## Verification checks
 
