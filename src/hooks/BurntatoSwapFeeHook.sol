@@ -56,7 +56,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
             revert Errors.InvalidAddress();
         }
         _validateFeeAddress(feeAddress_, token_, address(manager));
-        if (feeBps_ > Constants.BPS) revert Errors.InvalidBps();
+        if (feeBps_ > Constants.MAX_HOOK_FEE_BPS) revert Errors.InvalidBps();
         _validateOperatorRewards(operatorRewardsRouter_, operatorRewardShareBps_, feeAddress_, token_, address(manager));
         _initializeOwner(owner_);
         token = token_;
@@ -75,7 +75,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     }
 
     function setFeeBps(uint16 newFeeBps) external onlyOwner {
-        if (newFeeBps > Constants.BPS) revert Errors.InvalidBps();
+        if (newFeeBps > Constants.MAX_HOOK_FEE_BPS) revert Errors.InvalidBps();
         feeBps = newFeeBps;
         emit FeeBpsSet(newFeeBps);
     }

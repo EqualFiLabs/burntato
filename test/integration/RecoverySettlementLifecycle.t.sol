@@ -136,7 +136,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 20_000 ether);
     }
 
-    function test_CommitmentIsIrrevocableAndTargetAdvancesAtRoundStart() public {
+    function test_CommitmentRemainsLockedOncePredecessorHasHolderAndTargetAdvancesAtRoundStart() public {
         _buy(alice, 0.01 ether);
         vm.warp(block.timestamp + 120);
         vm.prank(keeper);
@@ -144,6 +144,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         vm.prank(alice);
         recovery.commitRecovery(9_000 ether);
         assertEq(recovery.recoveryCommitment(2, alice), 9_000 ether);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(2), 0);
         assertEq(potato.balanceOf(alice), 1_000 ether);
 
         _expireAndSettle();
@@ -154,6 +155,88 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(recovery.recoveryCommitment(3, alice), 1_000 ether);
         assertEq(potato.balanceOf(alice), 0);
         assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 10_000 ether);
+    }
+
+    function test_StalledRecoveryWithdrawsAfterThirtyDaysEvenWhenCommitmentsPaused() public {
+        uint256 amount = 6_000 ether;
+        uint256 availableAt = _prepareStalledRecovery(amount);
+        assertEq(availableAt, vm.getBlockTimestamp() + 30 days);
+
+        vm.prank(authority);
+        IGovernance(address(diamond)).setPauseState(false, true);
+
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.RecoveryWithdrawalTooSoon.selector, availableAt));
+        recovery.withdrawStalledRecovery(3);
+
+        vm.warp(availableAt);
+        vm.prank(bob);
+        vm.expectRevert(Errors.NothingToCancel.selector);
+        recovery.withdrawStalledRecovery(3);
+
+        uint256 aliceBefore = potato.balanceOf(alice);
+        uint256 diamondBefore = potato.balanceOf(address(diamond));
+        vm.expectEmit(true, true, false, true, address(diamond));
+        emit IRecovery.StalledRecoveryWithdrawn(3, alice, amount, 0);
+        vm.prank(alice);
+        assertEq(recovery.withdrawStalledRecovery(3), amount);
+
+        assertEq(potato.balanceOf(alice) - aliceBefore, amount);
+        assertEq(diamondBefore - potato.balanceOf(address(diamond)), amount);
+        assertEq(recovery.recoveryCommitment(3, alice), 0);
+        assertEq(recovery.totalRecoveryCommitment(3), 0);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), 0);
+    }
+
+    function test_StalledRecoveryUsesSharedClockAndRestartsAfterAllCommitmentsExit() public {
+        _buy(alice, 0.01 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        _buy(bob, 0.011 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        game.materializeMaturedEmission();
+        _expireAndSettle();
+
+        vm.prank(alice);
+        recovery.commitRecovery(5_000 ether);
+        uint256 sharedAvailableAt = recovery.stalledRecoveryWithdrawalAt(3);
+        vm.warp(vm.getBlockTimestamp() + 1 days);
+        vm.prank(bob);
+        recovery.commitRecovery(4_000 ether);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), sharedAvailableAt);
+
+        vm.warp(sharedAvailableAt);
+        vm.prank(alice);
+        assertEq(recovery.withdrawStalledRecovery(3), 5_000 ether);
+        assertEq(recovery.totalRecoveryCommitment(3), 4_000 ether);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), sharedAvailableAt);
+
+        vm.prank(bob);
+        assertEq(recovery.withdrawStalledRecovery(3), 4_000 ether);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), 0);
+
+        vm.prank(alice);
+        recovery.commitRecovery(1_000 ether);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), vm.getBlockTimestamp() + 30 days);
+    }
+
+    function test_FirstPurchasePermanentlyClosesStalledRecoveryWithdrawal() public {
+        uint256 amount = 6_000 ether;
+        uint256 availableAt = _prepareStalledRecovery(amount);
+
+        _buy(bob, 0.01 ether);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), 0);
+        vm.warp(availableAt);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.RecoveryWithdrawalUnavailable.selector, 3));
+        recovery.withdrawStalledRecovery(3);
+
+        _expireAndSettle();
+        assertTrue(game.getRound(3).activated);
+        assertEq(recovery.recoveryCommitment(3, alice), amount);
+        assertEq(recovery.totalRecoveryCommitment(3), amount);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.RecoveryWithdrawalUnavailable.selector, 3));
+        recovery.withdrawStalledRecovery(3);
     }
 
     function test_ClaimsCannotBeRepeated() public {
@@ -261,6 +344,19 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         game.materializeMaturedEmission();
         vm.prank(alice);
         recovery.commitRecovery(10_000 ether);
+    }
+
+    function _prepareStalledRecovery(uint256 amount) internal returns (uint256 availableAt) {
+        _buy(alice, 0.01 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        game.materializeMaturedEmission();
+        _expireAndSettle();
+        assertEq(game.currentRoundId(), 2);
+        assertEq(game.getRound(2).currentHolder, address(0));
+
+        vm.prank(alice);
+        recovery.commitRecovery(amount);
+        availableAt = recovery.stalledRecoveryWithdrawalAt(3);
     }
 
     function _expireAndSettle() internal {
