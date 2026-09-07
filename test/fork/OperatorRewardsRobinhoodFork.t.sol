@@ -23,6 +23,7 @@ contract ForkBurntatoClaims {
 contract OperatorRewardsRobinhoodForkTest is Test {
     uint256 internal constant FIRST_OPERATOR = 1;
     uint256 internal constant SECOND_OPERATOR = 2;
+    string internal constant MAINNET_MANIFEST_PATH = "deployments/statics-operators-robinhood-4663.json";
 
     function setUp() public {
         string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
@@ -31,12 +32,14 @@ contract OperatorRewardsRobinhoodForkTest is Test {
             if (requireFork) revert("ROBINHOOD_MAINNET is required");
             vm.skip(true, "ROBINHOOD_MAINNET is not configured");
         }
-        StaticsOperatorDependencies memory dependencies = StaticsOperatorDeploymentConfig.load();
+        string memory manifest = vm.readFile(MAINNET_MANIFEST_PATH);
+        uint256 finalizedBlock = vm.parseJsonUint(manifest, ".finalizedBlock");
         uint256 overrideBlock = vm.envOr("ROBINHOOD_OPERATOR_FORK_BLOCK", uint256(0));
         if (overrideBlock != 0) {
-            assertEq(overrideBlock, dependencies.finalizedBlock, "ROBINHOOD_OPERATOR_FORK_BLOCK drift");
+            assertEq(overrideBlock, finalizedBlock, "ROBINHOOD_OPERATOR_FORK_BLOCK drift");
         }
-        vm.createSelectFork(rpc, dependencies.finalizedBlock);
+        vm.createSelectFork(rpc, finalizedBlock);
+        StaticsOperatorDependencies memory dependencies = StaticsOperatorDeploymentConfig.load();
         StaticsOperatorDeploymentConfig.validate(dependencies);
     }
 
