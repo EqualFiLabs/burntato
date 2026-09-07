@@ -3,6 +3,9 @@ specs/
 broadcast/
 cache/
 out/
+out-formal/
+.certora_internal/
+certora_metadata.json
 deployments/*
 !deployments/robinhood-chain-4663.json
 !deployments/statics-operators-robinhood-4663.json
