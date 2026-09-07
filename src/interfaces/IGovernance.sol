@@ -18,6 +18,7 @@ interface IGovernance {
     function commitmentsPaused() external view returns (bool);
     function protocolFinalized() external view returns (bool);
     function protocolConfig() external view returns (ProtocolConfig memory);
+    function foundationConfigured() external view returns (bool);
     function purchasesInitialized() external view returns (bool);
     function initializePurchases() external;
     function setAuthority(address newAuthority) external;

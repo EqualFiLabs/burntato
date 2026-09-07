@@ -37,6 +37,7 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
+import {LibMarketMath} from "../src/libraries/LibMarketMath.sol";
 import {
     BurntatoDeployment,
     BurntatoOwnedCodeHashes,
@@ -436,6 +437,9 @@ contract DeployBurntato is Script {
                 || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
                 || config.potatoSeed == 0
         ) revert InvalidGenesisConfiguration();
+        if (LibMarketMath.launchLiquidity(config.potatoSeed, config.tickLower, config.tickUpper) == 0) {
+            revert InvalidGenesisConfiguration();
+        }
     }
 
     function _log(BurntatoDeployment memory deployment) internal pure {

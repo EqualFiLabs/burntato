@@ -13,6 +13,7 @@ contract FinalizeBurntatoRobinhoodTestnet is Script {
 
     error InvalidTestnetChain(uint256 actualChainId);
     error PurchasesNotInitialized();
+    error PurchasesPaused();
     error MarketNotLaunched();
     error ExternalBuysNotEnabled();
 
@@ -44,11 +45,16 @@ contract FinalizeBurntatoRobinhoodTestnet is Script {
 
     function checkFinalized() external view returns (bool) {
         _requireChain();
-        address diamond = _diamond();
-        if (!IGovernance(diamond).purchasesInitialized()) revert PurchasesNotInitialized();
+        return checkFinalizedDeployment(_diamond(), _hook());
+    }
+
+    function checkFinalizedDeployment(address diamond, address hook) public view returns (bool) {
+        IGovernance governance = IGovernance(diamond);
+        if (!governance.purchasesInitialized()) revert PurchasesNotInitialized();
+        if (governance.purchasesPaused()) revert PurchasesPaused();
         (,, bool launching, bool launched) = IMarket(diamond).marketState();
         if (launching || !launched) revert MarketNotLaunched();
-        if (!BurntatoSwapFeeHook(payable(_hook())).externalBuysEnabled()) revert ExternalBuysNotEnabled();
+        if (!BurntatoSwapFeeHook(payable(hook)).externalBuysEnabled()) revert ExternalBuysNotEnabled();
         return true;
     }
 

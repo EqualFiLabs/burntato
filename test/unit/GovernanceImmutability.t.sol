@@ -288,7 +288,7 @@ contract GovernanceAdministrationTest is Test {
     }
 
     function _governanceSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](14);
+        selectors = new bytes4[](15);
         selectors[0] = IGovernance.authority.selector;
         selectors[1] = IGovernance.guardian.selector;
         selectors[2] = IGovernance.purchasesPaused.selector;
@@ -301,7 +301,8 @@ contract GovernanceAdministrationTest is Test {
         selectors[9] = IGovernance.setProtocolConfig.selector;
         selectors[10] = IGovernance.setTreasuryRecipient.selector;
         selectors[11] = IGovernance.finalizeProtocol.selector;
-        selectors[12] = IGovernance.purchasesInitialized.selector;
-        selectors[13] = IGovernance.initializePurchases.selector;
+        selectors[12] = IGovernance.foundationConfigured.selector;
+        selectors[13] = IGovernance.purchasesInitialized.selector;
+        selectors[14] = IGovernance.initializePurchases.selector;
     }
 }

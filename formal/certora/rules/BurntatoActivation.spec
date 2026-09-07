@@ -1,6 +1,6 @@
 methods {
     function formalConfigureState(address, bool, bool) external envfree;
-    function formalFoundationInitialized() external returns (bool) envfree;
+    function foundationConfigured() external returns (bool) envfree;
     function authority() external returns (address) envfree;
     function purchasesInitialized() external returns (bool) envfree;
 }
@@ -8,6 +8,7 @@ methods {
 rule foundationConfigurationIsRequired(address admin) {
     require admin != 0;
     formalConfigureState(admin, false, false);
+    assert !foundationConfigured(), "foundation getter does not expose missing configuration";
 
     env e;
     require e.msg.sender == admin;
@@ -16,6 +17,7 @@ rule foundationConfigurationIsRequired(address admin) {
     bool reverted = lastReverted;
 
     assert reverted, "admin activates purchases before foundation configuration";
+    assert !foundationConfigured(), "failed activation mutates foundation configuration";
     assert !purchasesInitialized(), "failed activation mutates purchase state";
 }
 
@@ -23,6 +25,7 @@ rule onlyCurrentAuthorityCanInitialize(address admin, address caller) {
     require admin != 0;
     require caller != admin;
     formalConfigureState(admin, true, false);
+    assert foundationConfigured(), "foundation getter does not expose completed configuration";
 
     env e;
     require e.msg.sender == caller;
@@ -43,6 +46,7 @@ rule currentAuthorityInitializes(address admin) {
     require e.msg.value == 0;
     initializePurchases(e);
 
+    assert foundationConfigured(), "activation clears foundation configuration";
     assert purchasesInitialized(), "authority cannot initialize purchases";
 }
 

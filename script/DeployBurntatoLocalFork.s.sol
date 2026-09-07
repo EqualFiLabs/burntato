@@ -10,6 +10,7 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
+import {BurntatoGenesisCodec} from "./libraries/BurntatoGenesisCodec.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
@@ -37,7 +38,7 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         deployment = deployWithDependencies(config, deployer, dependencies, operatorDependencies);
         vm.stopBroadcast();
 
-        _writeDeployment(deployment, dependencies);
+        _writeDeployment(deployment, config, dependencies);
         _log(deployment);
     }
 
@@ -77,14 +78,18 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         StaticsOperatorDeploymentConfig.validate(operatorDependencies);
     }
 
-    function _writeDeployment(BurntatoDeployment memory deployment, CanonicalV4Dependencies memory dependencies)
-        internal
-    {
+    function _writeDeployment(
+        BurntatoDeployment memory deployment,
+        GenesisConfig memory config,
+        CanonicalV4Dependencies memory dependencies
+    ) internal {
         vm.createDir("artifacts/robinhood-local", true);
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
         string memory object = "robinhoodLocal";
+        vm.serializeUint(object, "schemaVersion", 2);
         vm.serializeUint(object, "chainId", dependencies.chainId);
         vm.serializeUint(object, "forkBlock", operatorDependencies.finalizedBlock);
+        vm.serializeBytes(object, "genesisConfig", BurntatoGenesisCodec.encode(config));
         vm.serializeAddress(object, "diamond", deployment.diamond);
         vm.serializeAddress(object, "admin", deployment.admin);
         vm.serializeAddress(object, "hook", deployment.hook);

@@ -15,8 +15,4 @@ contract BurntatoActivationHarness is GovernanceFacet {
         LibProtocolStorage.initialization().foundationInitialized = foundationInitialized_;
         LibProtocolStorage.game().initialized = purchasesInitialized_;
     }
-
-    function formalFoundationInitialized() external view returns (bool) {
-        return LibProtocolStorage.initialization().foundationInitialized;
-    }
 }

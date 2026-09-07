@@ -39,6 +39,10 @@ contract GovernanceFacet is IGovernance {
         return LibProtocolStorage.game().config;
     }
 
+    function foundationConfigured() external view returns (bool) {
+        return LibProtocolStorage.initialization().foundationInitialized;
+    }
+
     function purchasesInitialized() external view returns (bool) {
         return LibProtocolStorage.game().initialized;
     }

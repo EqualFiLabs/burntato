@@ -30,6 +30,14 @@ contract PotatoTokenFacet is ERC20 {
         emit PotatoBurned(msg.sender, amount);
     }
 
+    function canonicalHook() external view returns (address) {
+        return LibProtocolStorage.token().canonicalHook;
+    }
+
+    function tokenPoolManager() external view returns (address) {
+        return LibProtocolStorage.token().poolManager;
+    }
+
     function isDistributor(address account) external view returns (bool) {
         return LibProtocolStorage.token().distributors[account];
     }

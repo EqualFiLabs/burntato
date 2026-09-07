@@ -116,6 +116,7 @@ contract BurntatoActivationProperties is Test {
     }
 
     function check_nonPurchaseViewsRemainAvailable() public view {
+        assertTrue(governance.foundationConfigured());
         assertFalse(governance.purchasesInitialized());
         assertFalse(governance.purchasesPaused());
         assertFalse(governance.commitmentsPaused());

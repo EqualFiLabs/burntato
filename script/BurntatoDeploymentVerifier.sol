@@ -13,6 +13,7 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {BuybackConfig, ProtocolConfig, Round} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
+import {LibMarketMath} from "../src/libraries/LibMarketMath.sol";
 import {
     BurntatoDeployment,
     CanonicalV4Dependencies,
@@ -124,6 +125,7 @@ contract BurntatoDeploymentVerifier {
         _check(!governance.purchasesPaused(), "PURCHASES_UNPAUSED");
         _check(!governance.commitmentsPaused(), "COMMITMENTS_UNPAUSED");
         _check(!governance.protocolFinalized(), "NOT_FINALIZED");
+        _check(governance.foundationConfigured(), "FOUNDATION_CONFIGURED");
         _check(!governance.purchasesInitialized(), "PURCHASES_NOT_INITIALIZED");
         ProtocolConfig memory protocol = governance.protocolConfig();
         ProtocolConfig memory expected = config.protocol;
@@ -152,6 +154,8 @@ contract BurntatoDeploymentVerifier {
         _check(token.decimals() == 18, "TOKEN_DECIMALS");
         _check(token.totalSupply() == config.potatoSeed, "TOKEN_SUPPLY");
         _check(token.balanceOf(deployment.diamond) == config.potatoSeed, "GENESIS_MARKET_BALANCE");
+        _check(token.canonicalHook() == deployment.hook, "TOKEN_CANONICAL_HOOK");
+        _check(token.tokenPoolManager() == deployment.poolManager, "TOKEN_POOL_MANAGER");
         _check(token.isDistributor(config.treasuryRecipient), "TREASURY_DISTRIBUTOR");
         BuybackConfig memory buybackConfig = buyback.buybackConfig();
         _check(buybackConfig.maxSpend == config.buyback.maxSpend, "BUYBACK_MAX_SPEND");
@@ -198,6 +202,10 @@ contract BurntatoDeploymentVerifier {
             "TICK_ALIGNMENT_DOMAIN"
         );
         _check(config.potatoSeed != 0, "SEED_DOMAIN");
+        _check(
+            LibMarketMath.launchLiquidity(config.potatoSeed, config.tickLower, config.tickUpper) != 0,
+            "LAUNCH_LIQUIDITY_DOMAIN"
+        );
     }
 
     function _check(bool condition, bytes32 check) private pure {

@@ -23,7 +23,7 @@ While authority exists it can:
   authority separately holds that ownership role.
 
 Fresh deployments begin configured and unpaused with purchases inactive. Only
-`buyPotato()` checks `purchasesInitialized()`. The designated final admin may
+`buyPotato()` checks `purchasesInitialized()`. The current Diamond authority may
 call `initializePurchases()` exactly once, directly and without a Burntato
 timelock. The initializer does not gate market launch, Recovery, settlement,
 claims, reward scheduling, or administrative selectors.
@@ -101,8 +101,9 @@ Changing any one of these three roles does not implicitly mutate the others.
 For a deployment, verify:
 
 - `authority()` is the intended final-admin EOA, Safe, or governance address;
+- `foundationConfigured()` is true before purchase activation;
 - `purchasesInitialized()` is false during deployment verification and becomes
-  true only after the final admin's one-shot call;
+  true only after the current authority's one-shot call;
 - `guardian()` and both pause bits match intended operations state;
 - the hook owner is the intended final admin;
 - for a self-contained deployment, the PoolManager owner is that final admin; for

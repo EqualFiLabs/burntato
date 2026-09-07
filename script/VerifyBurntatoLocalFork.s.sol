@@ -4,7 +4,6 @@ pragma solidity 0.8.26;
 import {Script, console2} from "forge-std/Script.sol";
 
 import {BurntatoDeploymentVerifier} from "./BurntatoDeploymentVerifier.sol";
-import {DeployBurntato} from "./DeployBurntato.s.sol";
 import {DeployBurntatoLocalFork} from "./DeployBurntatoLocalFork.s.sol";
 import {
     BurntatoDeployment,
@@ -13,27 +12,31 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
+import {BurntatoGenesisCodec} from "./libraries/BurntatoGenesisCodec.sol";
 
 contract VerifyBurntatoLocalFork is Script {
     string internal constant OUTPUT_PATH = "artifacts/robinhood-local/deployment.json";
 
+    error InvalidArtifactSchema(uint256 actual);
+
     function run() external returns (bool verified) {
         CanonicalV4Dependencies memory dependencies = (new DeployBurntatoLocalFork()).preflightDeployedLocalFork();
-        DeployBurntato configLoader = new DeployBurntato();
-        GenesisConfig memory config = configLoader.environmentConfig();
+        string memory json = vm.readFile(OUTPUT_PATH);
+        uint256 schemaVersion = vm.parseJsonUint(json, ".schemaVersion");
+        if (schemaVersion != 2) revert InvalidArtifactSchema(schemaVersion);
+        GenesisConfig memory config = _readConfig(json);
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
-        BurntatoDeployment memory deployment = _readDeployment(dependencies);
+        BurntatoDeployment memory deployment = _readDeployment(json, dependencies);
         verified =
             (new BurntatoDeploymentVerifier()).verifyCanonical(config, deployment, dependencies, operatorDependencies);
         console2.log("Burntato local fork deployment verified", verified);
     }
 
-    function _readDeployment(CanonicalV4Dependencies memory dependencies)
+    function _readDeployment(string memory json, CanonicalV4Dependencies memory dependencies)
         private
-        view
+        pure
         returns (BurntatoDeployment memory deployment)
     {
-        string memory json = vm.readFile(OUTPUT_PATH);
         deployment.diamond = vm.parseJsonAddress(json, ".diamond");
         deployment.admin = vm.parseJsonAddress(json, ".admin");
         deployment.hook = vm.parseJsonAddress(json, ".hook");
@@ -61,6 +64,11 @@ contract VerifyBurntatoLocalFork is Script {
         deployment.universalRouter = dependencies.universalRouter;
         deployment.permit2 = dependencies.permit2;
         deployment.weth9 = dependencies.weth;
+    }
+
+    function _readConfig(string memory json) private pure returns (GenesisConfig memory config) {
+        bytes memory encoded = vm.parseJsonBytes(json, ".genesisConfig");
+        config = BurntatoGenesisCodec.decode(encoded);
     }
 
     function _readCodeHashes(string memory json, BurntatoDeployment memory deployment) private pure {

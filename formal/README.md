@@ -12,7 +12,8 @@ The Halmos properties execute production `LibMath`, the production Diamond,
 
 - diminishing-timeout bounds and its fixed-reset branches;
 - rejection of every pre-activation `buyPotato()` payment;
-- current-authority-only, one-shot purchase activation; and
+- configured-foundation visibility and current-authority-only, one-shot
+  purchase activation; and
 - a successful first purchase after activation without gating read surfaces.
 
 The Certora harnesses are thin wrappers over production `LibMath` and

@@ -19,7 +19,7 @@ disabled.
 
 Deployment completes fully configured and unpaused while
 `purchasesInitialized()` remains false. Only `buyPotato()` is gated by this
-one-shot state. The designated final admin calls `initializePurchases()`
+one-shot state. The current Diamond authority calls `initializePurchases()`
 directly after verification; no delay is imposed by Burntato. Market launch,
 Recovery, claims, settlement, and all other selectors are not gated by purchase
 initialization.
@@ -73,7 +73,9 @@ fixed resets. Protocol and Operator-share BPS values are bounded to 10,000; the
 purchase and Recovery splits must each sum to 10,000. The bilateral hook fee
 has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
 narrower 0-to-100 BPS domain. Zero price growth, emission step, emission budget,
-or hook fee is valid.
+or hook fee is valid. The genesis POTATO allocation must fit the PositionManager
+`uint128` amount domain and produce nonzero, `uint128`-representable liquidity
+at the configured launch ticks.
 
 ## Environment
 
@@ -197,9 +199,11 @@ forge script script/VerifyBurntatoLocalFork.s.sol:VerifyBurntatoLocalFork \
 
 The public-only frontend handoff is
 `artifacts/robinhood-local/deployment.json`. It contains the fork identity,
+the exact ABI-encoded genesis configuration used for repeatable verification,
 Diamond, final admin, hook, Operator router/share, Statics dependencies, facets,
 initializer, owned runtime hashes, and canonical dependency addresses. It never
-contains the RPC URL or private key.
+contains the RPC URL or private key. Verification reads the persisted genesis
+configuration, so one-shot shell overrides do not need to be re-exported.
 
 Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
 instead. Run archive-RPC qualification locally; it is intentionally excluded
