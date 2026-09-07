@@ -211,13 +211,16 @@ contract DeployBurntato is Script {
 
     function _deployHook(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
         deployment.hookDeployer = address(new BurntatoHookDeployer());
+        address hookOperatorRewardsRouter = BurntatoDeploymentConfig.hookOperatorRewardsRouter(
+            config.operatorRewardShareBps, deployment.operatorRewardsRouter
+        );
         bytes memory constructorArgs = abi.encode(
             IPoolManager(deployment.poolManager),
             deployment.timelock,
             deployment.diamond,
             config.treasuryRecipient,
             config.hookFeeBps,
-            deployment.operatorRewardsRouter,
+            hookOperatorRewardsRouter,
             config.operatorRewardShareBps,
             config.tickSpacing
         );
@@ -233,7 +236,7 @@ contract DeployBurntato is Script {
                     deployment.diamond,
                     config.treasuryRecipient,
                     config.hookFeeBps,
-                    deployment.operatorRewardsRouter,
+                    hookOperatorRewardsRouter,
                     config.operatorRewardShareBps,
                     config.tickSpacing
                 )

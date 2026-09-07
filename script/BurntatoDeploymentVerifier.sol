@@ -27,6 +27,7 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
+import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
@@ -227,7 +228,10 @@ contract BurntatoDeploymentVerifier {
         _check(hook.token() == deployment.diamond, "HOOK_TOKEN");
         _check(hook.feeAddress() == config.treasuryRecipient, "HOOK_FEE_ADDRESS");
         _check(hook.feeBps() == config.hookFeeBps, "HOOK_FEE_BPS");
-        _check(hook.operatorRewardsRouter() == deployment.operatorRewardsRouter, "HOOK_OPERATOR_ROUTER");
+        address expectedHookRouter = BurntatoDeploymentConfig.hookOperatorRewardsRouter(
+            config.operatorRewardShareBps, deployment.operatorRewardsRouter
+        );
+        _check(hook.operatorRewardsRouter() == expectedHookRouter, "HOOK_OPERATOR_ROUTER");
         _check(hook.operatorRewardShareBps() == config.operatorRewardShareBps, "HOOK_OPERATOR_SHARE");
         _check(hook.tickSpacing() == config.tickSpacing, "HOOK_TICK_SPACING");
         _check(address(hook.poolManager()) == deployment.poolManager, "HOOK_POOL_MANAGER");

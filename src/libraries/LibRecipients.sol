@@ -8,10 +8,11 @@ import {Errors} from "../shared/Errors.sol";
 library LibRecipients {
     function enforceExternal(address recipient) internal view {
         LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
+        address operatorRewardsRouter = LibProtocolStorage.operatorRevenue().router;
         if (
             recipient == address(0) || recipient == address(this) || recipient == Constants.LOCKED_LP_RECIPIENT
                 || recipient == ms.hook || recipient == ms.poolManager || recipient == ms.positionManager
-                || recipient == ms.permit2
+                || recipient == ms.permit2 || recipient == operatorRewardsRouter
         ) revert Errors.InvalidAddress();
     }
 }

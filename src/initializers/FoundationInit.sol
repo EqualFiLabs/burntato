@@ -31,6 +31,7 @@ contract FoundationInit is ERC20 {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         if (gs.initialized) revert Errors.AlreadyInitialized();
         LibRecipients.enforceExternal(treasury);
+        if (treasury == operatorRewardsRouter) revert Errors.InvalidAddress();
         if (marketPotatoSeed == 0) revert Errors.ZeroAmount();
         LibConfig.validate(config);
         if (operatorRewardsRouter == address(0)) {

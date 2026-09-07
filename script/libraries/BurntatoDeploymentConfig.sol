@@ -61,4 +61,8 @@ library BurntatoDeploymentConfig {
         if (value < type(int24).min || value > type(int24).max) revert NarrowingOverflow();
         narrowed = int24(value);
     }
+
+    function hookOperatorRewardsRouter(uint16 operatorRewardShareBps, address router) internal pure returns (address) {
+        return operatorRewardShareBps == 0 ? address(0) : router;
+    }
 }

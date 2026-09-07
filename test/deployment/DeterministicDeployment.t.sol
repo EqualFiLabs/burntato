@@ -49,6 +49,11 @@ contract DeploymentConfigHarness {
     function checkedInt24(int256 value) external pure returns (int24) {
         return BurntatoDeploymentConfig.checkedInt24(value);
     }
+
+    function hookOperatorRewardsRouter(uint256 operatorRewardShareBps, address router) external pure returns (address) {
+        if (operatorRewardShareBps > type(uint16).max) revert();
+        return BurntatoDeploymentConfig.hookOperatorRewardsRouter(uint16(operatorRewardShareBps), router);
+    }
 }
 
 contract DeterministicDeploymentTest is Test {
@@ -328,6 +333,15 @@ contract DeterministicDeploymentTest is Test {
         harness.checkedInt24(int256(type(int24).max) + 1);
         vm.expectRevert(BurntatoDeploymentConfig.NarrowingOverflow.selector);
         harness.checkedInt24(int256(type(int24).min) - 1);
+    }
+
+    function test_HookRouterConfigurationSupportsEveryRevenueCombination() public {
+        DeploymentConfigHarness harness = new DeploymentConfigHarness();
+        address router = makeAddr("operator-router");
+
+        assertEq(harness.hookOperatorRewardsRouter(0, address(0)), address(0));
+        assertEq(harness.hookOperatorRewardsRouter(0, router), address(0));
+        assertEq(harness.hookOperatorRewardsRouter(4_000, router), router);
     }
 
     function test_VerifierRejectsProtocolConfigurationMismatch() public {
