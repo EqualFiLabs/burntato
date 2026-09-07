@@ -256,9 +256,6 @@ toggle the gate repeatedly before or after launch and Diamond finalization.
 All canonical buy/sell hook fees continue to route directly to the hook's
 governed Treasury recipient.
 
-The ignored local specification package was updated but is intentionally not a
-versioned PR artifact.
-
 ## Tests
 
 Qualification selected every owned test path explicitly and used the repository
