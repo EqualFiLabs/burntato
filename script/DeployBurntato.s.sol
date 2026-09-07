@@ -13,7 +13,6 @@ import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
 import {IPositionDescriptor} from "@uniswap/v4-periphery/src/interfaces/IPositionDescriptor.sol";
 import {IWETH9} from "@uniswap/v4-periphery/src/interfaces/external/IWETH9.sol";
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import {BurntatoDiamond} from "../src/BurntatoDiamond.sol";
 import {ClaimsFacet} from "../src/facets/ClaimsFacet.sol";
@@ -40,6 +39,7 @@ import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol"
 import {Constants} from "../src/shared/Constants.sol";
 import {
     BurntatoDeployment,
+    BurntatoOwnedCodeHashes,
     CanonicalV4Dependencies,
     GenesisConfig,
     StaticsOperatorDependencies
@@ -75,8 +75,8 @@ contract DeployBurntato is Script {
         if (config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0) {
             revert InvalidGenesisConfiguration();
         }
-        _deployTimelock(config, deployment);
-        _deployUniswap(deployment);
+        deployment.admin = config.finalAdmin;
+        _deployUniswap(config.finalAdmin, deployment);
         StaticsOperatorDependencies memory operatorDependencies;
         _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
@@ -92,7 +92,7 @@ contract DeployBurntato is Script {
         }
         RobinhoodDeploymentConfig.validate(dependencies);
         _populateCanonicalDependencies(dependencies, deployment);
-        _deployTimelock(config, deployment);
+        deployment.admin = config.finalAdmin;
         StaticsOperatorDependencies memory operatorDependencies;
         _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
@@ -110,7 +110,7 @@ contract DeployBurntato is Script {
         RobinhoodDeploymentConfig.validate(dependencies);
         StaticsOperatorDeploymentConfig.validate(operatorDependencies);
         _populateCanonicalDependencies(dependencies, deployment);
-        _deployTimelock(config, deployment);
+        deployment.admin = config.finalAdmin;
         _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
 
@@ -125,6 +125,7 @@ contract DeployBurntato is Script {
         _initializeDiamond(config, deployment);
         _deployHook(config, deployment);
         _configureProtocol(config, deployment);
+        _recordOwnedCodeHashes(deployment);
     }
 
     function _deployOperatorRewards(
@@ -140,16 +141,8 @@ contract DeployBurntato is Script {
         );
     }
 
-    function _deployTimelock(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
-        address[] memory proposers = new address[](1);
-        proposers[0] = config.proposer;
-        address[] memory executors = new address[](1);
-        executors[0] = address(0);
-        deployment.timelock = address(new TimelockController(config.timelockDelay, proposers, executors, address(0)));
-    }
-
-    function _deployUniswap(BurntatoDeployment memory deployment) private {
-        deployment.poolManager = address(new PoolManager(deployment.timelock));
+    function _deployUniswap(address finalAdmin, BurntatoDeployment memory deployment) private {
+        deployment.poolManager = address(new PoolManager(finalAdmin));
         deployment.permit2 = address(new LocalPermit2());
         deployment.weth9 = address(new LocalWETH9());
         deployment.positionDescriptor = address(
@@ -216,7 +209,7 @@ contract DeployBurntato is Script {
         );
         bytes memory constructorArgs = abi.encode(
             IPoolManager(deployment.poolManager),
-            deployment.timelock,
+            config.finalAdmin,
             deployment.diamond,
             config.treasuryRecipient,
             config.hookFeeBps,
@@ -232,7 +225,7 @@ contract DeployBurntato is Script {
                 .deploy(
                     salt,
                     IPoolManager(deployment.poolManager),
-                    deployment.timelock,
+                    config.finalAdmin,
                     deployment.diamond,
                     config.treasuryRecipient,
                     config.hookFeeBps,
@@ -263,7 +256,30 @@ contract DeployBurntato is Script {
             })
             );
         ITreasuryRewards(deployment.diamond).setRewardAllocator(config.rewardAllocator);
-        IGovernance(deployment.diamond).setAuthority(deployment.timelock);
+        IGovernance(deployment.diamond).setAuthority(config.finalAdmin);
+    }
+
+    function _recordOwnedCodeHashes(BurntatoDeployment memory deployment) private view {
+        deployment.codeHashes = BurntatoOwnedCodeHashes({
+            diamond: deployment.diamond.codehash,
+            diamondCutFacet: deployment.diamondCutFacet.codehash,
+            diamondLoupeFacet: deployment.diamondLoupeFacet.codehash,
+            governanceFacet: deployment.governanceFacet.codehash,
+            marketFacet: deployment.marketFacet.codehash,
+            buybackFacet: deployment.buybackFacet.codehash,
+            potatoTokenFacet: deployment.potatoTokenFacet.codehash,
+            gameFacet: deployment.gameFacet.codehash,
+            recoveryFacet: deployment.recoveryFacet.codehash,
+            settlementFacet: deployment.settlementFacet.codehash,
+            claimsFacet: deployment.claimsFacet.codehash,
+            treasuryRewardsFacet: deployment.treasuryRewardsFacet.codehash,
+            foundationInit: deployment.foundationInit.codehash,
+            hookDeployer: deployment.hookDeployer.codehash,
+            hook: deployment.hook.codehash,
+            operatorRewardsRouter: deployment.operatorRewardsRouter == address(0)
+                ? bytes32(0)
+                : deployment.operatorRewardsRouter.codehash
+        });
     }
 
     function localDefaults() external pure returns (GenesisConfig memory config) {
@@ -277,11 +293,10 @@ contract DeployBurntato is Script {
     function _environmentConfig() internal view returns (GenesisConfig memory config) {
         config = BurntatoDeploymentConfig.localDefaults();
         config.deployer = vm.envOr("BURNTATO_DEPLOYER", config.deployer);
-        config.proposer = vm.envOr("BURNTATO_PROPOSER", config.proposer);
+        config.finalAdmin = vm.envOr("BURNTATO_FINAL_ADMIN", config.finalAdmin);
         config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
         config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
         config.rewardAllocator = vm.envOr("BURNTATO_REWARD_ALLOCATOR", config.rewardAllocator);
-        config.timelockDelay = vm.envOr("BURNTATO_TIMELOCK_DELAY", config.timelockDelay);
         config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
         config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
@@ -400,7 +415,7 @@ contract DeployBurntato is Script {
     function _validateConfig(GenesisConfig memory config, address bootstrapAuthority) private pure {
         ProtocolConfig memory protocol = config.protocol;
         if (
-            bootstrapAuthority == address(0) || config.deployer == address(0) || config.proposer == address(0)
+            bootstrapAuthority == address(0) || config.deployer == address(0) || config.finalAdmin == address(0)
                 || config.treasuryRecipient == address(0) || config.rewardAllocator == address(0)
                 || protocol.startingPrice == 0 || protocol.roundTimeout == 0 || protocol.roundTimeout > type(uint64).max
                 || protocol.minimumRoundTimeout == 0 || protocol.minimumRoundTimeout > protocol.roundTimeout
@@ -425,7 +440,7 @@ contract DeployBurntato is Script {
 
     function _log(BurntatoDeployment memory deployment) internal pure {
         console2.log("BurntatoDiamond", deployment.diamond);
-        console2.log("TimelockController", deployment.timelock);
+        console2.log("BurntatoAdmin", deployment.admin);
         console2.log("PoolManager", deployment.poolManager);
         console2.log("Permit2", deployment.permit2);
         console2.log("WETH9", deployment.weth9);

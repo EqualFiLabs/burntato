@@ -13,6 +13,7 @@ import {IOperatorRewards} from "../interfaces/IOperatorRewards.sol";
 
 contract FoundationInit is ERC20 {
     event GenesisMarketSupplyMinted(uint256 amount);
+    event FoundationConfigured();
 
     function name() public pure override returns (string memory) {
         return "Burntato Potato";
@@ -28,8 +29,9 @@ contract FoundationInit is ERC20 {
         address operatorRewardsRouter,
         uint256 marketPotatoSeed
     ) external {
+        LibProtocolStorage.InitializationStorage storage initialization = LibProtocolStorage.initialization();
+        if (initialization.foundationInitialized) revert Errors.AlreadyInitialized();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
-        if (gs.initialized) revert Errors.AlreadyInitialized();
         LibRecipients.enforceExternal(treasury);
         if (treasury == operatorRewardsRouter) revert Errors.InvalidAddress();
         if (marketPotatoSeed == 0) revert Errors.ZeroAmount();
@@ -42,7 +44,7 @@ contract FoundationInit is ERC20 {
                 revert Errors.InvalidProtocolConfig();
             }
         }
-        gs.initialized = true;
+        initialization.foundationInitialized = true;
         gs.config = config;
         LibProtocolStorage.operatorRevenue().router = operatorRewardsRouter;
 
@@ -53,5 +55,6 @@ contract FoundationInit is ERC20 {
         LibProtocolStorage.market().potatoSeed = marketPotatoSeed;
         _mint(address(this), marketPotatoSeed);
         emit GenesisMarketSupplyMinted(marketPotatoSeed);
+        emit FoundationConfigured();
     }
 }

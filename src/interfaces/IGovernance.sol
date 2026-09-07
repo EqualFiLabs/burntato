@@ -10,6 +10,7 @@ interface IGovernance {
     event ProtocolConfigUpdated(ProtocolConfig config);
     event TreasuryRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event ProtocolFinalized();
+    event PurchasesInitialized(address indexed admin);
 
     function authority() external view returns (address);
     function guardian() external view returns (address);
@@ -17,6 +18,8 @@ interface IGovernance {
     function commitmentsPaused() external view returns (bool);
     function protocolFinalized() external view returns (bool);
     function protocolConfig() external view returns (ProtocolConfig memory);
+    function purchasesInitialized() external view returns (bool);
+    function initializePurchases() external;
     function setAuthority(address newAuthority) external;
     function setGuardian(address newGuardian) external;
     function setPauseState(bool pausePurchases, bool pauseCommitments) external;

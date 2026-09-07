@@ -73,6 +73,8 @@ abstract contract DiamondTestSetup is Test {
         IBuyback(address(diamond)).setBuybackConfig(_defaultBuybackConfig());
         vm.prank(authority);
         ITreasuryRewards(address(diamond)).setRewardAllocator(treasury);
+        vm.prank(authority);
+        IGovernance(address(diamond)).initializePurchases();
     }
 
     function _initialConfig() internal view virtual returns (ProtocolConfig memory config) {
@@ -129,7 +131,7 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _governanceSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](12);
+        selectors = new bytes4[](14);
         selectors[0] = IGovernance.authority.selector;
         selectors[1] = IGovernance.guardian.selector;
         selectors[2] = IGovernance.purchasesPaused.selector;
@@ -142,6 +144,8 @@ abstract contract DiamondTestSetup is Test {
         selectors[9] = IGovernance.setProtocolConfig.selector;
         selectors[10] = IGovernance.setTreasuryRecipient.selector;
         selectors[11] = IGovernance.finalizeProtocol.selector;
+        selectors[12] = IGovernance.purchasesInitialized.selector;
+        selectors[13] = IGovernance.initializePurchases.selector;
     }
 
     function _tokenSelectors() internal pure returns (bytes4[] memory selectors) {

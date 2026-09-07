@@ -5,11 +5,10 @@ import {BuybackConfig, ProtocolConfig} from "../src/shared/Types.sol";
 
 struct GenesisConfig {
     address deployer;
-    address proposer;
+    address finalAdmin;
     address guardian;
     address treasuryRecipient;
     address rewardAllocator;
-    uint256 timelockDelay;
     ProtocolConfig protocol;
     BuybackConfig buyback;
     uint16 hookFeeBps;
@@ -55,6 +54,25 @@ struct CanonicalV4Dependencies {
     bytes32 wethCodeHash;
 }
 
+struct BurntatoOwnedCodeHashes {
+    bytes32 diamond;
+    bytes32 diamondCutFacet;
+    bytes32 diamondLoupeFacet;
+    bytes32 governanceFacet;
+    bytes32 marketFacet;
+    bytes32 buybackFacet;
+    bytes32 potatoTokenFacet;
+    bytes32 gameFacet;
+    bytes32 recoveryFacet;
+    bytes32 settlementFacet;
+    bytes32 claimsFacet;
+    bytes32 treasuryRewardsFacet;
+    bytes32 foundationInit;
+    bytes32 hookDeployer;
+    bytes32 hook;
+    bytes32 operatorRewardsRouter;
+}
+
 struct BurntatoDeployment {
     address diamond;
     address diamondCutFacet;
@@ -69,7 +87,7 @@ struct BurntatoDeployment {
     address claimsFacet;
     address treasuryRewardsFacet;
     address foundationInit;
-    address timelock;
+    address admin;
     address poolManager;
     address permit2;
     address weth9;
@@ -82,4 +100,5 @@ struct BurntatoDeployment {
     address stateView;
     address reservesLens;
     address universalRouter;
+    BurntatoOwnedCodeHashes codeHashes;
 }

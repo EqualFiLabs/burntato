@@ -17,6 +17,12 @@ changes apply to future unsnapshotted rounds.
 Every successful purchase resets from its own timestamp; purchase count drives
 the urgency schedule but still does not consume POTATO emission.
 
+Fresh deployments are fully configured and unpaused but begin with Hot Potato
+purchases inactive. Only `buyPotato()` is blocked until the configured final
+admin calls `initializePurchases()` once; market launch, Recovery, settlement,
+claims, and other selectors remain available. Burntato deploys no mandatory
+timelock. The final admin may itself be an EOA, Safe, or governance contract.
+
 POTATO uses a Solady transfer-lock pattern adapted from the pinned FWA.fun
 implementation: minting,
 burning, transfers involving the current authority or an administered
@@ -53,7 +59,7 @@ inventory. The reward allocator is independently administered and may be
 replaced or disabled without changing the Treasury recipient or distributor
 registry.
 
-Administration remains available through the configured authority. The
+Administration remains available through the configured final-admin authority. The
 guardian can add purchase or commitment pauses but cannot unpause. Protocol
 finalization permanently disables only future Diamond cuts; it does not disable
 economic, Treasury, hook, PoolManager, pause, or authority administration.

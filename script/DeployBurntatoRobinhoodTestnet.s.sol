@@ -14,7 +14,6 @@ import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploy
 
 contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
     uint256 public constant CHAIN_ID = 46_630;
-    uint256 public constant TIMELOCK_DELAY = 120 seconds;
     string public constant OUTPUT_PATH = "artifacts/robinhood-testnet/deployment.json";
 
     error InvalidTestnetChain(uint256 actualChainId);
@@ -38,11 +37,10 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
     function testnetConfig(address deployer) public pure returns (GenesisConfig memory config) {
         config = BurntatoDeploymentConfig.localDefaults();
         config.deployer = deployer;
-        config.proposer = deployer;
+        config.finalAdmin = deployer;
         config.guardian = deployer;
         config.treasuryRecipient = deployer;
         config.rewardAllocator = deployer;
-        config.timelockDelay = TIMELOCK_DELAY;
         config.protocol.winnerBps = 2_500;
         config.protocol.recoveryBps = 3_000;
         config.protocol.treasuryBps = 2_000;
@@ -65,13 +63,12 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeUint(object, "deploymentBlock", block.number);
         vm.serializeAddress(object, "deployer", config.deployer);
         vm.serializeAddress(object, "diamond", deployment.diamond);
-        vm.serializeAddress(object, "timelock", deployment.timelock);
+        vm.serializeAddress(object, "admin", deployment.admin);
         vm.serializeAddress(object, "hook", deployment.hook);
         vm.serializeAddress(object, "hookDeployer", deployment.hookDeployer);
         vm.serializeAddress(object, "operatorRewardsRouter", deployment.operatorRewardsRouter);
         vm.serializeAddress(object, "operatorsNft", operatorDependencies.operatorsNft);
         vm.serializeAddress(object, "activationRegistry", operatorDependencies.activationRegistry);
-        vm.serializeUint(object, "timelockDelay", config.timelockDelay);
         vm.serializeUint(object, "winnerBps", config.protocol.winnerBps);
         vm.serializeUint(object, "recoveryBps", config.protocol.recoveryBps);
         vm.serializeUint(object, "treasuryBps", config.protocol.treasuryBps);
@@ -91,6 +88,7 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeAddress(object, "claimsFacet", deployment.claimsFacet);
         vm.serializeAddress(object, "treasuryRewardsFacet", deployment.treasuryRewardsFacet);
         vm.serializeAddress(object, "foundationInit", deployment.foundationInit);
+        _serializeCodeHashes(object, deployment);
         vm.serializeAddress(object, "poolManager", deployment.poolManager);
         vm.serializeAddress(object, "positionDescriptor", deployment.positionDescriptor);
         vm.serializeAddress(object, "positionManager", deployment.positionManager);
@@ -101,5 +99,24 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeAddress(object, "permit2", deployment.permit2);
         string memory json = vm.serializeAddress(object, "weth", deployment.weth9);
         vm.writeJson(json, OUTPUT_PATH);
+    }
+
+    function _serializeCodeHashes(string memory object, BurntatoDeployment memory deployment) private {
+        vm.serializeBytes32(object, "diamondCodeHash", deployment.codeHashes.diamond);
+        vm.serializeBytes32(object, "diamondCutFacetCodeHash", deployment.codeHashes.diamondCutFacet);
+        vm.serializeBytes32(object, "diamondLoupeFacetCodeHash", deployment.codeHashes.diamondLoupeFacet);
+        vm.serializeBytes32(object, "governanceFacetCodeHash", deployment.codeHashes.governanceFacet);
+        vm.serializeBytes32(object, "marketFacetCodeHash", deployment.codeHashes.marketFacet);
+        vm.serializeBytes32(object, "buybackFacetCodeHash", deployment.codeHashes.buybackFacet);
+        vm.serializeBytes32(object, "potatoTokenFacetCodeHash", deployment.codeHashes.potatoTokenFacet);
+        vm.serializeBytes32(object, "gameFacetCodeHash", deployment.codeHashes.gameFacet);
+        vm.serializeBytes32(object, "recoveryFacetCodeHash", deployment.codeHashes.recoveryFacet);
+        vm.serializeBytes32(object, "settlementFacetCodeHash", deployment.codeHashes.settlementFacet);
+        vm.serializeBytes32(object, "claimsFacetCodeHash", deployment.codeHashes.claimsFacet);
+        vm.serializeBytes32(object, "treasuryRewardsFacetCodeHash", deployment.codeHashes.treasuryRewardsFacet);
+        vm.serializeBytes32(object, "foundationInitCodeHash", deployment.codeHashes.foundationInit);
+        vm.serializeBytes32(object, "hookDeployerCodeHash", deployment.codeHashes.hookDeployer);
+        vm.serializeBytes32(object, "hookCodeHash", deployment.codeHashes.hook);
+        vm.serializeBytes32(object, "operatorRewardsRouterCodeHash", deployment.codeHashes.operatorRewardsRouter);
     }
 }

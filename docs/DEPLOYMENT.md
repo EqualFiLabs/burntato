@@ -1,27 +1,36 @@
 # Deployment
 
-`DeployBurntato.s.sol` deploys a complete local system in this order: timelock,
-timelock-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
+`DeployBurntato.s.sol` deploys a complete local system in this order: a
+final-admin-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
 PositionManager, Diamond shell and facets, optional immutable Operator rewards
 router, initializer, CREATE2 hook deployer, and mined-address canonical hook. It
 installs the selector manifest, configures the market, enables the initial
 Treasury distributor, configures buybacks, appoints the reward allocator and
-guardian, and transfers Diamond authority to the timelock.
+guardian, and transfers Diamond authority to the configured `finalAdmin`.
 
-The hook and PoolManager are independently owned by the timelock. Deployment
-does not renounce either owner and does not disable the PoolManager protocol-fee
-controller surface. The hook starts with the configured Treasury fee recipient
-and bilateral fee. Self-contained local deployment keeps Operator rewards
-disabled. Robinhood deployment requires an explicit nonzero Operator share.
-External buys start disabled.
+No `TimelockController` is deployed automatically. `finalAdmin` may be an EOA,
+Safe, or governance contract. The hook and self-contained PoolManager are
+independently owned by that address. Deployment does not renounce either owner
+and does not disable the PoolManager protocol-fee controller surface. The hook
+starts with the configured Treasury fee recipient and bilateral fee.
+Self-contained local deployment keeps Operator rewards disabled. Robinhood
+deployment requires an explicit nonzero Operator share. External buys start
+disabled.
+
+Deployment completes fully configured and unpaused while
+`purchasesInitialized()` remains false. Only `buyPotato()` is gated by this
+one-shot state. The designated final admin calls `initializePurchases()`
+directly after verification; no delay is imposed by Burntato. Market launch,
+Recovery, claims, settlement, and all other selectors are not gated by purchase
+initialization.
 
 ## Deployment modes
 
 | Mode | Dependencies | Swap proof | Ownership boundary |
 | --- | --- | --- | --- |
-| Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | Burntato timelock owns the local PoolManager and hook |
-| Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | Burntato timelock owns only the Diamond authority and Burntato hook |
-| Robinhood testnet | Pinned chain-46630 v4 contracts plus a fresh standalone Statics Genesis replica | Live market launch against the canonical PoolManager and PositionManager | 120-second Burntato timelock owns the Diamond authority and Burntato hook |
+| Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | `finalAdmin` owns the local PoolManager, hook, and Diamond authority |
+| Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | `finalAdmin` owns the Diamond authority and Burntato hook only |
+| Robinhood testnet | Pinned chain-46630 v4 contracts plus a standalone Statics Genesis replica | Live market launch against the canonical PoolManager and PositionManager | Profile deployer is `finalAdmin`; canonical PoolManager ownership is external |
 
 The committed manifest pins block `45234855`, its block hash, and exact runtime
 hashes for all nine canonical dependencies. Addresses and hashes are not
@@ -35,7 +44,7 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 
 | Setting | Default |
 | --- | --- |
-| Timelock delay | 1 day |
+| Final admin | Second standard Anvil account |
 | Starting Hot Potato price | 0.01 ETH |
 | Price increase | 1,000 BPS |
 | Round timeout | 1 hour |
@@ -54,9 +63,9 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 | Genesis POTATO launch allocation | 100,000,000 POTATO |
 | Reward allocator | Treasury recipient |
 
-Defaults are operational inputs, not protocol immutability claims. Zero
-timelock delay is accepted, and the proposer may equal the bootstrap authority.
-Starting price, round timeout, minimum round timeout, and emission vesting must
+Defaults are operational inputs, not protocol immutability claims. The final
+admin must be nonzero and may equal the bootstrap authority. Starting price,
+round timeout, minimum round timeout, and emission vesting must
 remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
 safety. Minimum timeout cannot exceed the initial timeout, and timeout decay
 cannot exceed the initial timeout. Zero timeout decay is valid and produces
@@ -72,11 +81,10 @@ The deployment and verification scripts accept:
 
 ```text
 BURNTATO_DEPLOYER
-BURNTATO_PROPOSER
+BURNTATO_FINAL_ADMIN
 BURNTATO_GUARDIAN
 BURNTATO_TREASURY
 BURNTATO_REWARD_ALLOCATOR
-BURNTATO_TIMELOCK_DELAY
 BURNTATO_STARTING_PRICE
 BURNTATO_PRICE_INCREASE_BPS
 BURNTATO_ROUND_TIMEOUT
@@ -130,12 +138,28 @@ Set the emitted addresses before verification:
 
 ```text
 BURNTATO_DIAMOND
-BURNTATO_TIMELOCK
+BURNTATO_ADMIN
+BURNTATO_DIAMOND_CUT_FACET
+BURNTATO_DIAMOND_LOUPE_FACET
+BURNTATO_GOVERNANCE_FACET
+BURNTATO_MARKET_FACET
+BURNTATO_BUYBACK_FACET
+BURNTATO_POTATO_TOKEN_FACET
+BURNTATO_GAME_FACET
+BURNTATO_RECOVERY_FACET
+BURNTATO_SETTLEMENT_FACET
+BURNTATO_CLAIMS_FACET
+BURNTATO_TREASURY_REWARDS_FACET
+BURNTATO_FOUNDATION_INIT
+BURNTATO_HOOK_DEPLOYER
 BURNTATO_POOL_MANAGER
 BURNTATO_POSITION_MANAGER
 BURNTATO_PERMIT2
 BURNTATO_HOOK
 BURNTATO_OPERATOR_REWARDS_ROUTER
+BURNTATO_HOOK_DEPLOYER_CODE_HASH
+BURNTATO_HOOK_CODE_HASH
+BURNTATO_OPERATOR_REWARDS_ROUTER_CODE_HASH
 ```
 
 Then run:
@@ -143,6 +167,9 @@ Then run:
 ```bash
 forge script script/VerifyBurntato.s.sol:VerifyBurntato \
   --rpc-url http://127.0.0.1:8545
+
+forge script script/InitializeBurntato.s.sol:InitializeBurntato \
+  --rpc-url http://127.0.0.1:8545 --broadcast
 ```
 
 ## Persistent Robinhood fork
@@ -170,9 +197,9 @@ forge script script/VerifyBurntatoLocalFork.s.sol:VerifyBurntatoLocalFork \
 
 The public-only frontend handoff is
 `artifacts/robinhood-local/deployment.json`. It contains the fork identity,
-Diamond, timelock, hook, Operator router/share, Statics dependencies, facets,
-initializer, and canonical dependency addresses. It never contains the RPC URL
-or private key.
+Diamond, final admin, hook, Operator router/share, Statics dependencies, facets,
+initializer, owned runtime hashes, and canonical dependency addresses. It never
+contains the RPC URL or private key.
 
 Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
 instead. Run archive-RPC qualification locally; it is intentionally excluded
@@ -200,14 +227,14 @@ address; the validator pins that observed binding explicitly while separately
 validating the deployed testnet WETH. Burntato's market is native/POTATO and
 does not route through either wrapped-native address.
 
-The testnet profile is fixed in code: the deployer holds proposer, guardian,
-Treasury, and reward-allocator roles; timelock delay is 120 seconds; purchase
+The testnet profile is fixed in code: the deployer is final admin, guardian,
+Treasury recipient, and reward allocator; purchase
 revenue is split 25% Winner, 30% Recovery, 20% Treasury, 10% buyback, and 15%
 Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent to the
 same Operator rewards router (0.4% of swap volume) and 60% sent to Treasury.
 
-Use the phased wrapper so deployment verification occurs before market launch,
-and so the timelock delay remains visible rather than hidden inside one command:
+Use the phased wrapper so deployment verification occurs before purchase
+initialization. The final admin calls each post-deployment action directly:
 
 ```bash
 export ROBINHOOD_TESTNET_RPC_URL="$ROBINHOOD_TESTNET"
@@ -216,9 +243,8 @@ export PRIVATE_KEY="$PRIVATE_KEY"
 scripts/deploy-robinhood-testnet.sh --deploy
 scripts/deploy-robinhood-testnet.sh --verify
 scripts/deploy-robinhood-testnet.sh --launch
-scripts/deploy-robinhood-testnet.sh --schedule
-# Wait until the reported timelock timestamp.
-scripts/deploy-robinhood-testnet.sh --execute
+scripts/deploy-robinhood-testnet.sh --initialize
+scripts/deploy-robinhood-testnet.sh --enable
 scripts/deploy-robinhood-testnet.sh --check
 ```
 
@@ -229,21 +255,23 @@ the checked-in testnet deployment record.
 
 ## Verification checks
 
-The verifier checks code and selector routing, complete protocol configuration
-including the diminishing timeout domain,
-timelock delay and roles, Diamond authority, guardian and pause state,
-timelock-owned hook, hook token/fee/tick configuration, exact uninitialized
+The verifier checks independently supplied owned-contract addresses and runtime
+hashes, exact selector routing, complete protocol configuration including the
+diminishing timeout domain, final-admin authority, guardian and pause state,
+final-admin-owned hook, hook token/fee/tick configuration, exact uninitialized
 PoolKey, PositionManager dependencies, the configured genesis POTATO supply and
-Diamond reservation, empty initial round state, disabled external buys, the
+Diamond reservation, disabled purchase activation, empty initial round state,
+disabled external buys, the
 exact Operator router/share and immutable Statics bindings, the initial
 Treasury distributor, independently configured reward allocator with zero
 reward escrow, and zeroed buyback state with the configured execution defaults.
-Self-contained verification additionally requires the Burntato timelock to own
-its newly deployed PoolManager. Robinhood verification instead pins the
+Self-contained verification additionally requires `finalAdmin` to own its
+newly deployed PoolManager. Robinhood verification instead pins the
 external canonical PoolManager and its dependency bindings without asserting
 Burntato ownership.
 
-After deployment, operations should separately exercise a timelock call to the
+After deployment verification, operations should execute the one-shot purchase
+initializer from `finalAdmin`, then separately exercise an admin call to the
 Diamond and a hook fee update. A PoolManager owner function belongs only in the
 self-contained qualification path; Robinhood deployments must validate the
 external owner's published operating process separately. Diamond finalization

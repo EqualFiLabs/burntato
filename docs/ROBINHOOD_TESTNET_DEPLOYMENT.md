@@ -12,7 +12,10 @@ machine-readable record is
 > Recovery facet without stalled withdrawals. The candidate does not mutate or
 > redeploy this testnet instance and does not ship an in-place migration for
 > pre-existing commitments. It qualifies fresh deployments only. Clients must
-> not expose its new Recovery API against these addresses.
+> not expose its new Recovery API against these addresses. It also predates the
+> configurable-final-admin and one-shot purchase-activation deployment flow;
+> the timelock details below describe this historical instance, not current
+> deployment tooling.
 
 ## Addresses
 
