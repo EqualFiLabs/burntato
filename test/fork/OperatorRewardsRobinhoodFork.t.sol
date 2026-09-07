@@ -70,9 +70,11 @@ contract OperatorRewardsRobinhoodForkTest is Test {
         assertEq(registry.multiplierBps(FIRST_OPERATOR), 10_000);
 
         router.sync(FIRST_OPERATOR);
+        address secondReceiver = makeAddr("fork-second-operator-receiver");
         vm.prank(secondOwner);
-        uint256 secondClaim = router.claim(SECOND_OPERATOR, secondOwner);
+        uint256 secondClaim = router.claim(SECOND_OPERATOR, secondReceiver);
         assertEq(secondClaim, 1 ether);
+        assertEq(secondReceiver.balance, secondClaim);
         assertEq(router.totalRegisteredWeight(), secondWeight);
 
         vm.prank(nextOwner);

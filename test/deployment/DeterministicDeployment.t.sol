@@ -233,6 +233,29 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(verifier.verify(zeroDelayConfig, zeroDelayDeployment));
     }
 
+    function test_DeploymentAcceptsMaximumHookFeeAndCallerReward() public {
+        GenesisConfig memory maximumConfig = config;
+        maximumConfig.hookFeeBps = 200;
+        maximumConfig.buyback.callerRewardBps = 100;
+
+        BurntatoDeployment memory maximumDeployment = deployScript.deploy(maximumConfig, address(deployScript));
+
+        assertTrue(verifier.verify(maximumConfig, maximumDeployment));
+        assertEq(BurntatoSwapFeeHook(payable(maximumDeployment.hook)).feeBps(), 200);
+    }
+
+    function test_DeploymentRejectsHookFeeAndCallerRewardAboveMaximum() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.hookFeeBps = 201;
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+
+        unsafeConfig = config;
+        unsafeConfig.buyback.callerRewardBps = 101;
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
     function test_DeploymentAcceptsBootstrapAsTimelockProposer() public {
         GenesisConfig memory sharedAuthorityConfig = config;
         sharedAuthorityConfig.proposer = address(deployScript);

@@ -42,6 +42,7 @@ contract ProtocolHandler is Test {
     bool public transferBypass;
     bool public authorityBypass;
     bool public remainingIncreased;
+    bool public recoveryWithdrawalMismatch;
     uint256 internal observedRound;
     uint256 internal observedRemaining;
 
@@ -80,7 +81,7 @@ contract ProtocolHandler is Test {
     }
 
     function advance(uint256 rawSeconds) external {
-        vm.warp(vm.getBlockTimestamp() + bound(rawSeconds, 0, 2 hours));
+        vm.warp(vm.getBlockTimestamp() + bound(rawSeconds, 0, 45 days));
         _observeRemaining();
     }
 
@@ -101,6 +102,28 @@ contract ProtocolHandler is Test {
 
     function settle() external {
         try settlement.settleRound() {} catch {}
+        _observeRemaining();
+    }
+
+    function withdrawStalledRecovery(uint256 actorSeed) external {
+        uint256 currentRoundId = game.currentRoundId();
+        if (currentRoundId == 0) return;
+        uint256 targetRoundId = currentRoundId + 1;
+        address actor = actors[actorSeed % actors.length];
+        uint256 commitmentBefore = recovery.recoveryCommitment(targetRoundId, actor);
+        if (commitmentBefore == 0) return;
+        uint256 totalBefore = recovery.totalRecoveryCommitment(targetRoundId);
+        uint256 balanceBefore = potato.balanceOf(actor);
+
+        vm.prank(actor);
+        try recovery.withdrawStalledRecovery(targetRoundId) returns (uint256 amount) {
+            if (
+                commitmentBefore > totalBefore || amount != commitmentBefore
+                    || recovery.recoveryCommitment(targetRoundId, actor) != 0
+                    || recovery.totalRecoveryCommitment(targetRoundId) != totalBefore - commitmentBefore
+                    || potato.balanceOf(actor) != balanceBefore + commitmentBefore
+            ) recoveryWithdrawalMismatch = true;
+        } catch {}
         _observeRemaining();
     }
 
@@ -279,5 +302,6 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertFalse(handler.transferBypass());
         assertFalse(handler.authorityBypass());
         assertFalse(handler.remainingIncreased());
+        assertFalse(handler.recoveryWithdrawalMismatch());
     }
 }

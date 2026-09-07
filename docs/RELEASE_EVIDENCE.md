@@ -1,5 +1,78 @@
 # Release qualification evidence
 
+## Economic and Recovery safety candidate
+
+Date: September 4, 2026
+
+Source candidate: `17df073` on `fix/economic-recovery-safety`, based on merged
+`main` commit `ef96689`. Market accounting is commit `4cd45f8`; the Recovery
+escape is commit `2bf040c`.
+
+Buyback caller compensation is now calculated from actual ETH spent rather
+than the selected reserve slice. The swap budget reserves room for that
+compensation, a zero-spend or zero-output execution reverts atomically, and a
+positive partial fill restores every unspent base unit. The installed
+`BuybackFacet` rejects caller rewards above 100 BPS in both configuration and
+execution, including retained pre-cap storage. The standalone hook constructor
+and setter reject a total bilateral fee above 200 BPS. Operators may still
+receive anywhere from 0% through 100% of that already-capped fee.
+
+A target Recovery Market now gets one shared 30-day withdrawal deadline when
+its first commitment is made while the activated predecessor has never had a
+holder. Each user may withdraw only their complete commitment after that
+deadline, including while new commitments are paused. Partial exits preserve
+the original deadline; the final exit clears it so a later first commitment
+starts a new deadline. The predecessor's first purchase permanently closes the
+escape, as required by the approved policy.
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Format | `forge fmt --check` | Passed |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 55 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 67 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 10 properties, 1,000 runs each |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 13 properties, 166,400 calls |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 21 passed, 5 configured-RPC skips |
+| Pinned Burntato fork | `REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol --chain-id 4663 -j 1` | 3 passed |
+| Pinned Operator fork | `REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/OperatorRewardsRobinhoodFork.t.sol --chain-id 4663 -j 1` | 1 passed |
+| Canonical dependency forks | Targeted RPC-enabled deployment cases | 3 mainnet and 2 testnet cases passed |
+
+The executed market flows prove actual-spend reward conservation, the 100 BPS
+and 200 BPS boundaries, positive partial fills, atomic zero execution, retained
+pre-cap configuration rejection, Treasury delivery, and terminal buy-fee
+conversion with zero hook ETH, hook POTATO, or transient allowance residue.
+Because the terminal path left no residue, no pending-fee retry mechanism was
+added. Recovery integration, fuzz, and stateful tests prove the shared clock,
+pause independence, first-purchase closure, final-exit restart, exact POTATO
+return, and aggregate commitment conservation.
+
+The changed scope received checklist-driven review for general Solidity,
+precision/math, ERC-20 behavior, Uniswap v4 and AMM integration,
+Diamond/proxy storage and selectors, denial of service, and access control. Two
+Low documentation defects were corrected: the Diamond-side 100 BPS ceiling is
+structurally permanent only after Diamond-cut finalization, and Robinhood uses
+an externally governed canonical PoolManager rather than a Burntato-owned one.
+No unresolved implementation finding remains inside the fresh-deployment scope
+and approved economic policy.
+
+The following boundaries remain deliberate and visible:
+
+- any positive partial fill consumes the governed cooldown, with no TWAP,
+  minimum output, minimum fill ratio, deadline, or caller parameter;
+- the predecessor's first purchase permanently closes the exceptional Recovery
+  exit, so the target follows normal commitment and settlement rules afterward;
+- this candidate qualifies fresh deployments only and provides no initializer
+  for commitments already present on an in-place Diamond upgrade; and
+- the 100 BPS buyback ceiling can be replaced through a Diamond cut until
+  `protocolFinalized()` is true, while the standalone hook's 200 BPS ceiling is
+  fixed in its deployed bytecode.
+
+The private RPC runs are pinned fork evidence, not live transactions. This
+candidate does not redeploy or mutate the existing Robinhood testnet instance,
+which remains on commit `07688de` and is explicitly marked incompatible with
+the new Recovery API. This evidence does not prove remote CI, a production
+deployment, or an independent third-party audit.
+
 ## Statics Operator rewards router candidate
 
 Date: September 3, 2026
@@ -241,7 +314,12 @@ exact-transfer authorization order or current-Treasury output path. Precision
 review confirmed four-way rounding, signed delta handling, partial-fill reserve
 restoration, cap/reward edge cases, and aggregate ETH backing.
 
-## Accepted FWA-compatible boundary
+## Superseded historical FWA-compatible boundary
+
+The following gross-slice reward decision describes only the historical
+`32116ed` candidate above. Commit `4cd45f8` supersedes it by paying from actual
+ETH spent. The separate no-TWAP and positive-partial-fill boundary remains in
+the current source.
 
 Caller reward is deliberately calculated from the selected gross slice before
 the swap, matching the pinned FWA.fun implementation. A terminal-price partial

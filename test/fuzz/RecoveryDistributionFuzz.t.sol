@@ -97,6 +97,58 @@ contract RecoveryDistributionFuzzTest is DiamondTestSetup {
         claims.claimRecovery(2, alice);
     }
 
+    function testFuzz_StalledRecoveryWithdrawalsConserveEveryCommitment(
+        uint96 rawAliceCommitment,
+        uint96 rawBobCommitment,
+        uint32 rawSecondCommitDelay,
+        bool bobWithdrawsFirst
+    ) public {
+        _buy(alice, 0.01 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        _buy(bob, 0.011 ether);
+        vm.warp(vm.getBlockTimestamp() + 120);
+        game.materializeMaturedEmission();
+        _expireAndSettle();
+
+        uint256 aliceBalanceBefore = potato.balanceOf(alice);
+        uint256 bobBalanceBefore = potato.balanceOf(bob);
+        uint256 diamondBalanceBefore = potato.balanceOf(address(diamond));
+        uint256 aliceCommitment = bound(uint256(rawAliceCommitment), 1, aliceBalanceBefore);
+        uint256 bobCommitment = bound(uint256(rawBobCommitment), 1, bobBalanceBefore);
+
+        vm.prank(alice);
+        recovery.commitRecovery(aliceCommitment);
+        uint256 availableAt = recovery.stalledRecoveryWithdrawalAt(3);
+        vm.warp(vm.getBlockTimestamp() + bound(uint256(rawSecondCommitDelay), 0, 29 days));
+        vm.prank(bob);
+        recovery.commitRecovery(bobCommitment);
+
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), availableAt);
+        assertEq(recovery.totalRecoveryCommitment(3), aliceCommitment + bobCommitment);
+        assertEq(potato.balanceOf(address(diamond)), diamondBalanceBefore + aliceCommitment + bobCommitment);
+
+        vm.warp(availableAt);
+        if (bobWithdrawsFirst) {
+            vm.prank(bob);
+            assertEq(recovery.withdrawStalledRecovery(3), bobCommitment);
+            vm.prank(alice);
+            assertEq(recovery.withdrawStalledRecovery(3), aliceCommitment);
+        } else {
+            vm.prank(alice);
+            assertEq(recovery.withdrawStalledRecovery(3), aliceCommitment);
+            vm.prank(bob);
+            assertEq(recovery.withdrawStalledRecovery(3), bobCommitment);
+        }
+
+        assertEq(recovery.recoveryCommitment(3, alice), 0);
+        assertEq(recovery.recoveryCommitment(3, bob), 0);
+        assertEq(recovery.totalRecoveryCommitment(3), 0);
+        assertEq(recovery.stalledRecoveryWithdrawalAt(3), 0);
+        assertEq(potato.balanceOf(alice), aliceBalanceBefore);
+        assertEq(potato.balanceOf(bob), bobBalanceBefore);
+        assertEq(potato.balanceOf(address(diamond)), diamondBalanceBefore);
+    }
+
     function _buy(address buyer, uint256 price) internal {
         vm.prank(buyer);
         game.buyPotato{value: price}();

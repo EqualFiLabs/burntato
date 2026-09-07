@@ -406,8 +406,9 @@ contract DeployBurntato is Script {
                 || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
                 || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
                 || protocol.operatorPurchaseBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
-                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.BPS
-                || config.operatorRewardShareBps > Constants.BPS || config.buyback.callerRewardBps > Constants.BPS
+                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.MAX_HOOK_FEE_BPS
+                || config.operatorRewardShareBps > Constants.BPS
+                || config.buyback.callerRewardBps > Constants.MAX_BUYBACK_CALLER_REWARD_BPS
                 || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
                         + protocol.operatorPurchaseBps != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS

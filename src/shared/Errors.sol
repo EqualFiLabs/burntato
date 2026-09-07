@@ -21,6 +21,7 @@ library Errors {
     error NativeTransferFailed();
     error AlreadyLaunched();
     error BuybackUnavailable();
+    error BuybackNoExecution();
     error BuybackTooSoon(uint256 nextBlock);
     error ExactOutputNotAllowed();
     error ExternalBuysDisabled();
@@ -43,6 +44,8 @@ library Errors {
     error PoolManagerAllowanceExceeded(uint256 available, uint256 required);
     error PurchasesPaused();
     error Reentrancy();
+    error RecoveryWithdrawalTooSoon(uint256 availableAt);
+    error RecoveryWithdrawalUnavailable(uint256 roundId);
     error OperatorRevenueTransferFailed(address router, uint256 amount);
     error RoundAlreadySettled();
     error RoundExpired();

@@ -188,13 +188,40 @@ contract CanonicalMarketHandler is Test {
         uint256 reserveBefore = buybacks.buybackReserveEth();
         uint256 treasuryPotatoBefore = potato.balanceOf(feeAddress);
         uint256 feeAddressBefore = feeAddress.balance;
+        uint256 callerBefore = address(this).balance;
+        vm.recordLogs();
         try buybacks.buyback() returns (uint256 amountOut) {
             uint256 reserveAfter = buybacks.buybackReserveEth();
+            (bool found, uint256 ethSpent, uint256 potatoBought, uint256 callerReward, uint256 eventReserve) =
+                _buybackExecution(vm.getRecordedLogs());
+            uint256 expectedReward = ethSpent * buybacks.buybackConfig().callerRewardBps / 10_000;
+            uint256 treasuryPotatoAfter = potato.balanceOf(feeAddress);
+            uint256 callerAfter = address(this).balance;
             if (
-                reserveAfter > reserveBefore || potato.balanceOf(feeAddress) - treasuryPotatoBefore != amountOut
-                    || feeAddress.balance != feeAddressBefore || potato.transientPoolManagerAllowance() != 0
+                !found || reserveAfter > reserveBefore || potatoBought != amountOut || callerReward != expectedReward
+                    || ethSpent + callerReward > reserveBefore
+                    || reserveAfter != reserveBefore - ethSpent - callerReward || eventReserve != reserveAfter
+                    || treasuryPotatoAfter < treasuryPotatoBefore
+                    || treasuryPotatoAfter - treasuryPotatoBefore != amountOut || callerAfter < callerBefore
+                    || callerAfter - callerBefore != callerReward || feeAddress.balance != feeAddressBefore
+                    || potato.transientPoolManagerAllowance() != 0
             ) buybackAccountingMismatch = true;
         } catch {}
+    }
+
+    function _buybackExecution(Vm.Log[] memory logs)
+        internal
+        view
+        returns (bool found, uint256 ethSpent, uint256 potatoBought, uint256 callerReward, uint256 reserveEth)
+    {
+        bytes32 executionTopic = keccak256("BuybackExecuted(address,address,uint256,uint256,uint256,uint256,uint256)");
+        for (uint256 i; i < logs.length; ++i) {
+            if (logs[i].emitter == address(potato) && logs[i].topics[0] == executionTopic) {
+                (, ethSpent, potatoBought, callerReward, reserveEth) =
+                    abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
+                return (true, ethSpent, potatoBought, callerReward, reserveEth);
+            }
+        }
     }
 
     function _feeAccounting(Vm.Log[] memory logs) internal view returns (uint256 nativeFee, uint256 potatoFee) {
@@ -268,6 +295,7 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(IERC721OwnerView(address(positionManager)).ownerOf(1), market.lockedLpRecipient());
         assertEq(positionManager.nextTokenId(), 2);
         assertEq(address(hook).balance, 0);
+        assertEq(potato.balanceOf(address(hook)), 0);
         assertEq(potato.transientPoolManagerAllowance(), 0);
         assertGe(claims.treasuryEthAvailable(), treasuryFloor);
         assertFalse(handler.treasuryRevenueDecreased());

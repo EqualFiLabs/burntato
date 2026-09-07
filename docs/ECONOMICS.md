@@ -18,7 +18,10 @@ recoveryBurnBps / recoveryTreasuryBps
 ```
 
 The five purchase shares must sum to 10,000 BPS and the two Recovery shares
-must sum to 10,000 BPS. Every individual BPS value is bounded by 10,000.
+must sum to 10,000 BPS. Every `ProtocolConfig` BPS value is bounded by 10,000;
+the separate hook fee and installed buyback facet use narrower ceilings
+described below. The latter becomes immutable only after Diamond cuts are
+finalized.
 Starting price, round timeout, minimum round timeout, and emission vesting
 duration must be nonzero. Minimum round timeout cannot exceed the initial round
 timeout, and timeout decay cannot exceed the initial timeout. Round timeout is
@@ -130,9 +133,20 @@ budget. At the default, actual round emission is at most 100,000 POTATO.
 
 ## Recovery
 
-POTATO commitments are forward-only to `currentRoundId + 1` and are irrevocable.
-The target terms have already been snapshotted before commitment opens. POTATO
-moves into Diamond escrow through an exact transaction-scoped protocol transfer.
+POTATO commitments are forward-only to `currentRoundId + 1`. The target terms
+have already been snapshotted before commitment opens. POTATO moves into Diamond
+escrow through an exact transaction-scoped protocol transfer.
+
+Commitments normally remain irrevocable once the predecessor receives its first
+holder. There is one liveness escape for an activated predecessor that has never
+had a holder: its first target commitment starts a shared 30-day deadline. After
+that deadline, each committer may withdraw their complete target commitment
+while the predecessor is still current and holderless and the target remains
+inactive. A later commitment does not restart the clock. The final withdrawal
+clears it, so a later first commitment starts a new 30-day period. The exit stays
+available while new commitments are paused. The predecessor's first purchase
+permanently closes the exit, and normal settlement consumes commitments exactly
+as before.
 
 At target-round settlement:
 
@@ -183,7 +197,8 @@ treasuryAmount = realizedNativeFee - operatorAmount
 Hook revenue never enters the Diamond, is not launch reserve accounting, and is
 not auto-compounded. The Treasury remainder, including split dust, goes to
 `feeAddress`; the Operator portion goes to the standalone rewards router. The
-default fee is 1%, while 0% through 100% are valid.
+default fee is 1%, while 0% through 2% are valid. The Operator share remains
+valid from 0% through 100% of that already-capped fee.
 
 The Robinhood launch profile uses a 25/30/20/10/15 purchase split for Winner,
 Recovery, nominal Treasury, buyback, and Operators. It also routes 40% of the
@@ -202,25 +217,29 @@ recipient. A new owner must register explicitly.
 
 The buyback reserve accumulates from every purchase, including before launch.
 After launch, anyone may call parameterless `buyback()`. The governed defaults
-select at most 2 ETH gross, pay 50 BPS of that gross slice to the caller, and
-enforce a one-block delay:
+select at most 2 ETH gross, reward the caller at 50 BPS of actual ETH spent, and
+enforce a one-block delay. The caller-reward rate may be configured from 0
+through 100 BPS:
 
 ```text
 grossSlice = min(buybackReserveEth, maxSpend)
-callerReward = floor(grossSlice * callerRewardBps / 10_000)
-requestedInput = grossSlice - callerReward
+requestedInput = floor(grossSlice * 10_000 / (10_000 + callerRewardBps))
+(ethSpent, potatoBought) = canonicalSwap(requestedInput)
+require ethSpent > 0 and potatoBought > 0
+callerReward = floor(ethSpent * callerRewardBps / 10_000)
+reserveRestored = grossSlice - ethSpent - callerReward
 ```
 
 The Diamond executes an exact-input native-ETH-to-POTATO swap against only the
 canonical pool with `sqrtPriceLimitX96 = MIN_SQRT_PRICE + 1`. It deliberately
-uses no quote, TWAP, minimum output, deadline, or offchain sequencing. This
-matches the deployed FWA.fun buyback behavior and accepts public execution and
-MEV exposure as part of the demand mechanism. If the pool partially fills,
-unspent requested input returns to the tracked reserve. The caller reward is
-still based on the gross slice. A caller can therefore earn the configured
-reward when the pool consumes little or none of the requested input. The
-unspent swap input is restored, but the reward is not; governance bounds this
-explicit tradeoff through the cap, reward rate, and block delay.
+uses no quote, TWAP, user minimum output, deadline, or offchain sequencing.
+Public execution and MEV exposure remain part of the demand mechanism. If the
+pool partially fills, every unspent base unit outside actual spend and its
+proportional reward returns to the tracked reserve. A zero-spend or zero-output
+attempt reverts atomically, preserving reserve, caller balance, and cooldown.
+The extreme terminal-price path also reverts atomically. This removes the
+reserve leakage present when compensation was calculated from requested input
+without imposing a full-fill or user-facing slippage requirement.
 
 Buyback swaps bypass the bilateral hook fee and send purchased POTATO directly
 from PoolManager to the current Diamond Treasury recipient. Treasury may hold,

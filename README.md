@@ -17,7 +17,8 @@ changes apply to future unsnapshotted rounds.
 Every successful purchase resets from its own timestamp; purchase count drives
 the urgency schedule but still does not consume POTATO emission.
 
-POTATO uses the same Solady transfer-lock pattern proven by FWA.fun: minting,
+POTATO uses a Solady transfer-lock pattern adapted from the pinned FWA.fun
+implementation: minting,
 burning, transfers involving the current authority or an administered
 distributor, exact protocol movements, and exact transaction-scoped canonical
 PoolManager movements are allowed; ordinary wallet transfers revert. The
@@ -26,14 +27,23 @@ distributor changes are administered independently. Users can self-burn. The
 genesis deployment mints and reserves 100 million POTATO for a token-only v4
 launch. The initial position starts at the range's upper boundary, contains no
 ETH, and is permanently sent to the dead address. Its native LP fee is fixed at
-zero, and all hook fee ETH is sent directly to the hook's governed Treasury
-recipient.
+zero. The bilateral hook fee is governed within a fixed 2% ceiling, and all
+realized fee ETH is split between its governed Treasury recipient and optional
+Operator rewards router.
 
 The buyback share accumulates as dedicated Diamond ETH. After the canonical
 market launches, anyone may spend a governed reserve slice to buy POTATO for the
-current Treasury and receive a caller reward. External pool buys start disabled,
-but sells and the fee-free protocol buyback remain open; hook governance can
-toggle external buys repeatedly.
+current Treasury and receive a reward based only on actual ETH spent. The
+installed facet caps the caller-reward rate at 1%; that ceiling becomes
+permanent when Diamond cuts are finalized. A zero-execution attempt reverts
+without consuming reserve or cooldown. External pool buys start disabled, but
+sells and the fee-free protocol buyback remain open; hook governance can toggle
+external buys repeatedly.
+
+Recovery commitments normally remain locked through their target round. If an
+activated predecessor remains completely holderless, its target commitments may
+instead be withdrawn after one shared 30-day deadline. The first predecessor
+purchase permanently closes that exceptional exit.
 
 The Treasury Safe can also fund existing POTATO into future-round reward
 schedules. Each target round applies that separate budget through the same
@@ -68,4 +78,5 @@ the mechanism for relinquishing that role.
   — live chain-46630 addresses, economics, and deployment evidence.
 
 The implementation is licensed under BUSL-1.1. FWA.fun is reference precedent,
-not part of Burntato; see the pinned links in the integration guide.
+not part of Burntato and not security assurance for it; see the pinned links in
+the integration guide.

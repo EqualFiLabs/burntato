@@ -17,9 +17,9 @@ While authority exists it can:
 - replace or zero the Treasury reward allocator;
 - appoint or remove the guardian;
 - set or clear purchase and commitment pauses;
-- reconfigure canonical market infrastructure before launch;
-- administer the independently owned canonical hook and PoolManager; and
-- transfer any of those independent ownership roles under their native APIs.
+- reconfigure the Diamond's canonical market references before launch; and
+- administer or transfer the independently owned Burntato hook when the same
+  authority separately holds that ownership role.
 
 Economic updates do not rewrite active obligations. Round N snapshots the full
 configuration for Round N+1 when Round N activates. An active round and an
@@ -35,8 +35,9 @@ ownership, selectors, claims, settlement, emission materialization, or token
 movement rules. Authority may set the guardian to `address(0)`.
 
 Pauses stop only new Hot Potato purchases and/or new Recovery commitments.
-Settlement, claims, matured emission materialization, POTATO self-burning, and
-canonical trading remain live.
+Settlement, claims, matured emission materialization, POTATO self-burning,
+canonical trading, and an already-eligible stalled-Recovery withdrawal remain
+live.
 
 ## Finalization
 
@@ -57,11 +58,13 @@ selector-freeze, and one-time authority-lock APIs do not exist.
 
 ## Independently governed market components
 
-The timelock owns both the canonical `BurntatoSwapFeeHook` and the Uniswap v4
-PoolManager at genesis. Hook ownership controls `feeAddress`, `feeBps`, the
-atomic Operator rewards router/share pair, and the repeatable external-buy gate.
-PoolManager ownership retains the native v4 administrative surface, including
-the protocol-fee controller. Diamond finalization does not affect either owner.
+The Burntato timelock owns the `BurntatoSwapFeeHook`. Hook ownership controls
+`feeAddress`, `feeBps`, the atomic Operator rewards router/share pair, and the
+repeatable external-buy gate. In self-contained local deployments, the same
+timelock also owns the newly deployed Uniswap v4 PoolManager and its native
+administrative surface. Robinhood deployments instead use an externally
+governed canonical PoolManager whose ownership Burntato neither receives nor
+verifies. Diamond finalization does not affect any of these independent roles.
 
 The PoolKey, token-only launch range, and reserved POTATO allocation may be
 corrected before launch. Once the pool launches, the PoolKey, PoolManager, hook,
@@ -69,10 +72,17 @@ range, allocation, and locked LP are structurally fixed for that market.
 Post-launch fee recipient, hook fee, and Operator allocation administration
 remain available through hook ownership. Rotating away from a router affects
 future fees only; its existing pull claims remain available because the router
-has no administrator or sweep function.
+has no administrator or sweep function. The total bilateral fee is permanently
+capped at 200 BPS. The Operator share may still reach 10,000 BPS of that fee, so
+governance can direct all realized hook revenue to Operators without raising the
+trader fee.
 Diamond authority may also change buyback cap, caller reward, and block delay
 before or after launch and finalization. Setting the cap to zero disables
-execution without changing accrued reserve accounting.
+execution without changing accrued reserve accounting. The caller-reward rate
+is capped at 100 BPS by the installed facet and applies to actual ETH spent,
+not the selected reserve slice. Until Diamond cuts are finalized, authority can
+replace that facet or its storage rules; after finalization, the 100 BPS ceiling
+is permanent.
 
 The Treasury reward allocator is independent from the Treasury recipient and
 distributor registry. Genesis configures both roles to the Treasury Safe, but
@@ -86,13 +96,16 @@ For a deployment, verify:
 - `authority()` is the intended timelock or governance address;
 - the timelock delay and roles equal deployment configuration;
 - `guardian()` and both pause bits match intended operations state;
-- the hook and PoolManager owners are the intended timelock;
+- the hook owner is the intended Burntato timelock;
+- for a self-contained deployment, the PoolManager owner is that timelock; for
+  Robinhood, the PoolManager matches the pinned external deployment and owner;
 - `feeAddress()`, `feeBps()`, `operatorRewardsRouter()`, and
   `operatorRewardShareBps()` match Treasury policy;
 - `externalBuysEnabled()` matches current launch policy;
 - buyback split, cap, caller reward, delay, reserve, and last execution block
   match Treasury policy;
 - the reward allocator and funded POTATO escrow match Treasury policy;
-- `protocolFinalized()` is false unless Diamond cuts were intentionally ended;
+- `protocolFinalized()` matches whether the installed buyback ceiling and all
+  other Diamond facet behavior were intentionally made permanent;
   and
 - after finalization, governance setters still work while `diamondCut` reverts.

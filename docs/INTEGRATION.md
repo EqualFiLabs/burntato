@@ -11,7 +11,8 @@ Important state reads include:
 - `IGame.currentRoundId()`, `getRound()`, and `currentEarnedEmission()`;
 - `IGovernance.protocolConfig()`, authority, guardian, pause, and finalization
   views;
-- `IRecovery.recoveryCommitment()` and `totalRecoveryCommitment()`;
+- `IRecovery.recoveryCommitment()`, `totalRecoveryCommitment()`, and
+  `stalledRecoveryWithdrawalAt()`;
 - `IClaims.winnerClaimed()`, `recoveryClaimed()`, and
   `claimableRecovery()` for account claim state;
 - Treasury claimable ETH and POTATO views; and
@@ -109,10 +110,12 @@ router and `feeAddress`, with division dust assigned to `feeAddress`. `HookFee`,
 claim.
 
 Hook ownership may update `feeAddress`, `feeBps`, and the atomic Operator router
-and share configuration before or after launch and Diamond finalization. Both
-BPS values are bounded to 10,000. The Operator path is disabled only as
-`(address(0), 0)`; an enabled router must be deployed and distinct from known
-system and Treasury destinations.
+and share configuration before or after launch and Diamond finalization. The
+total fee is bounded to 200 BPS. The Operator share is independently bounded to
+10,000 BPS of that fee, allowing all hook revenue to go to Operators without
+increasing the trader fee. The Operator path is disabled only as `(address(0),
+0)`; an enabled router must be deployed and distinct from known system and
+Treasury destinations.
 
 External buys are disabled by default. `setExternalBuysEnabled(bool)` is an
 owner-only hook control that remains repeatable after launch and Diamond
@@ -176,26 +179,43 @@ and POTATO transient PoolManager allowance at zero.
 ## Permissionless buyback
 
 Call `IBuyback.buyback()` without parameters after market launch. It selects the
-governed gross slice from `buybackReserveEth`, pays the caller reward, and swaps
-the remainder as exact-input native ETH for POTATO at the extreme Uniswap price
-limit. There is intentionally no caller-provided quote, slippage, deadline, or
-recipient parameter. Partial fills restore unspent input to the reserve.
+governed gross slice from `buybackReserveEth`, derives a swap budget that leaves
+room for the configured reward, and swaps exact-input native ETH for POTATO at
+the extreme Uniswap price limit. The reward is then calculated from actual ETH
+spent. There is intentionally no caller-provided quote, slippage, deadline, or
+recipient parameter. Partial fills restore everything except actual spend and
+its proportional reward to the reserve.
 
 PoolManager sends output directly to the current `IClaims.treasuryRecipient()`.
 The hook exact-authorizes that transfer even when the current recipient is not a
 distributor, and the buyback leaves `externalBuysEnabled` unchanged. Observe
 `BuybackExecuted` for gross slice, actual ETH spent, POTATO bought, caller
 reward, and final reserve. The default cap, reward, and delay are 2 ETH, 50 BPS,
-and one block.
+and one block. The reward rate cannot exceed 100 BPS.
 
-This is the bounded Burntato adaptation of FWA's production buyback path:
-
-The reward is gross-slice based, not fill based. A terminal-price partial fill
-can therefore pay the configured reward even when little or no ETH is consumed
-by the swap. Integrators should expose the current cap, reward, delay, and
-reserve so governance and users can evaluate that explicit tradeoff.
+If the canonical swap spends zero ETH or returns zero POTATO, the complete call
+reverts: no reward is paid, reserve is unchanged, and the cooldown is not
+consumed. A partial positive fill remains valid. Integrators should expose the
+current cap, reward, delay, and reserve; no new user input is required.
 
 - [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
+
+## Stalled Recovery withdrawal
+
+Recovery normally needs no additional UI beyond commitment and later claim.
+For the exceptional holderless-predecessor state,
+`stalledRecoveryWithdrawalAt(targetRoundId)` returns the shared Unix timestamp
+when withdrawals open, or zero when no stalled exit is available. After that
+timestamp, a committer may call `withdrawStalledRecovery(targetRoundId)` to
+recover their complete commitment. The method remains callable when new
+commitments are paused.
+
+The exit is valid only while the target is `currentRoundId + 1`, its activated
+predecessor has never had a holder, and the target has not activated. The first
+predecessor purchase makes the view return zero and permanently closes the exit
+for those commitments. Clients should therefore treat a nonzero deadline as a
+conditional liveness escape, refresh it before submitting, and handle an
+ordinary state-change revert.
 
 ## Treasury reward schedules
 

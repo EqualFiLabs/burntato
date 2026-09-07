@@ -5,6 +5,15 @@ integration on Robinhood Chain testnet, chain ID `46630`. The canonical
 machine-readable record is
 [`deployments/robinhood-testnet-46630-launch.json`](../deployments/robinhood-testnet-46630-launch.json).
 
+> Compatibility note: this deployment was built from Burntato commit
+> `07688de3193492aca399c8bbadc9321162e5f726`. It predates the
+> `fix/economic-recovery-safety` candidate: the live contracts still use the
+> prior gross-slice caller reward, prior hook-fee domain, and three-selector
+> Recovery facet without stalled withdrawals. The candidate does not mutate or
+> redeploy this testnet instance and does not ship an in-place migration for
+> pre-existing commitments. It qualifies fresh deployments only. Clients must
+> not expose its new Recovery API against these addresses.
+
 ## Addresses
 
 | Component | Address |

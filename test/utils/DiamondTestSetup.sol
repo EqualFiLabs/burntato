@@ -201,10 +201,12 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _recoverySelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](3);
+        selectors = new bytes4[](5);
         selectors[0] = IRecovery.commitRecovery.selector;
-        selectors[1] = IRecovery.recoveryCommitment.selector;
-        selectors[2] = IRecovery.totalRecoveryCommitment.selector;
+        selectors[1] = IRecovery.withdrawStalledRecovery.selector;
+        selectors[2] = IRecovery.recoveryCommitment.selector;
+        selectors[3] = IRecovery.totalRecoveryCommitment.selector;
+        selectors[4] = IRecovery.stalledRecoveryWithdrawalAt.selector;
     }
 
     function _settlementSelectors() internal pure returns (bytes4[] memory selectors) {
