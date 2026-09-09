@@ -22,15 +22,23 @@ reserve and Diamond balance exactly, repeated funding is additive, zero-value
 funding reverts without mutation, and a raw native transfer does not enter
 reserve accounting.
 
-The Certora harnesses are thin wrappers over production `LibMath`,
-`GovernanceFacet`, and `BuybackFacet`. CVL independently checks the arithmetic
-properties and the activation transition, including foundation initialization,
-unauthorized callers, repeat calls, and authority transfer before activation.
-The buyback funding harness checks exact reserve addition for arbitrary callers,
-zero-value rollback, cooldown isolation, and enforcement of the shared
-reentrancy guard.
+The pause properties execute the production Diamond, `GovernanceFacet`, and
+`PotatoTokenFacet`. They establish that the guardian can pause but cannot
+unpause, unauthorized callers cannot pause, authority can clear the pause,
+paused central protocol minting reverts without changing supply or recipient
+balance, and authority cannot be renounced while a guardian remains.
 
-The activation and buyback funding harnesses have clearly marked
+The Certora harnesses are thin wrappers over production `LibMath`,
+`GovernanceFacet`, `PotatoTokenFacet`, and `BuybackFacet`. CVL independently
+checks the arithmetic properties and the activation transition, including
+foundation initialization, unauthorized callers, repeat calls, and authority
+transfer before activation. The buyback funding harness checks exact reserve
+addition for arbitrary callers, zero-value rollback, cooldown isolation, and
+enforcement of the shared reentrancy guard. The pause harness checks guardian
+and authority permissions, safe authority renunciation, and supply preservation
+when paused protocol minting reverts.
+
+The activation, pause, and buyback funding harnesses have clearly marked
 state-construction methods. They are verification-only and are never part of a
 deployment. Every transition under test is executed by its production facet.
 
@@ -74,19 +82,25 @@ Install `solc8.26`, configure Certora according to its official CLI
 documentation, and run:
 
 ```bash
+formal/scripts/run-certora.sh pause
+formal/scripts/run-certora.sh activation
 formal/scripts/run-certora.sh all
 ```
 
-Both configurations enable rule-sanity checks and wait for final cloud results.
+Every configuration enables rule-sanity checks and waits for final cloud results.
 Never describe a submitted or still-running job as verified.
 
 ## Reproducibility
 
 The arithmetic harness bounds monetary values to `uint128`, BPS inputs to
 `uint16`, and timing/count inputs to `uint64`. Activation and Halmos buyback
-funding use `uint96` payment inputs. Certora bounds both the starting reserve
-and positive contribution below `2^128`. These bounds are explicit proof
-assumptions, not Solidity type changes.
+funding use `uint96` payment inputs. The Halmos pause-mint property keeps the
+mint amount symbolic within `uint96` and uses one fixed nonzero recipient
+because Solady's hashed balance slot is not concrete for a fully symbolic
+address in Halmos. Certora checks arbitrary recipients and `uint256` amounts.
+Certora bounds both the starting reserve and positive contribution below
+`2^128`. These bounds are explicit proof assumptions, not Solidity type
+changes.
 
 The intended toolchain is Solidity 0.8.26 with the repository's production
 optimizer, `via_ir`, Cancun EVM, and metadata-free bytecode settings; Foundry
