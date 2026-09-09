@@ -17,12 +17,13 @@ Self-contained local deployment keeps Operator rewards disabled. Robinhood
 deployment requires an explicit nonzero Operator share. External buys start
 disabled.
 
-Deployment completes fully configured and unpaused while
+Deployment completes fully configured with `paused()` false while
 `purchasesInitialized()` remains false. Only `buyPotato()` is gated by this
 one-shot state. The current Diamond authority calls `initializePurchases()`
 directly after verification; no delay is imposed by Burntato. Market launch,
 Recovery, claims, settlement, and all other selectors are not gated by purchase
-initialization.
+initialization. They remain subject to their ordinary lifecycle checks,
+including the global emergency pause where applicable.
 
 ## Deployment modes
 
@@ -282,7 +283,8 @@ the checked-in testnet deployment record.
 
 The verifier checks independently supplied owned-contract addresses and runtime
 hashes, exact selector routing, complete protocol configuration including the
-diminishing timeout domain, final-admin authority, guardian and pause state,
+diminishing timeout domain, final-admin authority, guardian and unpaused global
+pause state,
 final-admin-owned hook, hook token/fee/tick configuration, exact uninitialized
 PoolKey, PositionManager dependencies, the configured genesis POTATO supply and
 Diamond reservation, disabled purchase activation, empty initial round state,

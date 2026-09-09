@@ -11,6 +11,7 @@ import {Round} from "../shared/Types.sol";
 
 contract SettlementFacet is ISettlement {
     function settleRound() external {
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         uint256 roundId = gs.currentRoundId;
         Round storage round = gs.rounds[roundId];

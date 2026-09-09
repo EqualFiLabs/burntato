@@ -11,6 +11,11 @@ import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
 contract ClaimsFacet is IClaims {
+    modifier whenNotPaused() {
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
+        _;
+    }
+
     modifier nonReentrant() {
         LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
         if (rs.status == 2) revert Errors.Reentrancy();
@@ -19,7 +24,12 @@ contract ClaimsFacet is IClaims {
         rs.status = 1;
     }
 
-    function claimWinner(uint256 roundId, address recipient) external nonReentrant returns (uint256 amount) {
+    function claimWinner(uint256 roundId, address recipient)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint256 amount)
+    {
         LibRecipients.enforceExternal(recipient);
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[roundId];
@@ -33,7 +43,12 @@ contract ClaimsFacet is IClaims {
         emit WinnerClaimed(roundId, msg.sender, recipient, amount);
     }
 
-    function claimRecovery(uint256 roundId, address recipient) external nonReentrant returns (uint256 amount) {
+    function claimRecovery(uint256 roundId, address recipient)
+        external
+        whenNotPaused
+        nonReentrant
+        returns (uint256 amount)
+    {
         LibRecipients.enforceExternal(recipient);
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[roundId];
@@ -65,7 +80,7 @@ contract ClaimsFacet is IClaims {
         return _recoveryAmount(roundId, round, rs, rs.commitments[roundId][account]);
     }
 
-    function claimTreasury() external nonReentrant returns (uint256 amount) {
+    function claimTreasury() external whenNotPaused nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         LibRecipients.enforceExternal(ts.recipient);
         amount = ts.purchaseEth;
@@ -75,7 +90,7 @@ contract ClaimsFacet is IClaims {
         emit TreasuryEthClaimed(ts.recipient, amount);
     }
 
-    function claimTreasuryPotato() external nonReentrant returns (uint256 amount) {
+    function claimTreasuryPotato() external whenNotPaused nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         LibRecipients.enforceExternal(ts.recipient);
         amount = ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;

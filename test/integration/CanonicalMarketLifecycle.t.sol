@@ -623,7 +623,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         market.launchMarket();
         _setExternalBuys(true);
         vm.prank(guardian);
-        IGovernance(address(diamond)).setPauseState(true, true);
+        IGovernance(address(diamond)).setPaused(true);
 
         uint256 bought = _buy(alice, 0.0001 ether);
         assertGt(bought, 0);

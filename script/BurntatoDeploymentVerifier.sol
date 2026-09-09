@@ -122,8 +122,7 @@ contract BurntatoDeploymentVerifier {
         IBuyback buyback = IBuyback(deployment.diamond);
         ITreasuryRewards rewards = ITreasuryRewards(deployment.diamond);
         _check(governance.guardian() == config.guardian, "GUARDIAN");
-        _check(!governance.purchasesPaused(), "PURCHASES_UNPAUSED");
-        _check(!governance.commitmentsPaused(), "COMMITMENTS_UNPAUSED");
+        _check(!governance.paused(), "PROTOCOL_UNPAUSED");
         _check(!governance.protocolFinalized(), "NOT_FINALIZED");
         _check(governance.foundationConfigured(), "FOUNDATION_CONFIGURED");
         _check(!governance.purchasesInitialized(), "PURCHASES_NOT_INITIALIZED");
