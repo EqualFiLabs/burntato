@@ -52,6 +52,7 @@ contract BurntatoPauseProperties is Test {
         governance = IGovernance(address(diamond));
         potato = IPotatoToken(address(diamond));
         governance.setGuardian(GUARDIAN);
+        governance.initializePurchases();
         governance.setAuthority(FINAL_ADMIN);
     }
 

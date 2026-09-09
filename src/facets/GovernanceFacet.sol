@@ -54,7 +54,10 @@ contract GovernanceFacet is IGovernance {
 
     function setAuthority(address newAuthority) external onlyAuthority {
         LibProtocolStorage.GovernanceStorage storage gs = LibProtocolStorage.governance();
-        if (newAuthority == address(0) && (gs.guardian != address(0) || gs.paused)) {
+        if (
+            newAuthority == address(0)
+                && (gs.guardian != address(0) || gs.paused || !LibProtocolStorage.game().initialized)
+        ) {
             revert Errors.UnsafeAuthorityRenunciation();
         }
         address previous = LibDiamond.authority();

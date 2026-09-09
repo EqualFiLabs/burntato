@@ -1,5 +1,5 @@
 methods {
-    function formalConfigurePauseState(address, address, bool) external envfree;
+    function formalConfigurePauseState(address, address, bool, bool) external envfree;
     function authority() external returns (address) envfree;
     function guardian() external returns (address) envfree;
     function paused() external returns (bool) envfree;
@@ -11,7 +11,7 @@ rule guardianCanPause(address admin, address guardian_) {
     require admin != 0;
     require guardian_ != 0;
     require admin != guardian_;
-    formalConfigurePauseState(admin, guardian_, false);
+    formalConfigurePauseState(admin, guardian_, false, true);
 
     env e;
     require e.msg.sender == guardian_;
@@ -25,7 +25,7 @@ rule guardianCannotUnpause(address admin, address guardian_) {
     require admin != 0;
     require guardian_ != 0;
     require admin != guardian_;
-    formalConfigurePauseState(admin, guardian_, true);
+    formalConfigurePauseState(admin, guardian_, true, true);
 
     env e;
     require e.msg.sender == guardian_;
@@ -42,7 +42,7 @@ rule unauthorizedCallerCannotPause(address admin, address guardian_, address cal
     require guardian_ != 0;
     require caller != admin;
     require caller != guardian_;
-    formalConfigurePauseState(admin, guardian_, false);
+    formalConfigurePauseState(admin, guardian_, false, true);
 
     env e;
     require e.msg.sender == caller;
@@ -57,7 +57,7 @@ rule unauthorizedCallerCannotPause(address admin, address guardian_, address cal
 rule authoritySetsEitherPauseState(address admin, address guardian_, bool initialState, bool nextState) {
     require admin != 0;
     require admin != guardian_;
-    formalConfigurePauseState(admin, guardian_, initialState);
+    formalConfigurePauseState(admin, guardian_, initialState, true);
 
     env e;
     require e.msg.sender == admin;
@@ -70,7 +70,7 @@ rule authoritySetsEitherPauseState(address admin, address guardian_, bool initia
 rule unsafeAuthorityRenunciationReverts(address admin, address guardian_, bool paused_) {
     require admin != 0;
     require guardian_ != 0 || paused_;
-    formalConfigurePauseState(admin, guardian_, paused_);
+    formalConfigurePauseState(admin, guardian_, paused_, true);
 
     env e;
     require e.msg.sender == admin;
@@ -84,7 +84,7 @@ rule unsafeAuthorityRenunciationReverts(address admin, address guardian_, bool p
 
 rule cleanAuthorityRenunciationSucceeds(address admin) {
     require admin != 0;
-    formalConfigurePauseState(admin, 0, false);
+    formalConfigurePauseState(admin, 0, false, true);
 
     env e;
     require e.msg.sender == admin;
@@ -96,10 +96,24 @@ rule cleanAuthorityRenunciationSucceeds(address admin) {
     assert !paused(), "clean authority renunciation pauses protocol";
 }
 
+rule uninitializedAuthorityRenunciationReverts(address admin) {
+    require admin != 0;
+    formalConfigurePauseState(admin, 0, false, false);
+
+    env e;
+    require e.msg.sender == admin;
+    require e.msg.value == 0;
+    setAuthority@withrevert(e, 0);
+    bool reverted = lastReverted;
+
+    assert reverted, "authority renounces before purchase initialization";
+    assert authority() == admin, "failed pre-initialization renunciation changes authority";
+}
+
 rule pausedProtocolMintRevertsWithoutSupplyChange(address admin, address recipient, uint256 amount) {
     require admin != 0;
     require recipient != 0;
-    formalConfigurePauseState(admin, 0, true);
+    formalConfigurePauseState(admin, 0, true, true);
     uint256 supplyBefore = totalSupply();
     uint256 balanceBefore = balanceOf(recipient);
 

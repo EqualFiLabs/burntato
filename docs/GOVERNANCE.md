@@ -7,8 +7,8 @@ to the configured `finalAdmin` and does not deploy a timelock. That address may
 be an EOA, Safe, or governance contract; Burntato does not require authority to
 have contract code or impose a delay. The current authority may transfer the
 role repeatedly to any nonzero address. Governance may relinquish authority by
-setting it to `address(0)` only after the guardian is already zero and the
-protocol is unpaused.
+setting it to `address(0)` only after purchases are initialized, the guardian
+is already zero, and the protocol is unpaused.
 
 While authority exists it can:
 
@@ -51,11 +51,12 @@ Recovery withdrawal, canonical market launch and swaps, buybacks or direct
 reserve funding, Treasury reward scheduling, views, or governance
 administration.
 
-Authority renunciation is guarded so containment cannot become permanent by
-accident. The safe sequence is to set the guardian to `address(0)`, clear the
-global pause if necessary, and only then set authority to `address(0)`. Once
-authority is zero, no guardian remains and no address can pause or administer
-the Diamond.
+Authority renunciation is guarded so an uninitialized game or containment
+state cannot become permanent by accident. Purchases must already be
+initialized; the remaining safe sequence is to set the guardian to
+`address(0)`, clear the global pause if necessary, and only then set authority
+to `address(0)`. Once authority is zero, no guardian remains and no address can
+pause or administer the Diamond.
 
 ## Finalization
 
@@ -127,6 +128,6 @@ For a deployment, verify:
 - the reward allocator and funded POTATO escrow match Treasury policy;
 - `protocolFinalized()` matches whether the installed buyback ceiling and all
   other Diamond facet behavior were intentionally made permanent;
-- any planned authority renunciation is preceded by a zero guardian and an
-  unpaused protocol; and
+- any planned authority renunciation follows purchase initialization and is
+  preceded by a zero guardian and an unpaused protocol; and
 - after finalization, governance setters still work while `diamondCut` reverts.

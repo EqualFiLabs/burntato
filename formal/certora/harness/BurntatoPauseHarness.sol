@@ -10,11 +10,17 @@ import {LibProtocolStorage} from "../../../src/libraries/LibProtocolStorage.sol"
 /// @notice Exposes controlled pause states while executing production governance and mint logic.
 /// @dev State construction and the self-call wrapper exist only in this verification harness.
 contract BurntatoPauseHarness is GovernanceFacet, PotatoTokenFacet {
-    function formalConfigurePauseState(address authority_, address guardian_, bool paused_) external {
+    function formalConfigurePauseState(
+        address authority_,
+        address guardian_,
+        bool paused_,
+        bool purchasesInitialized_
+    ) external {
         LibDiamond.transferAuthority(authority_);
         LibProtocolStorage.GovernanceStorage storage gs = LibProtocolStorage.governance();
         gs.guardian = guardian_;
         gs.paused = paused_;
+        LibProtocolStorage.game().initialized = purchasesInitialized_;
     }
 
     function formalProtocolMint(address recipient, uint256 amount) external {

@@ -70,8 +70,9 @@ canonical market launch and swaps, buybacks and reserve funding, reward
 scheduling, views, and administration live. Protocol finalization permanently
 disables only future Diamond cuts; it does not disable economic, Treasury, hook,
 PoolManager, pause, or authority administration. Diamond authority can be
-relinquished only after the guardian is zero and the protocol is unpaused;
-independent ownership roles retain their own zero-address transfer rules.
+relinquished only after purchases are initialized, the guardian is zero, and
+the protocol is unpaused; independent ownership roles retain their own
+zero-address transfer rules.
 
 ## Repository guide
 

@@ -35,8 +35,9 @@ foundation initialization, unauthorized callers, repeat calls, and authority
 transfer before activation. The buyback funding harness checks exact reserve
 addition for arbitrary callers, zero-value rollback, cooldown isolation, and
 enforcement of the shared reentrancy guard. The pause harness checks guardian
-and authority permissions, safe authority renunciation, and supply preservation
-when paused protocol minting reverts.
+and authority permissions, safe authority renunciation including the
+pre-initialization rejection, and supply preservation when paused protocol
+minting reverts.
 
 The activation, pause, and buyback funding harnesses have clearly marked
 state-construction methods. They are verification-only and are never part of a

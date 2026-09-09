@@ -194,6 +194,25 @@ contract GovernanceAdministrationTest is Test {
         assertEq(IGovernance(address(candidate)).authority(), guardian);
     }
 
+    function test_AuthorityCannotRelinquishBeforePurchaseInitialization() public {
+        BurntatoDiamond candidate = _deployBootstrapGovernance();
+        IGovernance candidateGovernance = IGovernance(address(candidate));
+        assertFalse(candidateGovernance.purchasesInitialized());
+        assertEq(candidateGovernance.guardian(), address(0));
+        assertFalse(candidateGovernance.paused());
+
+        vm.prank(bootstrap);
+        vm.expectRevert(Errors.UnsafeAuthorityRenunciation.selector);
+        candidateGovernance.setAuthority(address(0));
+        assertEq(candidateGovernance.authority(), bootstrap);
+
+        vm.startPrank(bootstrap);
+        candidateGovernance.initializePurchases();
+        candidateGovernance.setAuthority(address(0));
+        vm.stopPrank();
+        assertEq(candidateGovernance.authority(), address(0));
+    }
+
     function test_AuthorityCannotRelinquishWhileGuardianRemains() public {
         vm.prank(address(timelock));
         vm.expectRevert(Errors.UnsafeAuthorityRenunciation.selector);

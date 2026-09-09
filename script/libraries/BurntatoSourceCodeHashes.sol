@@ -8,7 +8,7 @@ library BurntatoSourceCodeHashes {
     bytes32 internal constant DIAMOND = 0x08078332fcfc2680de45d406fe082dcbe5c11e2f23fa0a6798726756ff1b2be6;
     bytes32 internal constant DIAMOND_CUT_FACET = 0xa84928664cd2e4743aff7733c3ab8f4661e9a6ab7545577ca11342272aa91ae5;
     bytes32 internal constant DIAMOND_LOUPE_FACET = 0x31f9d7259b05395dcadd67ec708606124e8667d3d9b275264c2f13875ef2ae93;
-    bytes32 internal constant GOVERNANCE_FACET = 0xc9b97eff15f51d31d1636a333f2bc50121a5a50659aff26a7236c50125d60df9;
+    bytes32 internal constant GOVERNANCE_FACET = 0xca75bec868cc9475d4a2105fedf274777beb8e6c7084bb5cf469534310911be0;
     bytes32 internal constant MARKET_FACET = 0x977918a2ed1ebd28b8408f79c2f99f684759ec2b8e2c7e0f030433b876f92cfe;
     bytes32 internal constant BUYBACK_FACET = 0xf3601b1c356b523c9d132d6b4d885ed6fecde484ae54235d8519014df6b84623;
     bytes32 internal constant POTATO_TOKEN_FACET = 0x6e46b3ba498d70b35a838846319b3766564ef29eb4e5b1d1552bcbaede1b6540;
