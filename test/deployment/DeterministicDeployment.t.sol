@@ -3,7 +3,6 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
@@ -11,8 +10,11 @@ import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifie
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
 import {DeployBurntatoLocalFork} from "../../script/DeployBurntatoLocalFork.s.sol";
 import {DeployBurntatoRobinhoodTestnet} from "../../script/DeployBurntatoRobinhoodTestnet.s.sol";
+import {FinalizeBurntatoRobinhoodTestnet} from "../../script/FinalizeBurntatoRobinhoodTestnet.s.sol";
 import {BurntatoHookDeployer} from "../../script/helpers/BurntatoHookDeployer.sol";
 import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
+import {BurntatoGenesisCodec} from "../../script/libraries/BurntatoGenesisCodec.sol";
+import {BurntatoSourceCodeHashes} from "../../script/libraries/BurntatoSourceCodeHashes.sol";
 import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "../../script/libraries/StaticsOperatorDeploymentConfig.sol";
 import {
@@ -22,14 +24,18 @@ import {
     StaticsOperatorDependencies
 } from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
+import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
+import {GameFacet} from "../../src/facets/GameFacet.sol";
 import {BurntatoOperatorRewardsRouter} from "../../src/rewards/BurntatoOperatorRewardsRouter.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {FacetCut, FacetCutAction, Round} from "../../src/shared/Types.sol";
+import {Errors} from "../../src/shared/Errors.sol";
+import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
 
 interface IPoolManagerAuthority {
     function owner() external view returns (address);
@@ -48,6 +54,15 @@ contract DeploymentConfigHarness {
 
     function checkedInt24(int256 value) external pure returns (int24) {
         return BurntatoDeploymentConfig.checkedInt24(value);
+    }
+
+    function hookOperatorRewardsRouter(uint256 operatorRewardShareBps, address router) external pure returns (address) {
+        if (operatorRewardShareBps > type(uint16).max) revert();
+        return BurntatoDeploymentConfig.hookOperatorRewardsRouter(uint16(operatorRewardShareBps), router);
+    }
+
+    function roundTripGenesisConfig(GenesisConfig memory config) external pure returns (GenesisConfig memory) {
+        return BurntatoGenesisCodec.decode(BurntatoGenesisCodec.encode(config));
     }
 }
 
@@ -68,8 +83,11 @@ contract DeterministicDeploymentTest is Test {
 
     function test_VerifierConfirmsCompleteGenesisDeployment() public view {
         assertTrue(verifier.verify(config, deployment));
-        assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), deployment.timelock);
-        assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), deployment.timelock);
+        assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), config.finalAdmin);
+        assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), config.finalAdmin);
+        assertEq(deployment.admin, config.finalAdmin);
+        assertTrue(IGovernance(deployment.diamond).foundationConfigured());
+        assertFalse(IGovernance(deployment.diamond).purchasesInitialized());
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
     }
 
@@ -81,6 +99,82 @@ contract DeterministicDeploymentTest is Test {
             )
         );
         verifier.verify(config, deployment);
+    }
+
+    function test_BuyPotatoBlockedUntilFinalAdminInitializesOnce() public {
+        vm.deal(buyer, config.protocol.startingPrice);
+        vm.prank(buyer);
+        vm.expectRevert(Errors.PurchasesNotInitialized.selector);
+        IGame(deployment.diamond).buyPotato{value: config.protocol.startingPrice}();
+
+        vm.prank(address(deployScript));
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, address(deployScript)));
+        IGovernance(deployment.diamond).initializePurchases();
+
+        vm.prank(config.guardian);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, config.guardian));
+        IGovernance(deployment.diamond).initializePurchases();
+
+        _initializePurchases(deployment, config.finalAdmin);
+        assertTrue(IGovernance(deployment.diamond).purchasesInitialized());
+
+        vm.prank(config.finalAdmin);
+        vm.expectRevert(Errors.AlreadyInitialized.selector);
+        IGovernance(deployment.diamond).initializePurchases();
+
+        vm.prank(buyer);
+        IGame(deployment.diamond).buyPotato{value: config.protocol.startingPrice}();
+        assertEq(IGame(deployment.diamond).currentRoundId(), 1);
+    }
+
+    function test_CurrentAdminCanInitializePurchasesAfterAuthorityTransfer() public {
+        IGovernance governance = IGovernance(deployment.diamond);
+        address successor = makeAddr("successor-admin");
+
+        vm.prank(config.finalAdmin);
+        governance.setAuthority(successor);
+
+        vm.prank(config.finalAdmin);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, config.finalAdmin));
+        governance.initializePurchases();
+
+        vm.prank(successor);
+        governance.initializePurchases();
+        assertTrue(governance.purchasesInitialized());
+    }
+
+    function test_PurchaseActivationDoesNotGateOtherProtocolSurfaces() public {
+        IGovernance governance = IGovernance(deployment.diamond);
+        assertFalse(governance.purchasesInitialized());
+        assertFalse(governance.purchasesPaused());
+        assertFalse(governance.commitmentsPaused());
+
+        address replacementGuardian = makeAddr("pre-activation-guardian");
+        vm.prank(config.finalAdmin);
+        governance.setGuardian(replacementGuardian);
+        assertEq(governance.guardian(), replacementGuardian);
+
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidRound.selector, 0));
+        IRecovery(deployment.diamond).commitRecovery(1);
+
+        IMarket market = IMarket(deployment.diamond);
+        assertTrue(market.marketReady());
+        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+        assertNotEq(poolId, bytes32(0));
+        assertGt(liquidity, 0);
+        assertFalse(governance.purchasesInitialized());
+    }
+
+    function test_TestnetFinalCheckRejectsPausedPurchases() public {
+        IGovernance governance = IGovernance(deployment.diamond);
+        vm.startPrank(config.finalAdmin);
+        governance.initializePurchases();
+        governance.setPauseState(true, false);
+        vm.stopPrank();
+
+        FinalizeBurntatoRobinhoodTestnet finalizer = new FinalizeBurntatoRobinhoodTestnet();
+        vm.expectRevert(FinalizeBurntatoRobinhoodTestnet.PurchasesPaused.selector);
+        finalizer.checkFinalizedDeployment(deployment.diamond, deployment.hook);
     }
 
     function _selectRobinhoodFork() internal {
@@ -108,11 +202,10 @@ contract DeterministicDeploymentTest is Test {
         GenesisConfig memory testnet = (new DeployBurntatoRobinhoodTestnet()).testnetConfig(deployer);
 
         assertEq(testnet.deployer, deployer);
-        assertEq(testnet.proposer, deployer);
+        assertEq(testnet.finalAdmin, deployer);
         assertEq(testnet.guardian, deployer);
         assertEq(testnet.treasuryRecipient, deployer);
         assertEq(testnet.rewardAllocator, deployer);
-        assertEq(testnet.timelockDelay, 120 seconds);
         assertEq(testnet.protocol.winnerBps, 2_500);
         assertEq(testnet.protocol.recoveryBps, 3_000);
         assertEq(testnet.protocol.treasuryBps, 2_000);
@@ -172,7 +265,7 @@ contract DeterministicDeploymentTest is Test {
         assertEq(canonicalDeployment.poolManager, dependencies.poolManager);
         assertEq(canonicalDeployment.positionManager, dependencies.positionManager);
         assertEq(canonicalDeployment.universalRouter, dependencies.universalRouter);
-        assertEq(BurntatoSwapFeeHook(payable(canonicalDeployment.hook)).owner(), canonicalDeployment.timelock);
+        assertEq(BurntatoSwapFeeHook(payable(canonicalDeployment.hook)).owner(), canonicalConfig.finalAdmin);
     }
 
     function test_CanonicalDependencyHashDriftFailsBeforeBurntatoDeployment() public {
@@ -209,6 +302,13 @@ contract DeterministicDeploymentTest is Test {
         assertEq(router.burntato(), canonicalDeployment.diamond);
         assertEq(address(router.operators()), operatorDependencies.operatorsNft);
         assertEq(address(router.activationRegistry()), operatorDependencies.activationRegistry);
+
+        BurntatoSwapFeeHook hook = BurntatoSwapFeeHook(payable(canonicalDeployment.hook));
+        vm.startPrank(canonicalConfig.finalAdmin);
+        hook.setOperatorRewards(address(0), 0);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        hook.setFeeAddress(canonicalDeployment.operatorRewardsRouter);
+        vm.stopPrank();
     }
 
     function test_LocalDeploymentRejectsOperatorShareWithoutCanonicalDependencies() public {
@@ -223,14 +323,6 @@ contract DeterministicDeploymentTest is Test {
         vm.chainId(1);
         vm.expectRevert(abi.encodeWithSelector(DeployBurntatoLocalFork.InvalidLocalForkChain.selector, 1));
         harness.preflightLocalFork();
-    }
-
-    function test_DeploymentAcceptsZeroTimelockDelay() public {
-        GenesisConfig memory zeroDelayConfig = config;
-        zeroDelayConfig.timelockDelay = 0;
-
-        BurntatoDeployment memory zeroDelayDeployment = deployScript.deploy(zeroDelayConfig, address(deployScript));
-        assertTrue(verifier.verify(zeroDelayConfig, zeroDelayDeployment));
     }
 
     function test_DeploymentAcceptsMaximumHookFeeAndCallerReward() public {
@@ -256,14 +348,27 @@ contract DeterministicDeploymentTest is Test {
         deployScript.deploy(unsafeConfig, address(deployScript));
     }
 
-    function test_DeploymentAcceptsBootstrapAsTimelockProposer() public {
-        GenesisConfig memory sharedAuthorityConfig = config;
-        sharedAuthorityConfig.proposer = address(deployScript);
+    function test_DeploymentAcceptsIndependentFinalAdmin() public {
+        GenesisConfig memory independentAdminConfig = config;
+        independentAdminConfig.finalAdmin = makeAddr("independent-final-admin");
 
-        BurntatoDeployment memory sharedAuthorityDeployment =
-            deployScript.deploy(sharedAuthorityConfig, address(deployScript));
-        TimelockController timelock = TimelockController(payable(sharedAuthorityDeployment.timelock));
-        assertTrue(timelock.hasRole(timelock.PROPOSER_ROLE(), address(deployScript)));
+        BurntatoDeployment memory independentAdminDeployment =
+            deployScript.deploy(independentAdminConfig, address(deployScript));
+        assertEq(IGovernance(independentAdminDeployment.diamond).authority(), independentAdminConfig.finalAdmin);
+        assertEq(
+            BurntatoSwapFeeHook(payable(independentAdminDeployment.hook)).owner(), independentAdminConfig.finalAdmin
+        );
+        assertEq(
+            IPoolManagerAuthority(independentAdminDeployment.poolManager).owner(), independentAdminConfig.finalAdmin
+        );
+    }
+
+    function test_DeploymentRejectsZeroFinalAdmin() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.finalAdmin = address(0);
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
     }
 
     function test_DeploymentRejectsTickSpacingOutsidePoolManagerDomain() public {
@@ -288,6 +393,26 @@ contract DeterministicDeploymentTest is Test {
     function test_DeploymentRejectsTimeoutOutsideDeadlineDomain() public {
         GenesisConfig memory unsafeConfig = config;
         unsafeConfig.protocol.roundTimeout = uint256(type(uint64).max) + 1;
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_DeploymentRejectsSeedAbovePositionManagerAmountDomain() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.potatoSeed = uint256(type(uint128).max) + 1;
+
+        vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
+        deployScript.deploy(unsafeConfig, address(deployScript));
+    }
+
+    function test_DeploymentRejectsSeedWhoseLaunchLiquidityRoundsToZero() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.tickSpacing = 1;
+        unsafeConfig.tickLower = TickMath.MIN_TICK;
+        unsafeConfig.initialTick = TickMath.MAX_TICK - 1;
+        unsafeConfig.tickUpper = TickMath.MAX_TICK - 1;
+        unsafeConfig.potatoSeed = 1;
 
         vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
         deployScript.deploy(unsafeConfig, address(deployScript));
@@ -330,6 +455,29 @@ contract DeterministicDeploymentTest is Test {
         harness.checkedInt24(int256(type(int24).min) - 1);
     }
 
+    function test_LocalArtifactGenesisConfigRoundTripsExactOverrides() public {
+        DeploymentConfigHarness harness = new DeploymentConfigHarness();
+        GenesisConfig memory overridden = config;
+        overridden.finalAdmin = makeAddr("artifact-final-admin");
+        overridden.protocol.startingPrice += 7;
+        overridden.protocol.treasuryBps -= 15;
+        overridden.protocol.operatorPurchaseBps += 15;
+        overridden.operatorRewardShareBps = 4_321;
+        overridden.potatoSeed += 99;
+
+        GenesisConfig memory decoded = harness.roundTripGenesisConfig(overridden);
+        assertEq(keccak256(abi.encode(decoded)), keccak256(abi.encode(overridden)));
+    }
+
+    function test_HookRouterConfigurationSupportsEveryRevenueCombination() public {
+        DeploymentConfigHarness harness = new DeploymentConfigHarness();
+        address router = makeAddr("operator-router");
+
+        assertEq(harness.hookOperatorRewardsRouter(0, address(0)), address(0));
+        assertEq(harness.hookOperatorRewardsRouter(0, router), address(0));
+        assertEq(harness.hookOperatorRewardsRouter(4_000, router), router);
+    }
+
     function test_VerifierRejectsProtocolConfigurationMismatch() public {
         GenesisConfig memory mismatched = config;
         mismatched.protocol.startingPrice += 1;
@@ -338,6 +486,158 @@ contract DeterministicDeploymentTest is Test {
             abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("STARTING_PRICE"))
         );
         verifier.verify(mismatched, deployment);
+    }
+
+    function test_VerifierRejectsMissingFoundationConfigurationFlag() public {
+        vm.store(deployment.diamond, keccak256("burntato.storage.initialization.v1"), bytes32(0));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("FOUNDATION_CONFIGURED")
+            )
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsCorruptedTokenMarketBindings() public {
+        bytes32 tokenSlot = keccak256("burntato.storage.token.v1");
+        vm.store(deployment.diamond, tokenSlot, bytes32(0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("TOKEN_CANONICAL_HOOK")
+            )
+        );
+        verifier.verify(config, deployment);
+
+        vm.store(deployment.diamond, tokenSlot, bytes32(uint256(uint160(deployment.hook))));
+        vm.store(deployment.diamond, bytes32(uint256(tokenSlot) + 1), bytes32(0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("TOKEN_POOL_MANAGER")
+            )
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsUnlaunchableSeedDomain() public {
+        GenesisConfig memory unsafeConfig = config;
+        unsafeConfig.potatoSeed = uint256(type(uint128).max) + 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("LAUNCH_LIQUIDITY_DOMAIN")
+            )
+        );
+        verifier.verify(unsafeConfig, deployment);
+    }
+
+    function test_SourceCodeHashManifestMatchesBuildArtifacts() public view {
+        _assertSourceHash("src/BurntatoDiamond.sol:BurntatoDiamond", BurntatoSourceCodeHashes.DIAMOND);
+        _assertSourceHash("src/facets/DiamondCutFacet.sol:DiamondCutFacet", BurntatoSourceCodeHashes.DIAMOND_CUT_FACET);
+        _assertSourceHash(
+            "src/facets/DiamondLoupeFacet.sol:DiamondLoupeFacet", BurntatoSourceCodeHashes.DIAMOND_LOUPE_FACET
+        );
+        _assertSourceHash("src/facets/GovernanceFacet.sol:GovernanceFacet", BurntatoSourceCodeHashes.GOVERNANCE_FACET);
+        _assertSourceHash("src/facets/MarketFacet.sol:MarketFacet", BurntatoSourceCodeHashes.MARKET_FACET);
+        _assertSourceHash("src/facets/BuybackFacet.sol:BuybackFacet", BurntatoSourceCodeHashes.BUYBACK_FACET);
+        _assertSourceHash(
+            "src/facets/PotatoTokenFacet.sol:PotatoTokenFacet", BurntatoSourceCodeHashes.POTATO_TOKEN_FACET
+        );
+        _assertSourceHash("src/facets/GameFacet.sol:GameFacet", BurntatoSourceCodeHashes.GAME_FACET);
+        _assertSourceHash("src/facets/RecoveryFacet.sol:RecoveryFacet", BurntatoSourceCodeHashes.RECOVERY_FACET);
+        _assertSourceHash("src/facets/SettlementFacet.sol:SettlementFacet", BurntatoSourceCodeHashes.SETTLEMENT_FACET);
+        _assertSourceHash("src/facets/ClaimsFacet.sol:ClaimsFacet", BurntatoSourceCodeHashes.CLAIMS_FACET);
+        _assertSourceHash(
+            "src/facets/TreasuryRewardsFacet.sol:TreasuryRewardsFacet", BurntatoSourceCodeHashes.TREASURY_REWARDS_FACET
+        );
+        _assertSourceHash(
+            "src/initializers/FoundationInit.sol:FoundationInit", BurntatoSourceCodeHashes.FOUNDATION_INIT
+        );
+        _assertSourceHash(
+            "script/helpers/BurntatoHookDeployer.sol:BurntatoHookDeployer",
+            BurntatoSourceCodeHashes.HOOK_DEPLOYER_NORMALIZED
+        );
+        _assertSourceHash(
+            "src/hooks/BurntatoSwapFeeHook.sol:BurntatoSwapFeeHook", BurntatoSourceCodeHashes.HOOK_NORMALIZED
+        );
+        _assertSourceHash(
+            "src/rewards/BurntatoOperatorRewardsRouter.sol:BurntatoOperatorRewardsRouter",
+            BurntatoSourceCodeHashes.OPERATOR_ROUTER_NORMALIZED
+        );
+    }
+
+    function test_VerifiersMeetEvmCodeSizeLimits() public view {
+        string[3] memory artifacts = [
+            "script/BurntatoDeploymentVerifier.sol:BurntatoDeploymentVerifier",
+            "script/BurntatoStructureVerifier.sol:BurntatoStructureVerifier",
+            "script/BurntatoMarketVerifier.sol:BurntatoMarketVerifier"
+        ];
+        for (uint256 i; i < artifacts.length; ++i) {
+            assertLe(vm.getDeployedCode(artifacts[i]).length, 24_576, artifacts[i]);
+            assertLe(vm.getCode(artifacts[i]).length, 49_152, artifacts[i]);
+        }
+    }
+
+    function test_VerifierRejectsRuntimeCodeMutation() public {
+        vm.etch(deployment.governanceFacet, hex"00");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("GOVERNANCE_FACET_CODE_HASH")
+            )
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsSelfReportedHookCodeMutation() public {
+        bytes memory runtime = deployment.hook.code;
+        runtime[runtime.length - 1] = bytes1(uint8(runtime[runtime.length - 1]) ^ 1);
+        vm.etch(deployment.hook, runtime);
+        deployment.codeHashes.hook = deployment.hook.codehash;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("HOOK_CODE_HASH"))
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsCodeLessSelfReportedHookDeployer() public {
+        address codeLess = makeAddr("code-less-hook-deployer");
+        vm.deal(codeLess, 1 ether);
+        deployment.hookDeployer = codeLess;
+        deployment.codeHashes.hookDeployer = codeLess.codehash;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("HOOK_DEPLOYER_CODE_HASH")
+            )
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsExpectedCodeHashMutation() public {
+        deployment.codeHashes.gameFacet = bytes32(uint256(deployment.codeHashes.gameFacet) ^ 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("GAME_FACET_CODE_HASH")
+            )
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsSelectorRoutingMutation() public {
+        FacetCut[] memory cuts = new FacetCut[](1);
+        cuts[0] = FacetCut({
+            facetAddress: address(new GameFacet()),
+            action: FacetCutAction.Replace,
+            functionSelectors: BurntatoSelectors.game()
+        });
+        vm.prank(config.finalAdmin);
+        IDiamondCut(deployment.diamond).diamondCut(cuts, address(0), "");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("SELECTOR_ROUTING"))
+        );
+        verifier.verify(config, deployment);
     }
 
     function test_VerifierRejectsDiminishingTimeoutMismatch() public {
@@ -361,6 +661,7 @@ contract DeterministicDeploymentTest is Test {
     }
 
     function test_GenesisPurchaseSnapshotsFixedEmissionBudget() public {
+        _initializePurchases(deployment, config.finalAdmin);
         vm.deal(buyer, config.protocol.startingPrice);
         vm.prank(buyer);
         IGame(deployment.diamond).buyPotato{value: config.protocol.startingPrice}();
@@ -379,39 +680,28 @@ contract DeterministicDeploymentTest is Test {
         );
     }
 
-    function test_TimelockIsOnlyPathToAdministrativeMutation() public {
+    function test_FinalAdminIsOnlyPathToAdministrativeMutation() public {
         address replacementGuardian = makeAddr("replacementGuardian");
-        bytes memory data = abi.encodeCall(IGovernance.setGuardian, (replacementGuardian));
-        bytes32 predecessor;
-        bytes32 salt = keccak256("replace guardian");
-        TimelockController timelock = TimelockController(payable(deployment.timelock));
 
         vm.prank(config.deployer);
-        vm.expectRevert();
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, config.deployer));
         IGovernance(deployment.diamond).setGuardian(replacementGuardian);
 
-        vm.prank(config.proposer);
-        timelock.schedule(deployment.diamond, 0, data, predecessor, salt, config.timelockDelay);
-        vm.warp(block.timestamp + config.timelockDelay);
-        timelock.execute(deployment.diamond, 0, data, predecessor, salt);
+        vm.prank(config.finalAdmin);
+        IGovernance(deployment.diamond).setGuardian(replacementGuardian);
 
         assertEq(IGovernance(deployment.diamond).guardian(), replacementGuardian);
     }
 
-    function test_TimelockCanAdministerPoolManager() public {
+    function test_FinalAdminCanAdministerPoolManager() public {
         address controller = makeAddr("protocolFeeController");
         IPoolManagerAuthority poolManager = IPoolManagerAuthority(deployment.poolManager);
 
         vm.expectRevert();
         poolManager.setProtocolFeeController(controller);
 
-        bytes memory data = abi.encodeCall(IPoolManagerAuthority.setProtocolFeeController, (controller));
-        bytes32 salt = keccak256("set protocol fee controller");
-        TimelockController timelock = TimelockController(payable(deployment.timelock));
-        vm.prank(config.proposer);
-        timelock.schedule(deployment.poolManager, 0, data, bytes32(0), salt, config.timelockDelay);
-        vm.warp(block.timestamp + config.timelockDelay);
-        timelock.execute(deployment.poolManager, 0, data, bytes32(0), salt);
+        vm.prank(config.finalAdmin);
+        poolManager.setProtocolFeeController(controller);
 
         assertEq(poolManager.protocolFeeController(), controller);
     }
@@ -423,6 +713,7 @@ contract DeterministicDeploymentTest is Test {
         IGame game = IGame(launchDeployment.diamond);
         IRecovery recovery = IRecovery(launchDeployment.diamond);
         ISettlement settlement = ISettlement(launchDeployment.diamond);
+        _initializePurchases(launchDeployment, launchConfig.finalAdmin);
 
         vm.deal(buyer, 1 ether);
         vm.prank(buyer);
@@ -446,5 +737,14 @@ contract DeterministicDeploymentTest is Test {
         assertNotEq(poolId, bytes32(0));
         assertGt(liquidity, 0);
         assertEq(IPositionOwner(launchDeployment.positionManager).ownerOf(1), market.lockedLpRecipient());
+    }
+
+    function _initializePurchases(BurntatoDeployment memory target, address finalAdmin) private {
+        vm.prank(finalAdmin);
+        IGovernance(target.diamond).initializePurchases();
+    }
+
+    function _assertSourceHash(string memory artifact, bytes32 expected) private view {
+        assertEq(keccak256(vm.getDeployedCode(artifact)), expected, artifact);
     }
 }

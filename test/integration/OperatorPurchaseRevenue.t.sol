@@ -141,8 +141,21 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
 
     function testInitializationRejectsMissingOrMismatchedRouter() public {
         ProtocolConfig memory config = _initialConfig();
-        _expectInitializationFailure(config, address(0));
-        _expectInitializationFailure(config, address(new WrongBurntatoRouter(address(0xBEEF))));
+        _expectInitializationFailure(config, address(0), Errors.InvalidProtocolConfig.selector);
+        _expectInitializationFailure(
+            config, address(new WrongBurntatoRouter(address(0xBEEF))), Errors.InvalidProtocolConfig.selector
+        );
+    }
+
+    function testInitializationRejectsOperatorRouterAsTreasury() public {
+        ProtocolConfig memory config = _initialConfig();
+        _expectInitializationFailure(config, address(router), Errors.InvalidAddress.selector, address(router));
+    }
+
+    function testGovernanceRejectsOperatorRouterAsTreasury() public {
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidAddress.selector);
+        IGovernance(address(diamond)).setTreasuryRecipient(address(router));
     }
 
     function testTinyPurchaseAssignsAllFiveWayDustToTreasury() public {
@@ -217,7 +230,18 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         assertEq(round.winnerPool + round.recoveryPool + treasuryShare + buybackShare + operatorShare, amount);
     }
 
-    function _expectInitializationFailure(ProtocolConfig memory config, address candidateRouter) private {
+    function _expectInitializationFailure(ProtocolConfig memory config, address candidateRouter, bytes4 expectedError)
+        private
+    {
+        _expectInitializationFailure(config, candidateRouter, expectedError, treasury);
+    }
+
+    function _expectInitializationFailure(
+        ProtocolConfig memory config,
+        address candidateRouter,
+        bytes4 expectedError,
+        address candidateTreasury
+    ) private {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
         BurntatoDiamond candidate = new BurntatoDiamond(authority, address(cutFacet));
         FoundationInit initializer = new FoundationInit();
@@ -225,15 +249,13 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
 
         vm.prank(authority);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                Errors.InitializationFailed.selector, abi.encodeWithSelector(Errors.InvalidProtocolConfig.selector)
-            )
+            abi.encodeWithSelector(Errors.InitializationFailed.selector, abi.encodeWithSelector(expectedError))
         );
         IDiamondCut(address(candidate))
             .diamondCut(
                 noCuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (config, treasury, candidateRouter, 1 ether))
+                abi.encodeCall(FoundationInit.initialize, (config, candidateTreasury, candidateRouter, 1 ether))
             );
     }
 }

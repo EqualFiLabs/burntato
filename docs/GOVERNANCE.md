@@ -2,11 +2,12 @@
 
 ## Authority model
 
-The Diamond recognizes one `authority` address. Deployment assigns it to an
-OpenZeppelin `TimelockController`, but the protocol does not hard-code a minimum
-delay or require the authority to have contract code. The current authority may
-transfer the role repeatedly to any address, including `address(0)` when
-governance intentionally relinquishes control.
+The Diamond recognizes one `authority` address. Deployment assigns it directly
+to the configured `finalAdmin` and does not deploy a timelock. That address may
+be an EOA, Safe, or governance contract; Burntato does not require authority to
+have contract code or impose a delay. The current authority may transfer the
+role repeatedly to any address, including `address(0)` when governance
+intentionally relinquishes control.
 
 While authority exists it can:
 
@@ -20,6 +21,12 @@ While authority exists it can:
 - reconfigure the Diamond's canonical market references before launch; and
 - administer or transfer the independently owned Burntato hook when the same
   authority separately holds that ownership role.
+
+Fresh deployments begin configured and unpaused with purchases inactive. Only
+`buyPotato()` checks `purchasesInitialized()`. The current Diamond authority may
+call `initializePurchases()` exactly once, directly and without a Burntato
+timelock. The initializer does not gate market launch, Recovery, settlement,
+claims, reward scheduling, or administrative selectors.
 
 Economic updates do not rewrite active obligations. Round N snapshots the full
 configuration for Round N+1 when Round N activates. An active round and an
@@ -58,10 +65,10 @@ selector-freeze, and one-time authority-lock APIs do not exist.
 
 ## Independently governed market components
 
-The Burntato timelock owns the `BurntatoSwapFeeHook`. Hook ownership controls
+The configured final admin owns the `BurntatoSwapFeeHook`. Hook ownership controls
 `feeAddress`, `feeBps`, the atomic Operator rewards router/share pair, and the
 repeatable external-buy gate. In self-contained local deployments, the same
-timelock also owns the newly deployed Uniswap v4 PoolManager and its native
+final admin also owns the newly deployed Uniswap v4 PoolManager and its native
 administrative surface. Robinhood deployments instead use an externally
 governed canonical PoolManager whose ownership Burntato neither receives nor
 verifies. Diamond finalization does not affect any of these independent roles.
@@ -93,11 +100,13 @@ Changing any one of these three roles does not implicitly mutate the others.
 
 For a deployment, verify:
 
-- `authority()` is the intended timelock or governance address;
-- the timelock delay and roles equal deployment configuration;
+- `authority()` is the intended final-admin EOA, Safe, or governance address;
+- `foundationConfigured()` is true before purchase activation;
+- `purchasesInitialized()` is false during deployment verification and becomes
+  true only after the current authority's one-shot call;
 - `guardian()` and both pause bits match intended operations state;
-- the hook owner is the intended Burntato timelock;
-- for a self-contained deployment, the PoolManager owner is that timelock; for
+- the hook owner is the intended final admin;
+- for a self-contained deployment, the PoolManager owner is that final admin; for
   Robinhood, the PoolManager matches the pinned external deployment and owner;
 - `feeAddress()`, `feeBps()`, `operatorRewardsRouter()`, and
   `operatorRewardShareBps()` match Treasury policy;

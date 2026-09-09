@@ -39,6 +39,23 @@ contract GovernanceFacet is IGovernance {
         return LibProtocolStorage.game().config;
     }
 
+    function foundationConfigured() external view returns (bool) {
+        return LibProtocolStorage.initialization().foundationInitialized;
+    }
+
+    function purchasesInitialized() external view returns (bool) {
+        return LibProtocolStorage.game().initialized;
+    }
+
+    function initializePurchases() external onlyAuthority {
+        LibProtocolStorage.InitializationStorage storage initialization = LibProtocolStorage.initialization();
+        if (!initialization.foundationInitialized) revert Errors.FoundationNotInitialized();
+        LibProtocolStorage.GameStorage storage game = LibProtocolStorage.game();
+        if (game.initialized) revert Errors.AlreadyInitialized();
+        game.initialized = true;
+        emit PurchasesInitialized(msg.sender);
+    }
+
     function setAuthority(address newAuthority) external onlyAuthority {
         address previous = LibDiamond.authority();
         LibDiamond.transferAuthority(newAuthority);

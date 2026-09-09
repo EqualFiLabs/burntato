@@ -9,7 +9,7 @@ import {BuybackConfig, ProtocolConfig} from "../../src/shared/Types.sol";
 library BurntatoDeploymentConfig {
     error NarrowingOverflow();
     address internal constant ANVIL_DEPLOYER = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
-    address internal constant ANVIL_PROPOSER = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
+    address internal constant ANVIL_ADMIN = 0x70997970C51812dc3A010C7d01b50e0d17dc79C8;
     address internal constant ANVIL_GUARDIAN = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
     address internal constant ANVIL_TREASURY = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
 
@@ -19,11 +19,10 @@ library BurntatoDeploymentConfig {
     function localDefaults() internal pure returns (GenesisConfig memory config) {
         config = GenesisConfig({
             deployer: ANVIL_DEPLOYER,
-            proposer: ANVIL_PROPOSER,
+            finalAdmin: ANVIL_ADMIN,
             guardian: ANVIL_GUARDIAN,
             treasuryRecipient: ANVIL_TREASURY,
             rewardAllocator: ANVIL_TREASURY,
-            timelockDelay: 1 days,
             protocol: ProtocolConfig({
                 startingPrice: 0.01 ether,
                 priceIncreaseBps: 1_000,
@@ -60,5 +59,9 @@ library BurntatoDeploymentConfig {
     function checkedInt24(int256 value) internal pure returns (int24 narrowed) {
         if (value < type(int24).min || value > type(int24).max) revert NarrowingOverflow();
         narrowed = int24(value);
+    }
+
+    function hookOperatorRewardsRouter(uint16 operatorRewardShareBps, address router) internal pure returns (address) {
+        return operatorRewardShareBps == 0 ? address(0) : router;
     }
 }

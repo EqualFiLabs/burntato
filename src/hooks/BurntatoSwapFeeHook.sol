@@ -15,6 +15,7 @@ import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 
 import {IMarket} from "../interfaces/IMarket.sol";
+import {IGame} from "../interfaces/IGame.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
@@ -158,7 +159,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
             return (BaseHook.afterSwap.selector, 0);
         }
         if (params.zeroForOne && !externalBuysEnabled) revert Errors.ExternalBuysDisabled();
-        if (params.amountSpecified > 0) revert Errors.ExactOutputNotAllowed();
+        if (params.amountSpecified >= 0) revert Errors.ExactOutputNotAllowed();
 
         bool specifiedTokenIs0 = (params.amountSpecified < 0 == params.zeroForOne);
         int128 signedSwapAmount = specifiedTokenIs0 ? delta.amount1() : delta.amount0();
@@ -245,7 +246,11 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     }
 
     function _validateFeeAddress(address candidate, address token_, address manager_) private view {
-        if (candidate == address(0) || candidate == address(this) || candidate == token_ || candidate == manager_) {
+        address purchaseRouter = IGame(token_).purchaseOperatorRewardsRouter();
+        if (
+            candidate == address(0) || candidate == address(this) || candidate == token_ || candidate == manager_
+                || (purchaseRouter != address(0) && candidate == purchaseRouter)
+        ) {
             revert Errors.InvalidAddress();
         }
     }

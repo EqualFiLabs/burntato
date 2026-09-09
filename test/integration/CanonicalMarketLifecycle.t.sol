@@ -579,6 +579,15 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
             ZERO_BYTES
         );
+
+        vm.prank(alice);
+        vm.expectRevert();
+        swapRouter.swap(
+            key,
+            SwapParams({zeroForOne: false, amountSpecified: 0, sqrtPriceLimitX96: MAX_PRICE_LIMIT}),
+            PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
+            ZERO_BYTES
+        );
     }
 
     function test_TransientAuthorizationCannotBeReusedForDirectPoolMovement() public {

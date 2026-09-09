@@ -23,6 +23,8 @@ interface IPotatoToken {
     function nonces(address owner) external view returns (uint256);
     function DOMAIN_SEPARATOR() external view returns (bytes32);
     function burn(uint256 amount) external;
+    function canonicalHook() external view returns (address);
+    function tokenPoolManager() external view returns (address);
     function isDistributor(address account) external view returns (bool);
     function setDistributor(address account, bool allowed) external;
     function protocolMint(address to, uint256 amount) external;

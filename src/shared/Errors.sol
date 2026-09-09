@@ -5,6 +5,7 @@ library Errors {
     error AlreadyClaimed();
     error AlreadyFinalized();
     error AlreadyInitialized();
+    error FoundationNotInitialized();
     error CommitmentClosed(uint256 roundId);
     error CommitmentsPaused();
     error CutsDisabled();
@@ -32,6 +33,7 @@ library Errors {
     error MarketNotLaunching();
     error MarketNotReady();
     error PoolAlreadyInitialized();
+    error PurchasesNotInitialized();
     error NoCode(address target);
     error NoCurrentHolder();
     error NotAuthority(address caller);

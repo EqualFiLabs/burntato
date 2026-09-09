@@ -2,75 +2,64 @@
 pragma solidity 0.8.26;
 
 import {Script, console2} from "forge-std/Script.sol";
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
+import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
 
 contract FinalizeBurntatoRobinhoodTestnet is Script {
     uint256 private constant CHAIN_ID = 46_630;
-    bytes32 private constant PREDECESSOR = bytes32(0);
-    bytes32 private constant EXTERNAL_BUYS_SALT = keccak256("burntato.robinhood-testnet.external-buys.v1");
     string private constant OUTPUT_PATH = "artifacts/robinhood-testnet/deployment.json";
 
     error InvalidTestnetChain(uint256 actualChainId);
+    error PurchasesNotInitialized();
+    error PurchasesPaused();
     error MarketNotLaunched();
     error ExternalBuysNotEnabled();
 
-    function launchMarket() external {
+    function initializePurchases() external {
         _requireChain();
-        (address diamond,) = _addresses();
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
-        (bytes32 poolId, uint128 liquidity) = IMarket(diamond).launchMarket();
+        IGovernance(_diamond()).initializePurchases();
+        vm.stopBroadcast();
+    }
+
+    function launchMarket() external {
+        _requireChain();
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        vm.startBroadcast(privateKey);
+        (bytes32 poolId, uint128 liquidity) = IMarket(_diamond()).launchMarket();
         vm.stopBroadcast();
         console2.logBytes32(poolId);
         console2.log("Locked market liquidity", liquidity);
     }
 
-    function scheduleExternalBuys() external {
+    function enableExternalBuys() external {
         _requireChain();
-        (, address timelock) = _addresses();
-        address hook = _hook();
-        bytes memory data = abi.encodeCall(BurntatoSwapFeeHook.setExternalBuysEnabled, (true));
-        TimelockController controller = TimelockController(payable(timelock));
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
-        controller.schedule(hook, 0, data, PREDECESSOR, EXTERNAL_BUYS_SALT, controller.getMinDelay());
-        vm.stopBroadcast();
-        console2.log("External buys ready at", controller.getTimestamp(operationId()));
-    }
-
-    function executeExternalBuys() external {
-        _requireChain();
-        (, address timelock) = _addresses();
-        address hook = _hook();
-        bytes memory data = abi.encodeCall(BurntatoSwapFeeHook.setExternalBuysEnabled, (true));
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        vm.startBroadcast(privateKey);
-        TimelockController(payable(timelock)).execute(hook, 0, data, PREDECESSOR, EXTERNAL_BUYS_SALT);
+        BurntatoSwapFeeHook(payable(_hook())).setExternalBuysEnabled(true);
         vm.stopBroadcast();
     }
 
     function checkFinalized() external view returns (bool) {
         _requireChain();
-        (address diamond,) = _addresses();
+        return checkFinalizedDeployment(_diamond(), _hook());
+    }
+
+    function checkFinalizedDeployment(address diamond, address hook) public view returns (bool) {
+        IGovernance governance = IGovernance(diamond);
+        if (!governance.purchasesInitialized()) revert PurchasesNotInitialized();
+        if (governance.purchasesPaused()) revert PurchasesPaused();
         (,, bool launching, bool launched) = IMarket(diamond).marketState();
         if (launching || !launched) revert MarketNotLaunched();
-        if (!BurntatoSwapFeeHook(payable(_hook())).externalBuysEnabled()) revert ExternalBuysNotEnabled();
+        if (!BurntatoSwapFeeHook(payable(hook)).externalBuysEnabled()) revert ExternalBuysNotEnabled();
         return true;
     }
 
-    function operationId() public view returns (bytes32) {
-        (, address timelock) = _addresses();
-        bytes memory data = abi.encodeCall(BurntatoSwapFeeHook.setExternalBuysEnabled, (true));
-        return TimelockController(payable(timelock)).hashOperation(_hook(), 0, data, PREDECESSOR, EXTERNAL_BUYS_SALT);
-    }
-
-    function _addresses() private view returns (address diamond, address timelock) {
-        string memory json = vm.readFile(OUTPUT_PATH);
-        diamond = vm.parseJsonAddress(json, ".diamond");
-        timelock = vm.parseJsonAddress(json, ".timelock");
+    function _diamond() private view returns (address) {
+        return vm.parseJsonAddress(vm.readFile(OUTPUT_PATH), ".diamond");
     }
 
     function _hook() private view returns (address) {

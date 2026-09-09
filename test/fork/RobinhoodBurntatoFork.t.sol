@@ -4,7 +4,6 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 import {Vm} from "forge-std/Vm.sol";
 
-import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
@@ -139,7 +138,7 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         vm.deal(bob, 100 ether);
         vm.deal(carol, 100 ether);
         config.deployer = address(deployer);
-        config.proposer = makeAddr("forkProposer");
+        config.finalAdmin = makeAddr("forkAdmin");
         config.guardian = makeAddr("initialForkGuardian");
         config.treasuryRecipient = makeAddr("forkTreasury");
         config.rewardAllocator = config.treasuryRecipient;
@@ -186,15 +185,17 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         quoter = IV4Quoter(dependencies.quoter);
         router = IUniversalRouter(dependencies.universalRouter);
         key = market.canonicalPoolKey();
+        vm.prank(config.finalAdmin);
+        governance.initializePurchases();
     }
 
     function _assertGenesisAndGovernance() private {
         assertEq(IDiamondLoupe(deployment.diamond).facetAddresses().length, 11);
         assertEq(governance.guardian(), config.guardian);
-        assertEq(governance.authority(), deployment.timelock);
+        assertEq(governance.authority(), config.finalAdmin);
         assertEq(claims.treasuryRecipient(), config.treasuryRecipient);
         assertEq(rewards.rewardAllocator(), config.rewardAllocator);
-        assertEq(hook.owner(), deployment.timelock);
+        assertEq(hook.owner(), config.finalAdmin);
         assertEq(address(hook.poolManager()), dependencies.poolManager);
         assertEq(hook.token(), deployment.diamond);
         assertFalse(hook.externalBuysEnabled());
@@ -205,7 +206,8 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertEq(uint160(deployment.hook) & Hooks.ALL_HOOK_MASK, requiredFlags);
 
         address nextGuardian = makeAddr("forkGuardian");
-        _timelockCall(deployment.diamond, abi.encodeCall(IGovernance.setGuardian, (nextGuardian)), "set guardian");
+        vm.prank(config.finalAdmin);
+        governance.setGuardian(nextGuardian);
         assertEq(governance.guardian(), nextGuardian);
     }
 
@@ -350,9 +352,8 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         _assertTradeSender(sellLogs);
         assertEq(potato.transientPoolManagerAllowance(), 0);
 
-        _timelockCall(
-            deployment.hook, abi.encodeCall(BurntatoSwapFeeHook.setExternalBuysEnabled, (true)), "enable external buys"
-        );
+        vm.prank(config.finalAdmin);
+        hook.setExternalBuysEnabled(true);
         assertTrue(hook.externalBuysEnabled());
 
         treasuryEthBefore = config.treasuryRecipient.balance;
@@ -412,15 +413,6 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         vm.warp(round.deadline);
         vm.prank(keeper);
         settlement.settleRound();
-    }
-
-    function _timelockCall(address target, bytes memory data, string memory saltLabel) private {
-        TimelockController timelock = TimelockController(payable(deployment.timelock));
-        bytes32 salt = keccak256(bytes(saltLabel));
-        vm.prank(config.proposer);
-        timelock.schedule(target, 0, data, bytes32(0), salt, config.timelockDelay);
-        vm.warp(vm.getBlockTimestamp() + config.timelockDelay);
-        timelock.execute(target, 0, data, bytes32(0), salt);
     }
 
     function _quote(bool zeroForOne, uint128 amountIn) private returns (uint128 minimumOut) {

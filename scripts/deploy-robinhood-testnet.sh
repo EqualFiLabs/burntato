@@ -5,14 +5,14 @@ readonly CHAIN_ID=46630
 readonly ARTIFACT=artifacts/robinhood-testnet/deployment.json
 
 usage() {
-  echo "usage: ROBINHOOD_TESTNET_RPC_URL=... $0 --deploy|--verify|--launch|--schedule|--execute|--check" >&2
+  echo "usage: ROBINHOOD_TESTNET_RPC_URL=... $0 --deploy|--verify|--launch|--initialize|--enable|--check" >&2
   echo "all modes except --verify and --check also require PRIVATE_KEY" >&2
 }
 
 [[ $# -eq 1 ]] || { usage; exit 2; }
 mode=$1
 case "$mode" in
-  --deploy|--verify|--launch|--schedule|--execute|--check) ;;
+  --deploy|--verify|--launch|--initialize|--enable|--check) ;;
   *) usage; exit 2 ;;
 esac
 
@@ -54,8 +54,8 @@ fi
 method=${mode#--}
 case "$method" in
   launch) signature='launchMarket()' ;;
-  schedule) signature='scheduleExternalBuys()' ;;
-  execute) signature='executeExternalBuys()' ;;
+  initialize) signature='initializePurchases()' ;;
+  enable) signature='enableExternalBuys()' ;;
 esac
 forge script script/FinalizeBurntatoRobinhoodTestnet.s.sol:FinalizeBurntatoRobinhoodTestnet \
   --sig "$signature" --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" --broadcast --slow \

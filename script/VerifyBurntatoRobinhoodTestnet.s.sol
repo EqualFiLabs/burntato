@@ -32,7 +32,7 @@ contract VerifyBurntatoRobinhoodTestnet is Script {
 
     function _readDeployment(string memory json) private pure returns (BurntatoDeployment memory deployment) {
         deployment.diamond = vm.parseJsonAddress(json, ".diamond");
-        deployment.timelock = vm.parseJsonAddress(json, ".timelock");
+        deployment.admin = vm.parseJsonAddress(json, ".admin");
         deployment.hook = vm.parseJsonAddress(json, ".hook");
         deployment.hookDeployer = vm.parseJsonAddress(json, ".hookDeployer");
         deployment.operatorRewardsRouter = vm.parseJsonAddress(json, ".operatorRewardsRouter");
@@ -48,6 +48,7 @@ contract VerifyBurntatoRobinhoodTestnet is Script {
         deployment.claimsFacet = vm.parseJsonAddress(json, ".claimsFacet");
         deployment.treasuryRewardsFacet = vm.parseJsonAddress(json, ".treasuryRewardsFacet");
         deployment.foundationInit = vm.parseJsonAddress(json, ".foundationInit");
+        _readCodeHashes(json, deployment);
         deployment.poolManager = vm.parseJsonAddress(json, ".poolManager");
         deployment.positionDescriptor = vm.parseJsonAddress(json, ".positionDescriptor");
         deployment.positionManager = vm.parseJsonAddress(json, ".positionManager");
@@ -57,5 +58,24 @@ contract VerifyBurntatoRobinhoodTestnet is Script {
         deployment.universalRouter = vm.parseJsonAddress(json, ".universalRouter");
         deployment.permit2 = vm.parseJsonAddress(json, ".permit2");
         deployment.weth9 = vm.parseJsonAddress(json, ".weth");
+    }
+
+    function _readCodeHashes(string memory json, BurntatoDeployment memory deployment) private pure {
+        deployment.codeHashes.diamond = vm.parseJsonBytes32(json, ".diamondCodeHash");
+        deployment.codeHashes.diamondCutFacet = vm.parseJsonBytes32(json, ".diamondCutFacetCodeHash");
+        deployment.codeHashes.diamondLoupeFacet = vm.parseJsonBytes32(json, ".diamondLoupeFacetCodeHash");
+        deployment.codeHashes.governanceFacet = vm.parseJsonBytes32(json, ".governanceFacetCodeHash");
+        deployment.codeHashes.marketFacet = vm.parseJsonBytes32(json, ".marketFacetCodeHash");
+        deployment.codeHashes.buybackFacet = vm.parseJsonBytes32(json, ".buybackFacetCodeHash");
+        deployment.codeHashes.potatoTokenFacet = vm.parseJsonBytes32(json, ".potatoTokenFacetCodeHash");
+        deployment.codeHashes.gameFacet = vm.parseJsonBytes32(json, ".gameFacetCodeHash");
+        deployment.codeHashes.recoveryFacet = vm.parseJsonBytes32(json, ".recoveryFacetCodeHash");
+        deployment.codeHashes.settlementFacet = vm.parseJsonBytes32(json, ".settlementFacetCodeHash");
+        deployment.codeHashes.claimsFacet = vm.parseJsonBytes32(json, ".claimsFacetCodeHash");
+        deployment.codeHashes.treasuryRewardsFacet = vm.parseJsonBytes32(json, ".treasuryRewardsFacetCodeHash");
+        deployment.codeHashes.foundationInit = vm.parseJsonBytes32(json, ".foundationInitCodeHash");
+        deployment.codeHashes.hookDeployer = vm.parseJsonBytes32(json, ".hookDeployerCodeHash");
+        deployment.codeHashes.hook = vm.parseJsonBytes32(json, ".hookCodeHash");
+        deployment.codeHashes.operatorRewardsRouter = vm.parseJsonBytes32(json, ".operatorRewardsRouterCodeHash");
     }
 }

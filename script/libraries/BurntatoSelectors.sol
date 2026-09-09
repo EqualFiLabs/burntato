@@ -28,7 +28,7 @@ library BurntatoSelectors {
     }
 
     function governance() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](12);
+        selectors = new bytes4[](15);
         selectors[0] = IGovernance.authority.selector;
         selectors[1] = IGovernance.guardian.selector;
         selectors[2] = IGovernance.purchasesPaused.selector;
@@ -41,6 +41,9 @@ library BurntatoSelectors {
         selectors[9] = IGovernance.setProtocolConfig.selector;
         selectors[10] = IGovernance.setTreasuryRecipient.selector;
         selectors[11] = IGovernance.finalizeProtocol.selector;
+        selectors[12] = IGovernance.foundationConfigured.selector;
+        selectors[13] = IGovernance.purchasesInitialized.selector;
+        selectors[14] = IGovernance.initializePurchases.selector;
     }
 
     function market() internal pure returns (bytes4[] memory selectors) {
@@ -66,7 +69,7 @@ library BurntatoSelectors {
     }
 
     function token() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](20);
+        selectors = new bytes4[](22);
         selectors[0] = IPotatoToken.name.selector;
         selectors[1] = IPotatoToken.symbol.selector;
         selectors[2] = IPotatoToken.decimals.selector;
@@ -87,6 +90,8 @@ library BurntatoSelectors {
         selectors[17] = IPotatoToken.transientPoolManagerAllowance.selector;
         selectors[18] = IPotatoToken.isDistributor.selector;
         selectors[19] = IPotatoToken.setDistributor.selector;
+        selectors[20] = IPotatoToken.canonicalHook.selector;
+        selectors[21] = IPotatoToken.tokenPoolManager.selector;
     }
 
     function game() internal pure returns (bytes4[] memory selectors) {

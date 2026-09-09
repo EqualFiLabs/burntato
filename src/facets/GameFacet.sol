@@ -10,12 +10,13 @@ import {Round} from "../shared/Types.sol";
 
 contract GameFacet is IGame {
     function buyPotato() external payable {
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        if (!gs.initialized) revert Errors.PurchasesNotInitialized();
         LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
         if (rs.status == 2) revert Errors.Reentrancy();
         rs.status = 2;
 
         if (LibProtocolStorage.governance().purchasesPaused) revert Errors.PurchasesPaused();
-        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = _currentOrStartRound(gs);
         if (round.currentHolder != address(0) && block.timestamp >= round.deadline) revert Errors.RoundExpired();
         if (msg.value != round.nextPrice) revert Errors.IncorrectPayment(round.nextPrice, msg.value);

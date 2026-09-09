@@ -35,3 +35,9 @@ runs = 5000
 runs = 512
 depth = 64
 fail_on_revert = true
+
+[profile.formal]
+test = "formal/halmos"
+out = "out-formal"
+optimizer = true
+via_ir = true

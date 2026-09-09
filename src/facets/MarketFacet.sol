@@ -11,11 +11,11 @@ import {IAllowanceTransfer} from "@uniswap/v4-periphery/lib/permit2/src/interfac
 import {IPoolInitializer_v4} from "@uniswap/v4-periphery/src/interfaces/IPoolInitializer_v4.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
-import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 
 import {IMarket} from "../interfaces/IMarket.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {LibMarketMath} from "../libraries/LibMarketMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
@@ -89,10 +89,9 @@ contract MarketFacet is IMarket {
         if (!_marketReady(ms)) revert Errors.MarketNotReady();
 
         PoolKey memory key = _poolKey(ms);
-        uint160 sqrtLower = TickMath.getSqrtPriceAtTick(ms.tickLower);
-        uint160 sqrtUpper = TickMath.getSqrtPriceAtTick(ms.tickUpper);
-        liquidity = LiquidityAmounts.getLiquidityForAmount1(sqrtLower, sqrtUpper, ms.potatoSeed);
-        if (liquidity == 0) revert Errors.InvalidMarketConfiguration();
+        uint256 prospectiveLiquidity = LibMarketMath.launchLiquidity(ms.potatoSeed, ms.tickLower, ms.tickUpper);
+        if (prospectiveLiquidity == 0) revert Errors.InvalidMarketConfiguration();
+        liquidity = uint128(prospectiveLiquidity);
 
         uint256 potatoBefore = IPotatoToken(address(this)).balanceOf(address(this));
 
@@ -111,7 +110,7 @@ contract MarketFacet is IMarket {
             ms.tickUpper,
             liquidity,
             uint256(0),
-            ms.potatoSeed,
+            uint128(ms.potatoSeed),
             Constants.LOCKED_LP_RECIPIENT,
             bytes("")
         );
@@ -186,6 +185,9 @@ contract MarketFacet is IMarket {
                 || config.tickUpper >= TickMath.MAX_TICK
         ) revert Errors.InvalidMarketConfiguration();
         if (config.sqrtPriceX96 != TickMath.getSqrtPriceAtTick(config.tickUpper)) {
+            revert Errors.InvalidMarketConfiguration();
+        }
+        if (LibMarketMath.launchLiquidity(config.potatoSeed, config.tickLower, config.tickUpper) == 0) {
             revert Errors.InvalidMarketConfiguration();
         }
         LibDiamond.enforceHasCode(config.hook);

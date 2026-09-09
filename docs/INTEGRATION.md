@@ -9,8 +9,8 @@ Use the EIP-2535 loupe to resolve the installed facet for each selector.
 Important state reads include:
 
 - `IGame.currentRoundId()`, `getRound()`, and `currentEarnedEmission()`;
-- `IGovernance.protocolConfig()`, authority, guardian, pause, and finalization
-  views;
+- `IGovernance.protocolConfig()`, `foundationConfigured()`, purchase
+  initialization, authority, guardian, pause, and finalization views;
 - `IRecovery.recoveryCommitment()`, `totalRecoveryCommitment()`, and
   `stalledRecoveryWithdrawalAt()`;
 - `IClaims.winnerClaimed()`, `recoveryClaimed()`, and
@@ -18,7 +18,8 @@ Important state reads include:
 - Treasury claimable ETH and POTATO views; and
 - `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
   `marketReady()`;
-- `IPotatoToken.isDistributor(account)` for the governed transfer allowlist; and
+- `IPotatoToken.isDistributor(account)`, `canonicalHook()`, and
+  `tokenPoolManager()` for the governed transfer and market bindings; and
 - `IBuyback.buybackConfig()`, `buybackReserveEth()`, and `lastBuybackBlock()`;
   and
 - `ITreasuryRewards.rewardAllocator()`, `treasuryRewardsReserved()`,
@@ -82,8 +83,8 @@ not underlying POTATO balances and cannot be intercepted by its transfer hook.
 The PoolKey is native ETH as currency0, the Burntato Diamond as currency1, zero
 native LP fee, the configured tick spacing, and the exact hook. The hook binds
 immutably to that POTATO address, PoolManager, and tick spacing. It rejects
-foreign initialization, foreign PoolKeys, exact-output swaps, and unauthorized
-liquidity addition.
+foreign initialization, foreign PoolKeys, exact-output and zero-amount swaps,
+and unauthorized liquidity addition.
 
 Market infrastructure and reserves can be corrected through `configureMarket`
 before launch. After launch, structural reconfiguration and a second launch
@@ -94,7 +95,9 @@ Genesis reserves the configured POTATO allocation in Diamond custody. The
 initial square-root price must equal `TickMath.getSqrtPriceAtTick(tickUpper)`,
 making the locked launch position entirely POTATO-sided; `launchMarket()` is
 nonpayable and does not consume Treasury ETH. The local default allocation is
-100 million POTATO. Because external buys start closed, the first protocol
+100 million POTATO. Configuration rejects allocations that exceed the
+PositionManager amount domain or produce zero/overflowed launch liquidity.
+Because external buys start closed, the first protocol
 buybacks add ETH-side pool inventory before ordinary users may buy, while POTATO
 holders may sell whenever the pool has ETH available.
 
@@ -116,6 +119,10 @@ total fee is bounded to 200 BPS. The Operator share is independently bounded to
 increasing the trader fee. The Operator path is disabled only as `(address(0),
 0)`; an enabled router must be deployed and distinct from known system and
 Treasury destinations.
+
+`feeAddress` also cannot be Burntato's purchase rewards router, including after
+the hook Operator share is disabled, so purchase-only routing cannot be
+accidentally widened to swap fees through Treasury configuration.
 
 External buys are disabled by default. `setExternalBuysEnabled(bool)` is an
 owner-only hook control that remains repeatable after launch and Diamond
