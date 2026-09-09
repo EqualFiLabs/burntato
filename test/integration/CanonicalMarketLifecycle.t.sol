@@ -701,6 +701,39 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertFalse(hook.externalBuysEnabled());
     }
 
+    function test_DirectReserveBootstrapCreatesSellLiquidityWithoutGamePurchase() public {
+        assertEq(game.currentRoundId(), 0);
+        assertEq(buybacks.buybackReserveEth(), 0);
+        market.launchMarket();
+        assertFalse(hook.externalBuysEnabled());
+
+        vm.prank(alice);
+        buybacks.fundBuybackReserve{value: 0.002 ether}();
+        assertEq(buybacks.buybackReserveEth(), 0.002 ether);
+
+        uint256 treasuryPotatoBefore = potato.balanceOf(treasury);
+        vm.prank(keeper);
+        uint256 bought = buybacks.buyback();
+
+        assertGt(bought, 0);
+        assertEq(potato.balanceOf(treasury) - treasuryPotatoBefore, bought);
+        assertEq(game.currentRoundId(), 0);
+        assertFalse(hook.externalBuysEnabled());
+        _expectBuyDisabled(alice, 0.0001 ether);
+
+        uint256 sellAmount = bought / 2;
+        vm.prank(treasury);
+        assertTrue(potato.transfer(alice, sellAmount));
+        vm.prank(alice);
+        potato.approve(address(swapRouter), sellAmount);
+        uint256 aliceBefore = alice.balance;
+        _sell(alice, sellAmount);
+
+        assertGt(alice.balance, aliceBefore);
+        assertEq(game.currentRoundId(), 0);
+        assertFalse(hook.externalBuysEnabled());
+    }
+
     function test_BuybackHonorsCapDelayAndTreasuryCanReusePurchasedPotato() public {
         vm.prank(authority);
         buybacks.setBuybackConfig(BuybackConfig({maxSpend: 0.001 ether, callerRewardBps: 50, delayBlocks: 1}));

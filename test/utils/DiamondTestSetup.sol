@@ -38,6 +38,14 @@ abstract contract DiamondTestSetup is Test {
     BurntatoDiamond internal diamond;
 
     function _deployCore() internal {
+        _deployCoreWithPurchaseInitialization(true);
+    }
+
+    function _deployCoreWithoutPurchaseInitialization() internal {
+        _deployCoreWithPurchaseInitialization(false);
+    }
+
+    function _deployCoreWithPurchaseInitialization(bool initializePurchases_) private {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
         diamond = new BurntatoDiamond(authority, address(cutFacet));
 
@@ -73,8 +81,10 @@ abstract contract DiamondTestSetup is Test {
         IBuyback(address(diamond)).setBuybackConfig(_defaultBuybackConfig());
         vm.prank(authority);
         ITreasuryRewards(address(diamond)).setRewardAllocator(treasury);
-        vm.prank(authority);
-        IGovernance(address(diamond)).initializePurchases();
+        if (initializePurchases_) {
+            vm.prank(authority);
+            IGovernance(address(diamond)).initializePurchases();
+        }
     }
 
     function _initialConfig() internal view virtual returns (ProtocolConfig memory config) {
@@ -188,13 +198,14 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _buybackSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](6);
+        selectors = new bytes4[](7);
         selectors[0] = IBuyback.setBuybackConfig.selector;
         selectors[1] = IBuyback.buybackConfig.selector;
-        selectors[2] = IBuyback.buybackReserveEth.selector;
-        selectors[3] = IBuyback.lastBuybackBlock.selector;
-        selectors[4] = IBuyback.buyback.selector;
-        selectors[5] = IBuyback.unlockCallback.selector;
+        selectors[2] = IBuyback.fundBuybackReserve.selector;
+        selectors[3] = IBuyback.buybackReserveEth.selector;
+        selectors[4] = IBuyback.lastBuybackBlock.selector;
+        selectors[5] = IBuyback.buyback.selector;
+        selectors[6] = IBuyback.unlockCallback.selector;
     }
 
     function _gameSelectors() internal pure returns (bytes4[] memory selectors) {

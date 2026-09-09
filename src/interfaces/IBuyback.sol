@@ -5,6 +5,7 @@ import {BuybackConfig} from "../shared/Types.sol";
 
 interface IBuyback {
     event BuybackConfigUpdated(BuybackConfig config);
+    event BuybackReserveFunded(address indexed funder, uint256 amount, uint256 reserveEth);
     event BuybackExecuted(
         address indexed caller,
         address indexed treasuryRecipient,
@@ -17,6 +18,7 @@ interface IBuyback {
 
     function setBuybackConfig(BuybackConfig calldata config) external;
     function buybackConfig() external view returns (BuybackConfig memory config);
+    function fundBuybackReserve() external payable;
     function buybackReserveEth() external view returns (uint256);
     function lastBuybackBlock() external view returns (uint256);
     function buyback() external returns (uint256 amountOut);

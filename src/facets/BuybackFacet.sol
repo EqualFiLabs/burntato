@@ -31,6 +31,11 @@ contract BuybackFacet is IBuyback {
         rs.status = 1;
     }
 
+    modifier onlyDiamond() {
+        if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
+        _;
+    }
+
     function setBuybackConfig(BuybackConfig calldata config) external {
         LibDiamond.enforceAuthority();
         if (config.callerRewardBps > Constants.MAX_BUYBACK_CALLER_REWARD_BPS) revert Errors.InvalidBps();
@@ -40,6 +45,13 @@ contract BuybackFacet is IBuyback {
 
     function buybackConfig() external view returns (BuybackConfig memory config) {
         return LibProtocolStorage.buyback().config;
+    }
+
+    function fundBuybackReserve() external payable onlyDiamond nonReentrant {
+        if (msg.value == 0) revert Errors.ZeroAmount();
+        LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
+        bs.reserveEth += msg.value;
+        emit BuybackReserveFunded(msg.sender, msg.value, bs.reserveEth);
     }
 
     function buybackReserveEth() external view returns (uint256) {

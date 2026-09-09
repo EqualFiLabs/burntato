@@ -25,6 +25,7 @@ contract ProtocolHandler is Test {
     address internal immutable guardian;
 
     IClaims internal immutable claims;
+    IBuyback internal immutable buybacks;
     IGame internal immutable game;
     IGovernance internal immutable governance;
     IPotatoToken internal immutable potato;
@@ -35,6 +36,7 @@ contract ProtocolHandler is Test {
 
     uint256 public nativeIn;
     uint256 public nativeOut;
+    uint256 public directBuybackFunding;
     uint256 public forcedNative;
     uint256 public selfBurned;
     mapping(uint256 => uint256) public recoveryPaid;
@@ -43,6 +45,7 @@ contract ProtocolHandler is Test {
     bool public authorityBypass;
     bool public remainingIncreased;
     bool public recoveryWithdrawalMismatch;
+    bool public buybackFundingMismatch;
     uint256 internal observedRound;
     uint256 internal observedRemaining;
 
@@ -50,6 +53,7 @@ contract ProtocolHandler is Test {
         diamond = diamond_;
         guardian = guardian_;
         claims = IClaims(diamond_);
+        buybacks = IBuyback(diamond_);
         game = IGame(diamond_);
         governance = IGovernance(diamond_);
         potato = IPotatoToken(diamond_);
@@ -171,6 +175,24 @@ contract ProtocolHandler is Test {
         } catch {}
     }
 
+    function fundBuybackReserve(uint256 actorSeed, uint256 rawAmount) external {
+        address actor = actors[actorSeed % actors.length];
+        uint256 amount = bound(uint256(rawAmount), 1, 10 ether);
+        uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 balanceBefore = diamond.balance;
+        vm.deal(actor, actor.balance + amount);
+        vm.prank(actor);
+        try buybacks.fundBuybackReserve{value: amount}() {
+            directBuybackFunding += amount;
+            if (
+                buybacks.buybackReserveEth() != reserveBefore + amount || diamond.balance != balanceBefore + amount
+                    || buybacks.lastBuybackBlock() != 0
+            ) buybackFundingMismatch = true;
+        } catch {
+            buybackFundingMismatch = true;
+        }
+    }
+
     function forceNative(uint96 rawAmount) external {
         uint256 amount = bound(uint256(rawAmount), 0, 10 ether);
         vm.deal(address(this), address(this).balance + amount);
@@ -228,7 +250,10 @@ contract ProtocolInvariantTest is DiamondTestSetup {
     }
 
     function invariant_NativeAssetAccountingIsExactlyConserved() public view {
-        assertEq(address(diamond).balance, handler.nativeIn() + handler.forcedNative() - handler.nativeOut());
+        assertEq(
+            address(diamond).balance,
+            handler.nativeIn() + handler.directBuybackFunding() + handler.forcedNative() - handler.nativeOut()
+        );
     }
 
     function invariant_PotatoSupplyEqualsEmissionMinusActualBurns() public view {
@@ -280,7 +305,7 @@ contract ProtocolInvariantTest is DiamondTestSetup {
     function invariant_BuybackReserveRemainsBackedAndPurchaseBounded() public view {
         uint256 reserve = IBuyback(address(diamond)).buybackReserveEth();
         assertLe(reserve, address(diamond).balance);
-        assertLe(reserve, handler.nativeIn());
+        assertLe(reserve, handler.nativeIn() + handler.directBuybackFunding());
     }
 
     function invariant_RecoveryNeverOverpaysAnyRound() public view {
@@ -303,5 +328,6 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertFalse(handler.authorityBypass());
         assertFalse(handler.remainingIncreased());
         assertFalse(handler.recoveryWithdrawalMismatch());
+        assertFalse(handler.buybackFundingMismatch());
     }
 }

@@ -16,14 +16,23 @@ The Halmos properties execute production `LibMath`, the production Diamond,
   purchase activation; and
 - a successful first purchase after activation without gating read surfaces.
 
-The Certora harnesses are thin wrappers over production `LibMath` and
-`GovernanceFacet`. CVL independently checks the arithmetic properties and the
-activation transition, including foundation initialization, unauthorized
-callers, repeat calls, and authority transfer before activation.
+The Halmos suite also executes the production Diamond and `BuybackFacet` to
+establish that any caller's positive direct funding increases both the tracked
+reserve and Diamond balance exactly, repeated funding is additive, zero-value
+funding reverts without mutation, and a raw native transfer does not enter
+reserve accounting.
 
-The activation harness has one clearly marked state-construction method. It is
-verification-only and is never part of a deployment. Every transition under
-test is executed by the production governance implementation.
+The Certora harnesses are thin wrappers over production `LibMath`,
+`GovernanceFacet`, and `BuybackFacet`. CVL independently checks the arithmetic
+properties and the activation transition, including foundation initialization,
+unauthorized callers, repeat calls, and authority transfer before activation.
+The buyback funding harness checks exact reserve addition for arbitrary callers,
+zero-value rollback, cooldown isolation, and enforcement of the shared
+reentrancy guard.
+
+The activation and buyback funding harnesses have clearly marked
+state-construction methods. They are verification-only and are never part of a
+deployment. Every transition under test is executed by its production facet.
 
 ## Deliberate boundaries
 
@@ -74,9 +83,10 @@ Never describe a submitted or still-running job as verified.
 ## Reproducibility
 
 The arithmetic harness bounds monetary values to `uint128`, BPS inputs to
-`uint16`, and timing/count inputs to `uint64`. Activation uses a `uint96`
-payment input. These bounds are explicit proof assumptions, not Solidity type
-changes.
+`uint16`, and timing/count inputs to `uint64`. Activation and Halmos buyback
+funding use `uint96` payment inputs. Certora bounds both the starting reserve
+and positive contribution below `2^128`. These bounds are explicit proof
+assumptions, not Solidity type changes.
 
 The intended toolchain is Solidity 0.8.26 with the repository's production
 optimizer, `via_ir`, Cancun EVM, and metadata-free bytecode settings; Foundry

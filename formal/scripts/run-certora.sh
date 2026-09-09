@@ -22,12 +22,16 @@ case "$suite" in
   activation)
     run_suite activation
     ;;
+  buyback-funding)
+    run_suite buyback-funding
+    ;;
   all)
     run_suite math
     run_suite activation
+    run_suite buyback-funding
     ;;
   *)
-    echo "usage: $0 [math|activation|all]" >&2
+    echo "usage: $0 [math|activation|buyback-funding|all]" >&2
     exit 2
     ;;
 esac
