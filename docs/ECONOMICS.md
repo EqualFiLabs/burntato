@@ -216,6 +216,13 @@ recipient. A new owner must register explicitly.
 ## Treasury buybacks and external-buy gate
 
 The buyback reserve accumulates from every purchase, including before launch.
+Anyone may also call payable `fundBuybackReserve()` with a positive amount.
+Direct funding increases the tracked reserve exactly and does not execute a
+buyback or change its cooldown. It remains available before purchase
+initialization and regardless of purchase pauses, market launch, or Diamond
+finalization. Plain native transfers to the Diamond increase its balance but do
+not enter reserve accounting.
+
 After launch, anyone may call parameterless `buyback()`. The governed defaults
 select at most 2 ETH gross, reward the caller at 50 BPS of actual ETH spent, and
 enforce a one-block delay. The caller-reward rate may be configured from 0
@@ -250,6 +257,12 @@ External ETH-to-POTATO pool buys start disabled. While disabled, exact-input
 sells remain available and only the Diamond buyback may buy. Hook ownership may
 enable, disable, or re-enable external buys at any time, including after launch
 and Diamond finalization.
+
+An initial demand bootstrap can therefore launch the token-only pool, fund the
+reserve directly, and execute one buyback while game purchases and external
+pool buys remain closed. The resulting pool inventory supports POTATO sells
+without pre-minting a fixed circulating supply. The funding amount is an
+explicit deployment input and remains subject to the governed buyback cap.
 
 ## Treasury-funded round rewards
 

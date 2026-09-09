@@ -18,12 +18,14 @@ contract EconomicFuzzTest is DiamondTestSetup {
     address internal bob = makeAddr("bob");
 
     IGame internal game;
+    IBuyback internal buybacks;
     IGovernance internal governance;
     IPotatoToken internal potato;
 
     function setUp() public {
         _deployCore();
         game = IGame(address(diamond));
+        buybacks = IBuyback(address(diamond));
         governance = IGovernance(address(diamond));
         potato = IPotatoToken(address(diamond));
     }
@@ -130,6 +132,23 @@ contract EconomicFuzzTest is DiamondTestSetup {
 
         assertLe(actualSpent + callerReward, gross);
         assertEq(restoredReserve + actualSpent + callerReward, gross);
+    }
+
+    function testFuzz_DirectBuybackFundingIsAdditiveAndExactlyBacked(uint96 rawFirst, uint96 rawSecond) public {
+        uint256 first = bound(uint256(rawFirst), 1, 1_000 ether);
+        uint256 second = bound(uint256(rawSecond), 1, 1_000 ether);
+
+        vm.deal(alice, first);
+        vm.prank(alice);
+        buybacks.fundBuybackReserve{value: first}();
+
+        vm.deal(bob, second);
+        vm.prank(bob);
+        buybacks.fundBuybackReserve{value: second}();
+
+        assertEq(buybacks.buybackReserveEth(), first + second);
+        assertEq(address(diamond).balance, first + second);
+        assertEq(buybacks.lastBuybackBlock(), 0);
     }
 
     function testFuzz_FourWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {

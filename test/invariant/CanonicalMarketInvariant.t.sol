@@ -46,8 +46,10 @@ contract CanonicalMarketHandler is Test {
     bool public treasuryRevenueDecreased;
     bool public feeMismatch;
     bool public buybackAccountingMismatch;
+    bool public buybackFundingMismatch;
     uint256 public successfulBuys;
     uint256 public successfulSells;
+    uint256 public directBuybackFunding;
 
     constructor(
         address diamond,
@@ -209,6 +211,24 @@ contract CanonicalMarketHandler is Test {
         } catch {}
     }
 
+    function fundBuybackReserve(uint256 actorSeed, uint256 rawAmount) external {
+        address actor = actors[actorSeed % actors.length];
+        uint256 amount = bound(uint256(rawAmount), 1, 0.01 ether);
+        uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 balanceBefore = address(potato).balance;
+        vm.deal(actor, actor.balance + amount);
+        vm.prank(actor);
+        try buybacks.fundBuybackReserve{value: amount}() {
+            directBuybackFunding += amount;
+            if (
+                buybacks.buybackReserveEth() != reserveBefore + amount
+                    || address(potato).balance != balanceBefore + amount
+            ) buybackFundingMismatch = true;
+        } catch {
+            buybackFundingMismatch = true;
+        }
+    }
+
     function _buybackExecution(Vm.Log[] memory logs)
         internal
         view
@@ -283,6 +303,7 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         handler = new CanonicalMarketHandler(
             address(diamond), IPoolManager(address(manager)), swapRouter, hook, canonicalKey, treasury
         );
+        handler.fundBuybackReserve(1, 0.001 ether);
         handler.buy(0, 0.0001 ether);
         handler.sell(0, type(uint256).max);
         targetContract(address(handler));
@@ -301,6 +322,8 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         assertFalse(handler.treasuryRevenueDecreased());
         assertFalse(handler.feeMismatch());
         assertFalse(handler.buybackAccountingMismatch());
+        assertFalse(handler.buybackFundingMismatch());
+        assertGt(handler.directBuybackFunding(), 0);
         assertGt(handler.successfulBuys(), 0);
         assertGt(handler.successfulSells(), 0);
     }

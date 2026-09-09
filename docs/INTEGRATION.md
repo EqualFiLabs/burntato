@@ -185,6 +185,17 @@ and POTATO transient PoolManager allowance at zero.
 
 ## Permissionless buyback
 
+Call payable `IBuyback.fundBuybackReserve()` to add a positive native amount to
+the tracked reserve. Any address may fund it. The call emits
+`BuybackReserveFunded(funder, amount, reserveEth)`, adds the exact amount, and
+does not execute a swap or change `lastBuybackBlock`. Purchase initialization,
+purchase and commitment pauses, market launch, and Diamond finalization do not
+gate funding. A zero-value call reverts. Sending native ETH to the Diamond's
+plain receive function does not credit the reserve.
+
+Calling the standalone facet implementation directly also reverts, preventing
+native funds from being stranded outside Diamond accounting.
+
 Call `IBuyback.buyback()` without parameters after market launch. It selects the
 governed gross slice from `buybackReserveEth`, derives a swap budget that leaves
 room for the configured reward, and swaps exact-input native ETH for POTATO at
@@ -204,6 +215,16 @@ If the canonical swap spends zero ETH or returns zero POTATO, the complete call
 reverts: no reward is paid, reserve is unchanged, and the cooldown is not
 consumed. A partial positive fill remains valid. Integrators should expose the
 current cap, reward, delay, and reserve; no new user input is required.
+
+`BootstrapBurntatoBuyback.s.sol` provides an optional two-transaction launch
+helper: it funds the reserve and then calls `buyback()`. It accepts the Diamond,
+funding amount in wei, and broadcaster key through
+`BURNTATO_DIAMOND`, `BURNTATO_BOOTSTRAP_BUYBACK_WEI`, and `PRIVATE_KEY`. It
+requires a launched market, inactive game purchases, no prior buyback, and an
+amount no greater than `maxSpend`. If the funding transaction succeeded but the
+buyback transaction did not, rerunning resumes only when the tracked reserve
+still equals the exact requested amount. The helper never enables external
+buys.
 
 - [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
 

@@ -59,13 +59,14 @@ library BurntatoSelectors {
     }
 
     function buyback() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](6);
+        selectors = new bytes4[](7);
         selectors[0] = IBuyback.setBuybackConfig.selector;
         selectors[1] = IBuyback.buybackConfig.selector;
-        selectors[2] = IBuyback.buybackReserveEth.selector;
-        selectors[3] = IBuyback.lastBuybackBlock.selector;
-        selectors[4] = IBuyback.buyback.selector;
-        selectors[5] = IBuyback.unlockCallback.selector;
+        selectors[2] = IBuyback.fundBuybackReserve.selector;
+        selectors[3] = IBuyback.buybackReserveEth.selector;
+        selectors[4] = IBuyback.lastBuybackBlock.selector;
+        selectors[5] = IBuyback.buyback.selector;
+        selectors[6] = IBuyback.unlockCallback.selector;
     }
 
     function token() internal pure returns (bytes4[] memory selectors) {

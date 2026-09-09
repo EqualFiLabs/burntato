@@ -38,14 +38,15 @@ zero. The bilateral hook fee is governed within a fixed 2% ceiling, and all
 realized fee ETH is split between its governed Treasury recipient and optional
 Operator rewards router.
 
-The buyback share accumulates as dedicated Diamond ETH. After the canonical
-market launches, anyone may spend a governed reserve slice to buy POTATO for the
-current Treasury and receive a reward based only on actual ETH spent. The
-installed facet caps the caller-reward rate at 1%; that ceiling becomes
-permanent when Diamond cuts are finalized. A zero-execution attempt reverts
-without consuming reserve or cooldown. External pool buys start disabled, but
-sells and the fee-free protocol buyback remain open; hook governance can toggle
-external buys repeatedly.
+The buyback share accumulates as dedicated Diamond ETH, and anyone may add a
+positive amount directly through the tracked reserve funding entry point. After
+the canonical market launches, anyone may spend a governed reserve slice to buy
+POTATO for the current Treasury and receive a reward based only on actual ETH
+spent. The installed facet caps the caller-reward rate at 1%; that ceiling
+becomes permanent when Diamond cuts are finalized. A zero-execution attempt
+reverts without consuming reserve or cooldown. External pool buys start
+disabled, but sells and the fee-free protocol buyback remain open; hook
+governance can toggle external buys repeatedly.
 
 Recovery commitments normally remain locked through their target round. If an
 activated predecessor remains completely holderless, its target commitments may

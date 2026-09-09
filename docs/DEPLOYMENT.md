@@ -174,6 +174,27 @@ forge script script/InitializeBurntato.s.sol:InitializeBurntato \
   --rpc-url http://127.0.0.1:8545 --broadcast
 ```
 
+## Initial buyback bootstrap
+
+After the token-only market has launched and before game purchases are
+initialized, an operator may seed initial sell-side liquidity with one direct
+reserve contribution followed by one permissionless buyback:
+
+```bash
+BURNTATO_DIAMOND="<diamond>" \
+BURNTATO_BOOTSTRAP_BUYBACK_WEI="<amount-in-wei>" \
+PRIVATE_KEY="<broadcaster-key>" \
+forge script script/BootstrapBurntatoBuyback.s.sol:BootstrapBurntatoBuyback \
+  --rpc-url "<rpc-url>" --broadcast
+```
+
+No amount is hardcoded. The chosen amount must be positive and no greater than
+the configured `maxSpend`. The helper refuses an unlaunched market, initialized
+game purchases, a prior buyback, or unrelated reserve contents. Funding and
+execution are deliberately separate transactions. If execution is interrupted
+after funding, the same command resumes at the buyback only when the reserve
+still equals the requested amount. It does not change the external-buy gate.
+
 ## Persistent Robinhood fork
 
 Use an archive-capable RPC privately. The launcher does not print the URL:
