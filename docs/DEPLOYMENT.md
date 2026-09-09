@@ -60,7 +60,7 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 | Operator share of hook fee | Disabled locally; required Robinhood input |
 | Buyback cap / reward / delay | 2 ETH / 50 BPS / 1 block |
 | Tick spacing | 60 |
-| Initial tick | 92,100 |
+| Initial tick | 170,280 |
 | Genesis POTATO launch allocation | 100,000,000 POTATO |
 | Reward allocator | Treasury recipient |
 

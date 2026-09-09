@@ -181,6 +181,17 @@ local default is 100 million POTATO. It is not holder-time emission and cannot
 be claimed before launch. Governance may resize the allocation before launch,
 subject to the Diamond's available POTATO inventory.
 
+The default initial and upper tick is 170,280. With the default 100 million
+POTATO allocation, an otherwise untouched pool, and the full 2 ETH gross
+bootstrap, the first buyback acquires approximately 33.06 million POTATO. At
+the resulting pool state, selling a fully vested first-holder emission of
+10,000 POTATO returns approximately 0.00089 ETH after the default bilateral
+hook fee. That is below the 0.001 ETH the corresponding 0.01 ETH game purchase
+contributes to the buyback reserve. These figures describe the deterministic
+default bootstrap path, not a minimum-output or market-price guarantee; prior
+pool activity, configuration changes, and transaction ordering change the
+realized result.
+
 Anyone may launch the exact canonical native ETH/POTATO v4 pool once the token
 reservation is available. The initial price equals the position's upper tick,
 so launch supplies POTATO only and consumes no Treasury ETH. The position NFT

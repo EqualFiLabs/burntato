@@ -70,7 +70,7 @@ abstract contract DiamondTestSetup is Test {
                 noCuts,
                 address(initializer),
                 abi.encodeCall(
-                    FoundationInit.initialize, (initialConfig, treasury, operatorRewardsRouter, GENESIS_MARKET_SUPPLY)
+                    FoundationInit.initialize, (initialConfig, treasury, operatorRewardsRouter, _genesisMarketSupply())
                 )
             );
         vm.prank(authority);
@@ -93,6 +93,10 @@ abstract contract DiamondTestSetup is Test {
 
     function _operatorRewardsRouterForInit() internal virtual returns (address) {
         return address(0);
+    }
+
+    function _genesisMarketSupply() internal pure virtual returns (uint256) {
+        return GENESIS_MARKET_SUPPLY;
     }
 
     function _install(address facet, bytes4[] memory selectors) internal {

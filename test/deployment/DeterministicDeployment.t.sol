@@ -298,6 +298,9 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.protocol.operatorPurchaseBps, 1_500);
         assertEq(testnet.hookFeeBps, 100);
         assertEq(testnet.operatorRewardShareBps, 4_000);
+        assertEq(testnet.initialTick, 170_280);
+        assertEq(testnet.tickUpper, 170_280);
+        assertEq(testnet.potatoSeed, 100_000_000 ether);
     }
 
     function test_RobinhoodTestnetManifestsMatchLiveDependencies() public {

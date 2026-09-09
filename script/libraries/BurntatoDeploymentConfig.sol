@@ -14,7 +14,7 @@ library BurntatoDeploymentConfig {
     address internal constant ANVIL_TREASURY = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
 
     int24 internal constant DEFAULT_TICK_SPACING = 60;
-    int24 internal constant DEFAULT_INITIAL_TICK = 92_100;
+    int24 internal constant DEFAULT_INITIAL_TICK = 170_280;
 
     function localDefaults() internal pure returns (GenesisConfig memory config) {
         config = GenesisConfig({
