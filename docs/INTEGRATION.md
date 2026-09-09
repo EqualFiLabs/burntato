@@ -189,8 +189,8 @@ Call payable `IBuyback.fundBuybackReserve()` to add a positive native amount to
 the tracked reserve. Any address may fund it. The call emits
 `BuybackReserveFunded(funder, amount, reserveEth)`, adds the exact amount, and
 does not execute a swap or change `lastBuybackBlock`. Purchase initialization,
-purchase and commitment pauses, market launch, and Diamond finalization do not
-gate funding. A zero-value call reverts. Sending native ETH to the Diamond's
+the global protocol pause, market launch, and Diamond finalization do not gate
+funding. A zero-value call reverts. Sending native ETH to the Diamond's
 plain receive function does not credit the reserve.
 
 Calling the standalone facet implementation directly also reverts, preventing
@@ -235,8 +235,8 @@ For the exceptional holderless-predecessor state,
 `stalledRecoveryWithdrawalAt(targetRoundId)` returns the shared Unix timestamp
 when withdrawals open, or zero when no stalled exit is available. After that
 timestamp, a committer may call `withdrawStalledRecovery(targetRoundId)` to
-recover their complete commitment. The method remains callable when new
-commitments are paused.
+recover their complete commitment. The method remains callable while the global
+protocol pause is active.
 
 The exit is valid only while the target is `currentRoundId + 1`, its activated
 predecessor has never had a holder, and the target has not activated. The first

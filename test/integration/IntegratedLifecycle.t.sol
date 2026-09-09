@@ -197,7 +197,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundThree.config.recoveryTreasuryBps, 2_000);
     }
 
-    function test_PauseBlocksOnlyNewRiskAndLeavesResolutionPathsLive() public {
+    function test_GlobalPauseStopsLifecycleAndClaimsUntilAuthorityUnpauses() public {
         _buy(alice);
         _advance(120);
         game.materializeMaturedEmission();
@@ -207,24 +207,79 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
 
         _buy(bob);
         _advance(120);
-        vm.prank(guardian);
-        governance.setPauseState(true, true);
-
-        vm.prank(carol);
-        vm.expectRevert(Errors.PurchasesPaused.selector);
-        game.buyPotato{value: 0.011 ether}();
         game.materializeMaturedEmission();
-        vm.prank(bob);
-        vm.expectRevert(Errors.CommitmentsPaused.selector);
+        _expireAndSettle();
+
+        _buy(carol);
+        _advance(120);
+        uint256 supplyBefore = potato.totalSupply();
+        uint256 diamondBalanceBefore = address(diamond).balance;
+        uint256 treasuryEthBefore = claims.treasuryEthAvailable();
+        uint256 treasuryPotatoBefore = claims.treasuryPotatoAvailable();
+        Round memory roundBefore = game.getRound(3);
+
+        vm.prank(guardian);
+        governance.setPaused(true);
+
+        vm.prank(alice);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        game.buyPotato{value: roundBefore.nextPrice}();
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        game.materializeMaturedEmission();
+        vm.prank(carol);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
         recovery.commitRecovery(1 ether);
+
+        vm.warp(roundBefore.deadline);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        settlement.settleRound();
+
+        vm.prank(bob);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        claims.claimWinner(2, bob);
+        vm.prank(alice);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        claims.claimRecovery(2, alice);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        claims.claimTreasury();
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        claims.claimTreasuryPotato();
+
+        assertEq(potato.totalSupply(), supplyBefore);
+        assertEq(address(diamond).balance, diamondBalanceBefore);
+        assertEq(claims.treasuryEthAvailable(), treasuryEthBefore);
+        assertEq(claims.treasuryPotatoAvailable(), treasuryPotatoBefore);
+        assertFalse(claims.winnerClaimed(2));
+        assertFalse(claims.recoveryClaimed(2, alice));
+        assertEq(recovery.totalRecoveryCommitment(4), 0);
+        Round memory roundAfter = game.getRound(3);
+        assertEq(roundAfter.currentHolder, roundBefore.currentHolder);
+        assertEq(roundAfter.remainingEmission, roundBefore.remainingEmission);
+        assertEq(roundAfter.emittedPotato, roundBefore.emittedPotato);
+        assertFalse(roundAfter.settled);
+
+        uint256 supplyBeforeBurn = potato.totalSupply();
+        uint256 bobBeforeBurn = potato.balanceOf(bob);
         vm.prank(bob);
         potato.burn(1 ether);
+        assertEq(potato.totalSupply(), supplyBeforeBurn - 1 ether);
+        assertEq(potato.balanceOf(bob), bobBeforeBurn - 1 ether);
 
-        _expireAndSettle();
+        vm.prank(authority);
+        governance.setPaused(false);
+        game.materializeMaturedEmission();
+        settlement.settleRound();
         vm.prank(alice);
         assertEq(claims.claimRecovery(2, alice), 0.008 ether);
         vm.prank(bob);
         assertEq(claims.claimWinner(2, bob), 0.0025 ether);
+        assertEq(claims.claimTreasury(), treasuryEthBefore);
+        assertEq(claims.claimTreasuryPotato(), treasuryPotatoBefore);
+
+        _buy(alice);
+        vm.prank(carol);
+        recovery.commitRecovery(1 ether);
+        assertEq(recovery.totalRecoveryCommitment(5), 1 ether);
     }
 
     function test_FinalizedProtocolContinuesNormalPermissionlessLifecycle() public {
@@ -246,9 +301,9 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         vm.prank(authority);
         governance.setProtocolConfig(_configWithPrice(0.02 ether, 2_000));
         vm.prank(guardian);
-        governance.setPauseState(true, true);
+        governance.setPaused(true);
         vm.prank(authority);
-        governance.setPauseState(false, false);
+        governance.setPaused(false);
     }
 
     function test_OneHundredFullHoldsFollowGeometricCurveAndLeaveAsymptoticDust() public {

@@ -13,7 +13,7 @@ export FOUNDRY_PROFILE=formal
 
 "$halmos_bin" \
   --forge-build-out out-formal \
-  --match-contract '^Burntato(Math|Activation|BuybackFunding)Properties$' \
+  --match-contract '^Burntato(Math|Activation|BuybackFunding|Pause)Properties$' \
   --solver-timeout-branching 5s \
   --solver-timeout-assertion 120s \
   --statistics

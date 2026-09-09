@@ -52,8 +52,7 @@ library LibProtocolStorage {
 
     struct GovernanceStorage {
         address guardian;
-        bool purchasesPaused;
-        bool commitmentsPaused;
+        bool paused;
     }
 
     struct MarketStorage {

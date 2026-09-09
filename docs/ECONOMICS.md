@@ -123,9 +123,11 @@ minimum round deadline. The duration is governed and snapshotted per round;
 changing deployment defaults does not alter an existing deployment.
 
 The next successful purchase finalizes the outgoing opportunity. After full
-vesting, anyone may materialize it while the round is active. Settlement
-finalizes any unresolved final holder. The per-opportunity finalized flag
-prevents double minting and no holder can exceed their snapshotted maximum.
+vesting, anyone may materialize it while the round is active and the protocol is
+unpaused. Unpaused settlement finalizes any unresolved final holder. The
+per-opportunity finalized flag prevents double minting and no holder can exceed
+their snapshotted maximum. During an emergency pause neither entry point may
+materialize holder emission or reach the central protocol-mint path.
 
 At the default 10% step, fully vested opportunities reproduce:
 
@@ -150,9 +152,9 @@ that deadline, each committer may withdraw their complete target commitment
 while the predecessor is still current and holderless and the target remains
 inactive. A later commitment does not restart the clock. The final withdrawal
 clears it, so a later first commitment starts a new 30-day period. The exit stays
-available while new commitments are paused. The predecessor's first purchase
-permanently closes the exit, and normal settlement consumes commitments exactly
-as before.
+available while the global protocol pause is active. The predecessor's first
+purchase permanently closes the exit, and normal settlement consumes
+commitments exactly as before.
 
 At target-round settlement:
 
@@ -162,7 +164,8 @@ burnedPotato   = totalCommitted - treasuryPotato
 ```
 
 The burn-as-remainder rule consumes every committed POTATO base unit exactly
-once. Recovery ETH claims are state-dependent. Each ordinary claimant receives
+once. Recovery ETH claims are executable only while the protocol is unpaused
+and remain state-dependent. Each ordinary claimant receives
 `floor(recoveryPool * commitment / totalCommitted)`. The claimant whose weight
 completes `totalCommitted` receives the exact remaining
 `recoveryPool - recoveryPaid`, assigning all accumulated division dust to the
@@ -225,9 +228,9 @@ The buyback reserve accumulates from every purchase, including before launch.
 Anyone may also call payable `fundBuybackReserve()` with a positive amount.
 Direct funding increases the tracked reserve exactly and does not execute a
 buyback or change its cooldown. It remains available before purchase
-initialization and regardless of purchase pauses, market launch, or Diamond
-finalization. Plain native transfers to the Diamond increase its balance but do
-not enter reserve accounting.
+initialization and regardless of the global protocol pause, market launch, or
+Diamond finalization. Plain native transfers to the Diamond increase its balance
+but do not enter reserve accounting.
 
 After launch, anyone may call parameterless `buyback()`. The governed defaults
 select at most 2 ETH gross, reward the caller at 50 BPS of actual ETH spent, and

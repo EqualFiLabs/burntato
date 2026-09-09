@@ -25,13 +25,17 @@ case "$suite" in
   buyback-funding)
     run_suite buyback-funding
     ;;
+  pause)
+    run_suite pause
+    ;;
   all)
     run_suite math
     run_suite activation
     run_suite buyback-funding
+    run_suite pause
     ;;
   *)
-    echo "usage: $0 [math|activation|buyback-funding|all]" >&2
+    echo "usage: $0 [math|activation|buyback-funding|pause|all]" >&2
     exit 2
     ;;
 esac

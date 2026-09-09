@@ -10,13 +10,13 @@ import {Round} from "../shared/Types.sol";
 
 contract GameFacet is IGame {
     function buyPotato() external payable {
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         if (!gs.initialized) revert Errors.PurchasesNotInitialized();
         LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
         if (rs.status == 2) revert Errors.Reentrancy();
         rs.status = 2;
 
-        if (LibProtocolStorage.governance().purchasesPaused) revert Errors.PurchasesPaused();
         Round storage round = _currentOrStartRound(gs);
         if (round.currentHolder != address(0) && block.timestamp >= round.deadline) revert Errors.RoundExpired();
         if (msg.value != round.nextPrice) revert Errors.IncorrectPayment(round.nextPrice, msg.value);
@@ -68,6 +68,7 @@ contract GameFacet is IGame {
     }
 
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         Round storage round = gs.rounds[gs.currentRoundId];
         if (round.currentHolder == address(0)) revert Errors.NoCurrentHolder();

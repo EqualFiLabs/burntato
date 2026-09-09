@@ -61,6 +61,7 @@ contract PotatoTokenFacet is ERC20 {
 
     function protocolMint(address to, uint256 amount) external {
         _enforceProtocol();
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         _mint(to, amount);
     }
 

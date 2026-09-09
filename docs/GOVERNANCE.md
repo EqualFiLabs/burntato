@@ -6,8 +6,9 @@ The Diamond recognizes one `authority` address. Deployment assigns it directly
 to the configured `finalAdmin` and does not deploy a timelock. That address may
 be an EOA, Safe, or governance contract; Burntato does not require authority to
 have contract code or impose a delay. The current authority may transfer the
-role repeatedly to any address, including `address(0)` when governance
-intentionally relinquishes control.
+role repeatedly to any nonzero address. Governance may relinquish authority by
+setting it to `address(0)` only after purchases are initialized, the guardian
+is already zero, and the protocol is unpaused.
 
 While authority exists it can:
 
@@ -17,7 +18,7 @@ While authority exists it can:
 - administer POTATO distributors and buyback cap, reward, and delay;
 - replace or zero the Treasury reward allocator;
 - appoint or remove the guardian;
-- set or clear purchase and commitment pauses;
+- set or clear the global protocol pause;
 - reconfigure the Diamond's canonical market references before launch; and
 - administer or transfer the independently owned Burntato hook when the same
   authority separately holds that ownership role.
@@ -35,16 +36,27 @@ updates apply to future unsnapshotted rounds.
 
 ## Guardian
 
-The guardian is containment-only. It may change either pause bit from `false`
-to `true`, but it cannot clear a pause. Only the Diamond authority can unpause.
-The guardian cannot change economics, recipients, market configuration,
-ownership, selectors, claims, settlement, emission materialization, or token
-movement rules. Authority may set the guardian to `address(0)`.
+The guardian is containment-only. It may set the single global pause from
+`false` to `true`, including an idempotent repeat call, but it cannot clear the
+pause. Only the Diamond authority can unpause. The guardian cannot change
+economics, recipients, market configuration, ownership, selectors, or any
+other administrative state. Authority may set the guardian to `address(0)`.
 
-Pauses stop only new Hot Potato purchases and/or new Recovery commitments.
-Settlement, claims, matured emission materialization, POTATO self-burning,
-canonical trading, and an already-eligible stalled-Recovery withdrawal remain
-live.
+While paused, Burntato rejects new Hot Potato purchases, new Recovery
+commitments, matured holder-emission materialization and central protocol
+minting, round settlement, and all Diamond Winner, Recovery, Treasury ETH, and
+Treasury POTATO claims. The pause deliberately does not stop ordinary POTATO
+approvals, Permit, allowed transfers, self-burning, an already-eligible stalled
+Recovery withdrawal, canonical market launch and swaps, buybacks or direct
+reserve funding, Treasury reward scheduling, views, or governance
+administration.
+
+Authority renunciation is guarded so an uninitialized game or containment
+state cannot become permanent by accident. Purchases must already be
+initialized; the remaining safe sequence is to set the guardian to
+`address(0)`, clear the global pause if necessary, and only then set authority
+to `address(0)`. Once authority is zero, no guardian remains and no address can
+pause or administer the Diamond.
 
 ## Finalization
 
@@ -104,7 +116,7 @@ For a deployment, verify:
 - `foundationConfigured()` is true before purchase activation;
 - `purchasesInitialized()` is false during deployment verification and becomes
   true only after the current authority's one-shot call;
-- `guardian()` and both pause bits match intended operations state;
+- `guardian()` and `paused()` match intended operations state;
 - the hook owner is the intended final admin;
 - for a self-contained deployment, the PoolManager owner is that final admin; for
   Robinhood, the PoolManager matches the pinned external deployment and owner;
@@ -116,5 +128,6 @@ For a deployment, verify:
 - the reward allocator and funded POTATO escrow match Treasury policy;
 - `protocolFinalized()` matches whether the installed buyback ceiling and all
   other Diamond facet behavior were intentionally made permanent;
-  and
+- any planned authority renunciation follows purchase initialization and is
+  preceded by a zero guardian and an unpaused protocol; and
 - after finalization, governance setters still work while `diamondCut` reverts.

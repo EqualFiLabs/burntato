@@ -118,8 +118,7 @@ contract BurntatoActivationProperties is Test {
     function check_nonPurchaseViewsRemainAvailable() public view {
         assertTrue(governance.foundationConfigured());
         assertFalse(governance.purchasesInitialized());
-        assertFalse(governance.purchasesPaused());
-        assertFalse(governance.commitmentsPaused());
+        assertFalse(governance.paused());
         assertEq(game.currentRoundId(), 0);
         assertEq(game.getRound(0).currentHolder, address(0));
         (uint256 baseEarned, uint256 treasuryEarned) = game.currentEarnedEmission();

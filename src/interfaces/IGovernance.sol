@@ -6,7 +6,7 @@ import {ProtocolConfig} from "../shared/Types.sol";
 interface IGovernance {
     event AuthorityTransferred(address indexed previousAuthority, address indexed newAuthority);
     event GuardianUpdated(address indexed previousGuardian, address indexed newGuardian);
-    event PauseStateUpdated(bool purchasesPaused, bool commitmentsPaused);
+    event PauseStateUpdated(bool paused);
     event ProtocolConfigUpdated(ProtocolConfig config);
     event TreasuryRecipientUpdated(address indexed previousRecipient, address indexed newRecipient);
     event ProtocolFinalized();
@@ -14,8 +14,7 @@ interface IGovernance {
 
     function authority() external view returns (address);
     function guardian() external view returns (address);
-    function purchasesPaused() external view returns (bool);
-    function commitmentsPaused() external view returns (bool);
+    function paused() external view returns (bool);
     function protocolFinalized() external view returns (bool);
     function protocolConfig() external view returns (ProtocolConfig memory);
     function foundationConfigured() external view returns (bool);
@@ -23,7 +22,7 @@ interface IGovernance {
     function initializePurchases() external;
     function setAuthority(address newAuthority) external;
     function setGuardian(address newGuardian) external;
-    function setPauseState(bool pausePurchases, bool pauseCommitments) external;
+    function setPaused(bool paused_) external;
     function setProtocolConfig(ProtocolConfig calldata config) external;
     function setTreasuryRecipient(address newRecipient) external;
     function finalizeProtocol() external;

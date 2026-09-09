@@ -25,6 +25,7 @@ import {
 } from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
+import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
@@ -168,6 +169,13 @@ contract DeterministicDeploymentTest is Test {
         assertEq(round.deadline - block.timestamp, 1 minutes);
     }
 
+    function test_DeploymentOmitsLegacyPartialPauseSelectors() public view {
+        IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
+        assertEq(loupe.facetAddress(bytes4(keccak256("purchasesPaused()"))), address(0));
+        assertEq(loupe.facetAddress(bytes4(keccak256("commitmentsPaused()"))), address(0));
+        assertEq(loupe.facetAddress(bytes4(keccak256("setPauseState(bool,bool)"))), address(0));
+    }
+
     function test_GenericVerifierRejectsOperatorRewardsWithoutCanonicalDependencies() public {
         config.operatorRewardShareBps = 1;
         vm.expectRevert(
@@ -223,8 +231,7 @@ contract DeterministicDeploymentTest is Test {
     function test_PurchaseActivationDoesNotGateOtherProtocolSurfaces() public {
         IGovernance governance = IGovernance(deployment.diamond);
         assertFalse(governance.purchasesInitialized());
-        assertFalse(governance.purchasesPaused());
-        assertFalse(governance.commitmentsPaused());
+        assertFalse(governance.paused());
 
         address replacementGuardian = makeAddr("pre-activation-guardian");
         vm.prank(config.finalAdmin);
@@ -242,15 +249,15 @@ contract DeterministicDeploymentTest is Test {
         assertFalse(governance.purchasesInitialized());
     }
 
-    function test_TestnetFinalCheckRejectsPausedPurchases() public {
+    function test_TestnetFinalCheckRejectsPausedProtocol() public {
         IGovernance governance = IGovernance(deployment.diamond);
         vm.startPrank(config.finalAdmin);
         governance.initializePurchases();
-        governance.setPauseState(true, false);
+        governance.setPaused(true);
         vm.stopPrank();
 
         FinalizeBurntatoRobinhoodTestnet finalizer = new FinalizeBurntatoRobinhoodTestnet();
-        vm.expectRevert(FinalizeBurntatoRobinhoodTestnet.PurchasesPaused.selector);
+        vm.expectRevert(FinalizeBurntatoRobinhoodTestnet.ProtocolPaused.selector);
         finalizer.checkFinalizedDeployment(deployment.diamond, deployment.hook);
     }
 
@@ -573,6 +580,16 @@ contract DeterministicDeploymentTest is Test {
             abi.encodeWithSelector(
                 BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("FOUNDATION_CONFIGURED")
             )
+        );
+        verifier.verify(config, deployment);
+    }
+
+    function test_VerifierRejectsPausedProtocol() public {
+        vm.prank(config.finalAdmin);
+        IGovernance(deployment.diamond).setPaused(true);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("PROTOCOL_UNPAUSED"))
         );
         verifier.verify(config, deployment);
     }
