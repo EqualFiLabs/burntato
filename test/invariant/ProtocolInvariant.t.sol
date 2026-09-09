@@ -202,7 +202,7 @@ contract ProtocolHandler is Test {
 
     function setPause(uint256 rawFlags) external {
         vm.prank(guardian);
-        try governance.setPauseState((rawFlags & 1) != 0, (rawFlags & 2) != 0) {} catch {}
+        try governance.setPaused((rawFlags & 1) != 0) {} catch {}
     }
 
     function attemptRestrictedTransfer(uint256 actorSeed, uint256 rawAmount) external {

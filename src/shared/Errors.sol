@@ -7,7 +7,6 @@ library Errors {
     error AlreadyInitialized();
     error FoundationNotInitialized();
     error CommitmentClosed(uint256 roundId);
-    error CommitmentsPaused();
     error CutsDisabled();
     error EmptySelectors();
     error FunctionNotFound(bytes4 selector);
@@ -44,7 +43,7 @@ library Errors {
     error NothingToClaim();
     error NothingToCancel();
     error PoolManagerAllowanceExceeded(uint256 available, uint256 required);
-    error PurchasesPaused();
+    error ProtocolPaused();
     error Reentrancy();
     error RecoveryWithdrawalTooSoon(uint256 availableAt);
     error RecoveryWithdrawalUnavailable(uint256 roundId);
@@ -57,6 +56,7 @@ library Errors {
     error SelectorUnchanged(bytes4 selector);
     error TransferRestricted(address from, address to);
     error UnpauseRequiresAuthority(address caller);
+    error UnsafeAuthorityRenunciation();
     error TokenOperationFailed();
     error UnauthorizedWinner(address caller);
     error VestingIncomplete();

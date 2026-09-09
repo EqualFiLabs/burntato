@@ -148,27 +148,38 @@ contract GovernanceAdministrationTest is Test {
     }
 
     function test_GuardianCanPauseButCannotAdminister() public {
+        vm.expectEmit(false, false, false, true, address(diamond));
+        emit IGovernance.PauseStateUpdated(true);
         vm.prank(guardian);
-        IGovernance(address(diamond)).setPauseState(true, true);
-        assertTrue(IGovernance(address(diamond)).purchasesPaused());
-        assertTrue(IGovernance(address(diamond)).commitmentsPaused());
+        IGovernance(address(diamond)).setPaused(true);
+        assertTrue(IGovernance(address(diamond)).paused());
+
+        vm.prank(guardian);
+        IGovernance(address(diamond)).setPaused(true);
+        assertTrue(IGovernance(address(diamond)).paused());
 
         vm.prank(guardian);
         vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, guardian));
         IGovernance(address(diamond)).setTreasuryRecipient(guardian);
     }
 
+    function test_NonGuardianCannotChangePauseState() public {
+        vm.prank(proposer);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotGuardian.selector, proposer));
+        IGovernance(address(diamond)).setPaused(true);
+        assertFalse(IGovernance(address(diamond)).paused());
+    }
+
     function test_GuardianCannotUnpauseButTimelockCan() public {
         vm.prank(guardian);
-        IGovernance(address(diamond)).setPauseState(true, true);
+        IGovernance(address(diamond)).setPaused(true);
 
         vm.prank(guardian);
         vm.expectRevert(abi.encodeWithSelector(Errors.UnpauseRequiresAuthority.selector, guardian));
-        IGovernance(address(diamond)).setPauseState(false, false);
+        IGovernance(address(diamond)).setPaused(false);
 
-        _scheduleAndExecute(abi.encodeCall(IGovernance.setPauseState, (false, false)));
-        assertFalse(IGovernance(address(diamond)).purchasesPaused());
-        assertFalse(IGovernance(address(diamond)).commitmentsPaused());
+        _scheduleAndExecute(abi.encodeCall(IGovernance.setPaused, (false)));
+        assertFalse(IGovernance(address(diamond)).paused());
     }
 
     function test_AuthorityCanTransferRepeatedlyToAnyAddress() public {
@@ -183,14 +194,39 @@ contract GovernanceAdministrationTest is Test {
         assertEq(IGovernance(address(candidate)).authority(), guardian);
     }
 
-    function test_AuthorityCanExplicitlyRelinquishToZero() public {
+    function test_AuthorityCannotRelinquishWhileGuardianRemains() public {
         vm.prank(address(timelock));
+        vm.expectRevert(Errors.UnsafeAuthorityRenunciation.selector);
         IGovernance(address(diamond)).setAuthority(address(0));
+        assertEq(IGovernance(address(diamond)).authority(), address(timelock));
+    }
+
+    function test_AuthorityCannotRelinquishWhilePaused() public {
+        vm.startPrank(address(timelock));
+        IGovernance(address(diamond)).setGuardian(address(0));
+        IGovernance(address(diamond)).setPaused(true);
+        vm.expectRevert(Errors.UnsafeAuthorityRenunciation.selector);
+        IGovernance(address(diamond)).setAuthority(address(0));
+        vm.stopPrank();
+
+        assertEq(IGovernance(address(diamond)).authority(), address(timelock));
+    }
+
+    function test_AuthorityCanRelinquishAfterGuardianClearAndUnpause() public {
+        vm.startPrank(address(timelock));
+        IGovernance(address(diamond)).setPaused(true);
+        IGovernance(address(diamond)).setGuardian(address(0));
+        IGovernance(address(diamond)).setPaused(false);
+        IGovernance(address(diamond)).setAuthority(address(0));
+        vm.stopPrank();
+
         assertEq(IGovernance(address(diamond)).authority(), address(0));
+        assertEq(IGovernance(address(diamond)).guardian(), address(0));
+        assertFalse(IGovernance(address(diamond)).paused());
 
         vm.prank(address(timelock));
         vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, address(timelock)));
-        IGovernance(address(diamond)).setGuardian(address(0));
+        IGovernance(address(diamond)).setGuardian(guardian);
     }
 
     function test_SelectorReplacementWorksUntilFinalization() public {
@@ -207,14 +243,13 @@ contract GovernanceAdministrationTest is Test {
 
     function test_FinalizationOnlyDisablesDiamondCuts() public {
         vm.prank(guardian);
-        IGovernance(address(diamond)).setPauseState(true, true);
+        IGovernance(address(diamond)).setPaused(true);
 
         _scheduleAndExecute(abi.encodeCall(IGovernance.finalizeProtocol, ()));
         IGovernance governance = IGovernance(address(diamond));
         assertTrue(governance.protocolFinalized());
         assertEq(governance.guardian(), guardian);
-        assertTrue(governance.purchasesPaused());
-        assertTrue(governance.commitmentsPaused());
+        assertTrue(governance.paused());
 
         address nextGuardian = makeAddr("nextGuardian");
         address nextTreasury = makeAddr("nextTreasury");
@@ -222,14 +257,13 @@ contract GovernanceAdministrationTest is Test {
         governance.setProtocolConfig(_config(0.02 ether, 2_000));
         governance.setTreasuryRecipient(nextTreasury);
         governance.setGuardian(nextGuardian);
-        governance.setPauseState(false, false);
+        governance.setPaused(false);
         governance.setAuthority(proposer);
         vm.stopPrank();
 
         assertEq(governance.guardian(), nextGuardian);
         assertEq(governance.authority(), proposer);
-        assertFalse(governance.purchasesPaused());
-        assertFalse(governance.commitmentsPaused());
+        assertFalse(governance.paused());
 
         FacetCut[] memory cuts = new FacetCut[](0);
         vm.prank(proposer);
@@ -288,21 +322,20 @@ contract GovernanceAdministrationTest is Test {
     }
 
     function _governanceSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](15);
+        selectors = new bytes4[](14);
         selectors[0] = IGovernance.authority.selector;
         selectors[1] = IGovernance.guardian.selector;
-        selectors[2] = IGovernance.purchasesPaused.selector;
-        selectors[3] = IGovernance.commitmentsPaused.selector;
-        selectors[4] = IGovernance.protocolFinalized.selector;
-        selectors[5] = IGovernance.protocolConfig.selector;
-        selectors[6] = IGovernance.setAuthority.selector;
-        selectors[7] = IGovernance.setGuardian.selector;
-        selectors[8] = IGovernance.setPauseState.selector;
-        selectors[9] = IGovernance.setProtocolConfig.selector;
-        selectors[10] = IGovernance.setTreasuryRecipient.selector;
-        selectors[11] = IGovernance.finalizeProtocol.selector;
-        selectors[12] = IGovernance.foundationConfigured.selector;
-        selectors[13] = IGovernance.purchasesInitialized.selector;
-        selectors[14] = IGovernance.initializePurchases.selector;
+        selectors[2] = IGovernance.paused.selector;
+        selectors[3] = IGovernance.protocolFinalized.selector;
+        selectors[4] = IGovernance.protocolConfig.selector;
+        selectors[5] = IGovernance.setAuthority.selector;
+        selectors[6] = IGovernance.setGuardian.selector;
+        selectors[7] = IGovernance.setPaused.selector;
+        selectors[8] = IGovernance.setProtocolConfig.selector;
+        selectors[9] = IGovernance.setTreasuryRecipient.selector;
+        selectors[10] = IGovernance.finalizeProtocol.selector;
+        selectors[11] = IGovernance.foundationConfigured.selector;
+        selectors[12] = IGovernance.purchasesInitialized.selector;
+        selectors[13] = IGovernance.initializePurchases.selector;
     }
 }

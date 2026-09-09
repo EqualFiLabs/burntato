@@ -78,7 +78,7 @@ contract BuybackFundingTest is DiamondTestSetup {
         buybacks.fundBuybackReserve{value: 1 ether}();
 
         vm.prank(guardian);
-        governance.setPauseState(true, true);
+        governance.setPaused(true);
         vm.prank(bob);
         buybacks.fundBuybackReserve{value: 2 ether}();
 
@@ -88,8 +88,7 @@ contract BuybackFundingTest is DiamondTestSetup {
         buybacks.fundBuybackReserve{value: 3 ether}();
 
         assertFalse(governance.purchasesInitialized());
-        assertTrue(governance.purchasesPaused());
-        assertTrue(governance.commitmentsPaused());
+        assertTrue(governance.paused());
         assertTrue(governance.protocolFinalized());
         assertEq(buybacks.buybackReserveEth(), 6 ether);
         assertEq(address(diamond).balance, 6 ether);

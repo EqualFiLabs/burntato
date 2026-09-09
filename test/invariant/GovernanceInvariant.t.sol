@@ -35,13 +35,13 @@ contract GovernanceHandler is Test {
 
     function guardianPause() external {
         vm.prank(originalGuardian);
-        try governance.setPauseState(true, true) {} catch {}
+        try governance.setPaused(true) {} catch {}
     }
 
     function guardianAttemptUnpause() external {
-        bool wasPaused = governance.purchasesPaused() || governance.commitmentsPaused();
+        bool wasPaused = governance.paused();
         vm.prank(originalGuardian);
-        try governance.setPauseState(false, false) {
+        try governance.setPaused(false) {
             if (wasPaused) guardianUnpauseBypass = true;
         } catch {}
     }
@@ -63,7 +63,7 @@ contract GovernanceHandler is Test {
     function authorityUnpause() external {
         bool wasFinalized = governance.protocolFinalized();
         vm.prank(authority);
-        try governance.setPauseState(false, false) {}
+        try governance.setPaused(false) {}
         catch {
             if (wasFinalized) administrationBlockedAfterFinalization = true;
         }

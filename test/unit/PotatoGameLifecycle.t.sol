@@ -325,6 +325,19 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         potato.protocolTransfer(alice, bob, 1 ether);
     }
 
+    function test_GlobalPauseBlocksProtocolMintWithoutChangingSupply() public {
+        vm.prank(guardian);
+        IGovernance(address(diamond)).setPaused(true);
+        uint256 supplyBefore = potato.totalSupply();
+
+        vm.prank(address(diamond));
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        potato.protocolMint(alice, 1 ether);
+
+        assertEq(potato.totalSupply(), supplyBefore);
+        assertEq(potato.balanceOf(alice), 0);
+    }
+
     function test_PurchaseConservesNativeAllocationAndRaisesPrice() public {
         _buy(alice, 0.01 ether);
         Round memory round = game.getRound(1);

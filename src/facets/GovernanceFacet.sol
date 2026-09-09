@@ -23,12 +23,8 @@ contract GovernanceFacet is IGovernance {
         return LibProtocolStorage.governance().guardian;
     }
 
-    function purchasesPaused() external view returns (bool) {
-        return LibProtocolStorage.governance().purchasesPaused;
-    }
-
-    function commitmentsPaused() external view returns (bool) {
-        return LibProtocolStorage.governance().commitmentsPaused;
+    function paused() external view returns (bool) {
+        return LibProtocolStorage.governance().paused;
     }
 
     function protocolFinalized() external view returns (bool) {
@@ -57,6 +53,10 @@ contract GovernanceFacet is IGovernance {
     }
 
     function setAuthority(address newAuthority) external onlyAuthority {
+        LibProtocolStorage.GovernanceStorage storage gs = LibProtocolStorage.governance();
+        if (newAuthority == address(0) && (gs.guardian != address(0) || gs.paused)) {
+            revert Errors.UnsafeAuthorityRenunciation();
+        }
         address previous = LibDiamond.authority();
         LibDiamond.transferAuthority(newAuthority);
         emit AuthorityTransferred(previous, newAuthority);
@@ -69,17 +69,14 @@ contract GovernanceFacet is IGovernance {
         emit GuardianUpdated(previous, newGuardian);
     }
 
-    function setPauseState(bool pausePurchases, bool pauseCommitments) external {
+    function setPaused(bool paused_) external {
         LibProtocolStorage.GovernanceStorage storage gs = LibProtocolStorage.governance();
         if (msg.sender != LibDiamond.authority()) {
             if (msg.sender != gs.guardian) revert Errors.NotGuardian(msg.sender);
-            if ((gs.purchasesPaused && !pausePurchases) || (gs.commitmentsPaused && !pauseCommitments)) {
-                revert Errors.UnpauseRequiresAuthority(msg.sender);
-            }
+            if (!paused_) revert Errors.UnpauseRequiresAuthority(msg.sender);
         }
-        gs.purchasesPaused = pausePurchases;
-        gs.commitmentsPaused = pauseCommitments;
-        emit PauseStateUpdated(pausePurchases, pauseCommitments);
+        gs.paused = paused_;
+        emit PauseStateUpdated(paused_);
     }
 
     function setProtocolConfig(ProtocolConfig calldata config) external onlyAuthority {

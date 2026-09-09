@@ -157,13 +157,13 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 10_000 ether);
     }
 
-    function test_StalledRecoveryWithdrawsAfterThirtyDaysEvenWhenCommitmentsPaused() public {
+    function test_StalledRecoveryWithdrawsAfterThirtyDaysEvenWhenProtocolPaused() public {
         uint256 amount = 6_000 ether;
         uint256 availableAt = _prepareStalledRecovery(amount);
         assertEq(availableAt, vm.getBlockTimestamp() + 30 days);
 
         vm.prank(authority);
-        IGovernance(address(diamond)).setPauseState(false, true);
+        IGovernance(address(diamond)).setPaused(true);
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Errors.RecoveryWithdrawalTooSoon.selector, availableAt));

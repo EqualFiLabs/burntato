@@ -11,7 +11,7 @@ import {Round} from "../shared/Types.sol";
 
 contract RecoveryFacet is IRecovery {
     function commitRecovery(uint256 amount) external {
-        if (LibProtocolStorage.governance().commitmentsPaused) revert Errors.CommitmentsPaused();
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         if (amount == 0) revert Errors.ZeroAmount();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         if (gs.currentRoundId == 0) revert Errors.InvalidRound(0);

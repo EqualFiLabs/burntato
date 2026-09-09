@@ -61,12 +61,17 @@ inventory. The reward allocator is independently administered and may be
 replaced or disabled without changing the Treasury recipient or distributor
 registry.
 
-Administration remains available through the configured final-admin authority. The
-guardian can add purchase or commitment pauses but cannot unpause. Protocol
-finalization permanently disables only future Diamond cuts; it does not disable
-economic, Treasury, hook, PoolManager, pause, or authority administration.
-Explicitly transferring an authority or ownership role to the zero address is
-the mechanism for relinquishing that role.
+Administration remains available through the configured final-admin authority.
+The guardian can activate one global emergency pause but cannot clear it. While
+active, the pause stops purchases, Recovery commitments, holder-emission
+materialization and protocol minting, round settlement, and every Diamond claim.
+It leaves ordinary token actions and self-burning, stalled-Recovery withdrawals,
+canonical market launch and swaps, buybacks and reserve funding, reward
+scheduling, views, and administration live. Protocol finalization permanently
+disables only future Diamond cuts; it does not disable economic, Treasury, hook,
+PoolManager, pause, or authority administration. Diamond authority can be
+relinquished only after the guardian is zero and the protocol is unpaused;
+independent ownership roles retain their own zero-address transfer rules.
 
 ## Repository guide
 
