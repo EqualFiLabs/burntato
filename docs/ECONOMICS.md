@@ -46,7 +46,7 @@ The local genesis defaults are:
 | Minimum round timeout | 5 minutes |
 | Round emission budget | 100,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
-| Emission vesting duration | 120 seconds |
+| Emission vesting duration | 4 minutes |
 | Winner / Recovery / Treasury / buyback / Operator split | 25% / 40% / 25% / 10% / 0% |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
@@ -115,6 +115,12 @@ Multiplication occurs before division in POTATO base units. Only `earned` is
 deducted. An unearned portion remains unissued inside the same round budget and
 informs the next holder's opportunity. Same-timestamp cycling earns zero and
 does not advance the curve.
+
+At the default four-minute vesting duration, a first holder earns 5,000 POTATO
+after two minutes and reaches the same 10,000 POTATO maximum after four minutes.
+An uninterrupted holder can fully vest one minute before the five-minute
+minimum round deadline. The duration is governed and snapshotted per round;
+changing deployment defaults does not alter an existing deployment.
 
 The next successful purchase finalizes the outgoing opportunity. After full
 vesting, anyone may materialize it while the round is active and the protocol is

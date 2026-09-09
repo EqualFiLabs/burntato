@@ -215,15 +215,15 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         _buyGame(alice, 0.01 ether);
         Round memory roundOne = game.getRound(1);
         assertEq(roundOne.deadline - roundOne.holderSince, 60 minutes);
-        vm.warp(vm.getBlockTimestamp() + 120);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
         _buyGame(bob, 0.011 ether);
         roundOne = game.getRound(1);
         assertEq(roundOne.deadline - roundOne.holderSince, 55 minutes);
-        vm.warp(vm.getBlockTimestamp() + 60);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration / 2);
         _buyGame(carol, 0.0121 ether);
         roundOne = game.getRound(1);
         assertEq(roundOne.deadline - roundOne.holderSince, 50 minutes);
-        vm.warp(vm.getBlockTimestamp() + 120);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
         game.materializeMaturedEmission();
         assertEq(roundOne.nextPrice, 0.01331 ether);
 
@@ -238,9 +238,9 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertEq(game.getRound(2).recoveryCarryIn, 0.01324 ether);
 
         _buyGame(dave, 0.01 ether);
-        vm.warp(vm.getBlockTimestamp() + 60);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration / 2);
         _buyGame(erin, 0.011 ether);
-        vm.warp(vm.getBlockTimestamp() + 120);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
         _settleCurrentRound();
         Round memory roundTwo = game.getRound(2);
         assertEq(roundTwo.totalCommitted, aliceCommitment + bobCommitment);
@@ -275,9 +275,9 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertEq(roundFour.treasuryEmissionBudget, 200 ether + 1);
         uint256 supplyBefore = potato.totalSupply();
         _buyGame(alice, 0.01 ether);
-        vm.warp(vm.getBlockTimestamp() + 60);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration / 2);
         _buyGame(bob, 0.011 ether);
-        vm.warp(vm.getBlockTimestamp() + 120);
+        vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
         _settleCurrentRound();
         roundFour = game.getRound(4);
         assertEq(roundFour.treasuryEmittedPotato, 29 ether);

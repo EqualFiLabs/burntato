@@ -29,7 +29,7 @@ library BurntatoDeploymentConfig {
                 roundTimeout: 1 hours,
                 roundEmissionBudget: 100_000 ether,
                 emissionStepBps: 1_000,
-                emissionVestingDuration: 120 seconds,
+                emissionVestingDuration: 4 minutes,
                 winnerBps: 2_500,
                 recoveryBps: 4_000,
                 treasuryBps: 2_500,

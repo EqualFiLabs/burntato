@@ -53,7 +53,7 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 | Minimum round timeout | 5 minutes |
 | Round emission budget | 100,000 POTATO |
 | Emission step | 1,000 BPS |
-| Emission vesting | 120 seconds |
+| Emission vesting | 4 minutes |
 | Purchase split | 2,500 / 4,000 / 2,500 / 1,000 / 0 BPS |
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |

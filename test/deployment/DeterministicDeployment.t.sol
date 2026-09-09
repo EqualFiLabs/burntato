@@ -92,6 +92,83 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
     }
 
+    function test_DefaultEmissionVestsAtFourMinutesAndMintsOnce() public {
+        _initializePurchases(deployment, config.finalAdmin);
+        IGame game = IGame(deployment.diamond);
+        IPotatoToken token = IPotatoToken(deployment.diamond);
+        uint256 supplyBefore = token.totalSupply();
+        vm.deal(buyer, 1 ether);
+        vm.prank(buyer);
+        game.buyPotato{value: config.protocol.startingPrice}();
+        Round memory round = game.getRound(1);
+        assertEq(round.config.emissionVestingDuration, 4 minutes);
+        assertEq(round.holderMaxReward, 10_000 ether);
+
+        vm.warp(round.holderSince + 2 minutes);
+        (uint256 halfEarned,) = game.currentEarnedEmission();
+        assertEq(halfEarned, 5_000 ether);
+        vm.expectRevert(Errors.VestingIncomplete.selector);
+        game.materializeMaturedEmission();
+        assertEq(token.totalSupply(), supplyBefore);
+
+        vm.warp(round.holderSince + 4 minutes - 1);
+        vm.expectRevert(Errors.VestingIncomplete.selector);
+        game.materializeMaturedEmission();
+
+        vm.warp(round.holderSince + 4 minutes);
+        (uint256 earned,) = game.materializeMaturedEmission();
+        assertEq(earned, 10_000 ether);
+        assertEq(token.balanceOf(buyer), earned);
+        assertEq(token.totalSupply() - supplyBefore, earned);
+
+        vm.warp(round.deadline);
+        ISettlement(deployment.diamond).settleRound();
+        assertEq(token.totalSupply() - supplyBefore, earned);
+        assertEq(game.getRound(1).remainingEmission, 90_000 ether);
+    }
+
+    function test_DefaultReplacementAfterTwoMinutesPreservesUnearnedBudget() public {
+        _initializePurchases(deployment, config.finalAdmin);
+        IGame game = IGame(deployment.diamond);
+        IPotatoToken token = IPotatoToken(deployment.diamond);
+        address successor = makeAddr("vesting-successor");
+        vm.deal(buyer, 1 ether);
+        vm.deal(successor, 1 ether);
+        vm.prank(buyer);
+        game.buyPotato{value: config.protocol.startingPrice}();
+        Round memory round = game.getRound(1);
+        vm.warp(round.holderSince + 2 minutes);
+        vm.prank(successor);
+        game.buyPotato{value: round.nextPrice}();
+
+        round = game.getRound(1);
+        assertEq(token.balanceOf(buyer), 5_000 ether);
+        assertEq(round.remainingEmission, 95_000 ether);
+        assertEq(round.holderMaxReward, 9_500 ether);
+        vm.warp(round.holderSince + 4 minutes);
+        game.materializeMaturedEmission();
+        assertEq(token.balanceOf(successor), 9_500 ether);
+        assertEq(game.getRound(1).remainingEmission, 85_500 ether);
+    }
+
+    function test_DefaultVestingCompletesBeforeMinimumRoundDeadline() public {
+        _initializePurchases(deployment, config.finalAdmin);
+        IGame game = IGame(deployment.diamond);
+        vm.deal(buyer, 1 ether);
+        uint256 price = config.protocol.startingPrice;
+        for (uint256 i; i < 12; ++i) {
+            vm.prank(buyer);
+            game.buyPotato{value: price}();
+            price = game.getRound(1).nextPrice;
+        }
+        Round memory round = game.getRound(1);
+        assertEq(round.deadline - round.holderSince, 5 minutes);
+        vm.warp(round.holderSince + 4 minutes);
+        (uint256 earned,) = game.materializeMaturedEmission();
+        assertEq(earned, 10_000 ether);
+        assertEq(round.deadline - block.timestamp, 1 minutes);
+    }
+
     function test_DeploymentOmitsLegacyPartialPauseSelectors() public view {
         IDiamondLoupe loupe = IDiamondLoupe(deployment.diamond);
         assertEq(loupe.facetAddress(bytes4(keccak256("purchasesPaused()"))), address(0));
@@ -213,6 +290,7 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.guardian, deployer);
         assertEq(testnet.treasuryRecipient, deployer);
         assertEq(testnet.rewardAllocator, deployer);
+        assertEq(testnet.protocol.emissionVestingDuration, 4 minutes);
         assertEq(testnet.protocol.winnerBps, 2_500);
         assertEq(testnet.protocol.recoveryBps, 3_000);
         assertEq(testnet.protocol.treasuryBps, 2_000);
@@ -735,7 +813,7 @@ contract DeterministicDeploymentTest is Test {
         vm.deal(buyer, 1 ether);
         vm.prank(buyer);
         game.buyPotato{value: launchConfig.protocol.startingPrice}();
-        vm.warp(block.timestamp + 120);
+        vm.warp(block.timestamp + launchConfig.protocol.emissionVestingDuration);
         game.materializeMaturedEmission();
         vm.prank(buyer);
         recovery.commitRecovery(10_000 ether);

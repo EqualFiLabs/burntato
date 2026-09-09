@@ -6,10 +6,10 @@ actual holder time. Forward Recovery commitments, restricted token movement,
 and a canonical Uniswap v4 market turn settled activity into permanently locked
 liquidity and direct Treasury trading revenue.
 
-The deployed defaults give the first holder one hour and shorten each later
+Fresh-deployment defaults give the first holder one hour and shorten each later
 purchase reset by five minutes until reaching a five-minute floor, alongside a
 10% price step, a fresh 100,000 POTATO emission budget, 10% holder
-opportunities vesting over 120 seconds, a 25% Winner / 40% Recovery / 25%
+opportunities vesting over four minutes, a 25% Winner / 40% Recovery / 25%
 Treasury / 10% buyback purchase split, a 90% burn / 10% Treasury Recovery split,
 and a 1% bilateral market fee. These are governed defaults, not immutable
 constants. Each active or already-snapshotted target round keeps its terms while
