@@ -8,7 +8,8 @@ Use the EIP-2535 loupe to resolve the installed facet for each selector.
 
 Important state reads include:
 
-- `IGame.currentRoundId()`, `getRound()`, and `currentEarnedEmission()`;
+- `IGame.currentRoundId()`, `getRound()`, `currentEarnedEmission()`, and
+  `winnerReserveEth()`;
 - `IGovernance.protocolConfig()`, `foundationConfigured()`, purchase
   initialization, authority, guardian, pause, and finalization views;
 - `IRecovery.recoveryCommitment()`, `totalRecoveryCommitment()`, and
@@ -37,6 +38,17 @@ The canonical hook is a separate administered contract. Read `owner()`,
 `token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`,
 `operatorRewardsRouter()`, `operatorRewardShareBps()`, `deploymentBlock()`, and
 `externalBuysEnabled()` from the hook itself.
+
+`fundWinnerReserve()` permissionlessly adds positive native value to the
+tracked Winner reserve even while the protocol is paused. Before Round 1 it
+targets Round 1; once a round is active it targets the following round. The
+complete reserve moves into `Round.winnerPool` when that target activates.
+Integrators should index `WinnerReserveFunded`, `NextRoundWinnerFunded`, and
+`WinnerReserveApplied`; a plain native transfer is deliberately untracked.
+
+Adding `nextRoundWinnerBps` expands both configuration tuples and is a
+fresh-deployment ABI and Diamond-storage change. Integrators must update their
+ABI before connecting to this version; it is not an in-place upgrade package.
 
 ## POTATO behavior
 
