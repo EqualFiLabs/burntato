@@ -343,11 +343,12 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 0.0025 ether);
         assertEq(round.recoveryPool, 0.004 ether);
-        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0025 ether);
+        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0023 ether);
         assertEq(uint256(vm.load(address(diamond), BUYBACK_SLOT)), 0.001 ether);
+        assertEq(game.winnerReserveEth(), 0.0002 ether);
         assertEq(
             round.winnerPool + round.recoveryPool + IClaims(address(diamond)).treasuryEthAvailable()
-                + uint256(vm.load(address(diamond), BUYBACK_SLOT)),
+                + uint256(vm.load(address(diamond), BUYBACK_SLOT)) + game.winnerReserveEth(),
             0.01 ether
         );
         assertEq(round.nextPrice, 0.011 ether);
@@ -365,7 +366,8 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(round.winnerPool, 2_500);
         assertEq(round.recoveryPool, 4_001);
         assertEq(uint256(vm.load(address(diamond), BUYBACK_SLOT)), 1_000);
-        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 2_502);
+        assertEq(game.winnerReserveEth(), 200);
+        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 2_302);
     }
 
     function test_ConfiguredEconomicsDriveRoundPurchasesAndEmission() public {
@@ -376,8 +378,9 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         config.emissionStepBps = 2_500;
         config.emissionVestingDuration = 40;
         config.winnerBps = 1_000;
+        config.nextRoundWinnerBps = 500;
         config.recoveryBps = 2_000;
-        config.treasuryBps = 6_000;
+        config.treasuryBps = 5_500;
         config.buybackBps = 1_000;
         vm.prank(authority);
         IGovernance(address(diamond)).setProtocolConfig(config);
@@ -390,7 +393,8 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(round.holderMaxReward, 50_000 ether);
         assertEq(round.winnerPool, 0.001 ether);
         assertEq(round.recoveryPool, 0.002 ether);
-        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.006 ether);
+        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0055 ether);
+        assertEq(game.winnerReserveEth(), 0.0005 ether);
 
         vm.warp(block.timestamp + 40);
         game.materializeMaturedEmission();

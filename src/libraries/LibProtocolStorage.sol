@@ -26,6 +26,7 @@ library LibProtocolStorage {
         uint256 currentRoundId;
         mapping(uint256 => Round) rounds;
         mapping(uint256 => bool) winnerClaimed;
+        uint256 winnerReserveEth;
     }
 
     struct TokenStorage {

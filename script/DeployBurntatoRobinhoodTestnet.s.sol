@@ -42,12 +42,14 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         config.treasuryRecipient = deployer;
         config.rewardAllocator = deployer;
         config.protocol.winnerBps = 2_500;
+        config.protocol.nextRoundWinnerBps = 200;
         config.protocol.recoveryBps = 3_000;
-        config.protocol.treasuryBps = 2_000;
+        config.protocol.treasuryBps = 1_800;
         config.protocol.buybackBps = 1_000;
         config.protocol.operatorPurchaseBps = 1_500;
         config.hookFeeBps = 100;
         config.operatorRewardShareBps = 4_000;
+        config.initialWinnerReserve = BurntatoDeploymentConfig.defaultInitialWinnerReserve(config.protocol);
     }
 
     function _writeDeployment(
@@ -73,10 +75,12 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeAddress(object, "operatorsNft", operatorDependencies.operatorsNft);
         vm.serializeAddress(object, "activationRegistry", operatorDependencies.activationRegistry);
         vm.serializeUint(object, "winnerBps", config.protocol.winnerBps);
+        vm.serializeUint(object, "nextRoundWinnerBps", config.protocol.nextRoundWinnerBps);
         vm.serializeUint(object, "recoveryBps", config.protocol.recoveryBps);
         vm.serializeUint(object, "treasuryBps", config.protocol.treasuryBps);
         vm.serializeUint(object, "buybackBps", config.protocol.buybackBps);
         vm.serializeUint(object, "operatorPurchaseBps", config.protocol.operatorPurchaseBps);
+        vm.serializeUint(object, "initialWinnerReserve", config.initialWinnerReserve);
         vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
         vm.serializeUint(object, "operatorRewardShareBps", config.operatorRewardShareBps);
         vm.serializeAddress(object, "diamondCutFacet", deployment.diamondCutFacet);

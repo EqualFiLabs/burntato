@@ -43,7 +43,7 @@ contract BurntatoActivationProperties is Test {
         IDiamondCut(address(diamond)).diamondCut(
             cuts,
             address(foundation),
-            abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), 1 ether))
+            abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), 1 ether, 0))
         );
 
         game = IGame(address(diamond));
@@ -136,6 +136,7 @@ contract BurntatoActivationProperties is Test {
             emissionStepBps: 0,
             emissionVestingDuration: 1,
             winnerBps: 10_000,
+            nextRoundWinnerBps: 0,
             recoveryBps: 0,
             treasuryBps: 0,
             buybackBps: 0,

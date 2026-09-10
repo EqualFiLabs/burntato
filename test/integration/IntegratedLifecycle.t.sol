@@ -68,8 +68,8 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
 
         uint256 carolBefore = carol.balance;
         vm.prank(carol);
-        assertEq(claims.claimWinner(2, carol), 0.00525 ether);
-        assertEq(carol.balance - carolBefore, 0.00525 ether);
+        assertEq(claims.claimWinner(2, carol), 0.00545 ether);
+        assertEq(carol.balance - carolBefore, 0.00545 ether);
         assertEq(game.getRound(3).remainingEmission, 100_000 ether);
     }
 
@@ -146,8 +146,9 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         updated.emissionStepBps = 2_000;
         updated.emissionVestingDuration = 240;
         updated.winnerBps = 1_000;
+        updated.nextRoundWinnerBps = 500;
         updated.recoveryBps = 2_000;
-        updated.treasuryBps = 6_000;
+        updated.treasuryBps = 5_500;
         updated.buybackBps = 1_000;
         updated.recoveryBurnBps = 8_000;
         updated.recoveryTreasuryBps = 2_000;
@@ -169,8 +170,9 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundTwo.config.emissionStepBps, 1_000);
         assertEq(roundTwo.config.emissionVestingDuration, 120);
         assertEq(roundTwo.config.winnerBps, 2_500);
+        assertEq(roundTwo.config.nextRoundWinnerBps, 200);
         assertEq(roundTwo.config.recoveryBps, 4_000);
-        assertEq(roundTwo.config.treasuryBps, 2_500);
+        assertEq(roundTwo.config.treasuryBps, 2_300);
         assertEq(roundTwo.config.buybackBps, 1_000);
         assertEq(roundTwo.config.recoveryBurnBps, 9_000);
         assertEq(roundTwo.config.recoveryTreasuryBps, 1_000);
@@ -190,8 +192,9 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundThree.config.emissionStepBps, 2_000);
         assertEq(roundThree.config.emissionVestingDuration, 240);
         assertEq(roundThree.config.winnerBps, 1_000);
+        assertEq(roundThree.config.nextRoundWinnerBps, 500);
         assertEq(roundThree.config.recoveryBps, 2_000);
-        assertEq(roundThree.config.treasuryBps, 6_000);
+        assertEq(roundThree.config.treasuryBps, 5_500);
         assertEq(roundThree.config.buybackBps, 1_000);
         assertEq(roundThree.config.recoveryBurnBps, 8_000);
         assertEq(roundThree.config.recoveryTreasuryBps, 2_000);
@@ -272,7 +275,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         vm.prank(alice);
         assertEq(claims.claimRecovery(2, alice), 0.008 ether);
         vm.prank(bob);
-        assertEq(claims.claimWinner(2, bob), 0.0025 ether);
+        assertEq(claims.claimWinner(2, bob), 0.0027 ether);
         assertEq(claims.claimTreasury(), treasuryEthBefore);
         assertEq(claims.claimTreasuryPotato(), treasuryPotatoBefore);
 

@@ -10,6 +10,7 @@ struct GenesisConfig {
     address treasuryRecipient;
     address rewardAllocator;
     ProtocolConfig protocol;
+    uint256 initialWinnerReserve;
     BuybackConfig buyback;
     uint16 hookFeeBps;
     uint16 operatorRewardShareBps;

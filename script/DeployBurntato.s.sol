@@ -137,7 +137,7 @@ contract DeployBurntato is Script {
         BurntatoDeployment memory deployment,
         StaticsOperatorDependencies memory operatorDependencies
     ) private {
-        _deployDiamondShellAndFacets(bootstrapAuthority, deployment);
+        _deployDiamondShellAndFacets(config, bootstrapAuthority, deployment);
         _deployOperatorRewards(config, deployment, operatorDependencies);
         _initializeDiamond(config, deployment);
         _deployHook(config, deployment);
@@ -190,9 +190,15 @@ contract DeployBurntato is Script {
         deployment.universalRouter = dependencies.universalRouter;
     }
 
-    function _deployDiamondShellAndFacets(address bootstrapAuthority, BurntatoDeployment memory deployment) private {
+    function _deployDiamondShellAndFacets(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        BurntatoDeployment memory deployment
+    ) private {
         deployment.diamondCutFacet = address(new DiamondCutFacet());
-        deployment.diamond = address(new BurntatoDiamond(bootstrapAuthority, deployment.diamondCutFacet));
+        deployment.diamond = address(
+            new BurntatoDiamond{value: config.initialWinnerReserve}(bootstrapAuthority, deployment.diamondCutFacet)
+        );
         deployment.diamondLoupeFacet = address(new DiamondLoupeFacet());
         deployment.governanceFacet = address(new GovernanceFacet());
         deployment.marketFacet = address(new MarketFacet());
@@ -213,7 +219,13 @@ contract DeployBurntato is Script {
                 deployment.foundationInit,
                 abi.encodeCall(
                     FoundationInit.initialize,
-                    (config.protocol, config.treasuryRecipient, deployment.operatorRewardsRouter, config.potatoSeed)
+                    (
+                        config.protocol,
+                        config.treasuryRecipient,
+                        deployment.operatorRewardsRouter,
+                        config.potatoSeed,
+                        config.initialWinnerReserve
+                    )
                 )
             );
     }
@@ -307,6 +319,9 @@ contract DeployBurntato is Script {
             vm.envOr("BURNTATO_EMISSION_VESTING_DURATION", config.protocol.emissionVestingDuration);
         config.protocol.winnerBps =
             BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_WINNER_BPS", uint256(config.protocol.winnerBps)));
+        config.protocol.nextRoundWinnerBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_NEXT_ROUND_WINNER_BPS", uint256(config.protocol.nextRoundWinnerBps))
+        );
         config.protocol.recoveryBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_BPS", uint256(config.protocol.recoveryBps))
         );
@@ -324,6 +339,9 @@ contract DeployBurntato is Script {
         );
         config.protocol.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.protocol.recoveryTreasuryBps))
+        );
+        config.initialWinnerReserve = vm.envOr(
+            "BURNTATO_INITIAL_WINNER_RESERVE", BurntatoDeploymentConfig.defaultInitialWinnerReserve(config.protocol)
         );
         config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
         config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(
@@ -414,14 +432,14 @@ contract DeployBurntato is Script {
                 || protocol.minimumRoundTimeout == 0 || protocol.minimumRoundTimeout > protocol.roundTimeout
                 || protocol.roundTimeoutDecay > protocol.roundTimeout || protocol.emissionVestingDuration == 0
                 || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
-                || protocol.winnerBps > Constants.BPS || protocol.recoveryBps > Constants.BPS
-                || protocol.treasuryBps > Constants.BPS || protocol.buybackBps > Constants.BPS
-                || protocol.operatorPurchaseBps > Constants.BPS || protocol.recoveryBurnBps > Constants.BPS
-                || protocol.recoveryTreasuryBps > Constants.BPS || config.hookFeeBps > Constants.MAX_HOOK_FEE_BPS
-                || config.operatorRewardShareBps > Constants.BPS
+                || protocol.winnerBps > Constants.BPS || protocol.nextRoundWinnerBps > Constants.BPS
+                || protocol.recoveryBps > Constants.BPS || protocol.treasuryBps > Constants.BPS
+                || protocol.buybackBps > Constants.BPS || protocol.operatorPurchaseBps > Constants.BPS
+                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
+                || config.hookFeeBps > Constants.MAX_HOOK_FEE_BPS || config.operatorRewardShareBps > Constants.BPS
                 || config.buyback.callerRewardBps > Constants.MAX_BUYBACK_CALLER_REWARD_BPS
-                || uint256(protocol.winnerBps) + protocol.recoveryBps + protocol.treasuryBps + protocol.buybackBps
-                        + protocol.operatorPurchaseBps != Constants.BPS
+                || uint256(protocol.winnerBps) + protocol.nextRoundWinnerBps + protocol.recoveryBps
+                        + protocol.treasuryBps + protocol.buybackBps + protocol.operatorPurchaseBps != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower < TickMath.MIN_TICK || config.tickUpper >= TickMath.MAX_TICK

@@ -26,6 +26,7 @@ struct ProtocolConfig {
     uint16 emissionStepBps;
     uint256 emissionVestingDuration;
     uint16 winnerBps;
+    uint16 nextRoundWinnerBps;
     uint16 recoveryBps;
     uint16 treasuryBps;
     uint16 recoveryBurnBps;
@@ -44,6 +45,7 @@ struct RoundConfig {
     uint16 emissionStepBps;
     uint256 emissionVestingDuration;
     uint16 winnerBps;
+    uint16 nextRoundWinnerBps;
     uint16 recoveryBps;
     uint16 treasuryBps;
     uint16 recoveryBurnBps;

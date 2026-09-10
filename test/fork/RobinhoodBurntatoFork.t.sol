@@ -124,6 +124,7 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         RobinhoodDeploymentConfig.validate(dependencies);
         deployer = new DeployBurntato();
         config = deployer.localDefaults();
+        vm.deal(address(deployer), config.initialWinnerReserve);
 
         alice = vm.addr(ALICE_KEY);
         bob = vm.addr(BOB_KEY);

@@ -12,12 +12,12 @@ library LibConfig {
                 || config.minimumRoundTimeout == 0 || config.minimumRoundTimeout > config.roundTimeout
                 || config.roundTimeoutDecay > config.roundTimeout || config.emissionVestingDuration == 0
                 || config.priceIncreaseBps > Constants.BPS || config.emissionStepBps > Constants.BPS
-                || config.winnerBps > Constants.BPS || config.recoveryBps > Constants.BPS
-                || config.treasuryBps > Constants.BPS || config.buybackBps > Constants.BPS
-                || config.operatorPurchaseBps > Constants.BPS || config.recoveryBurnBps > Constants.BPS
-                || config.recoveryTreasuryBps > Constants.BPS
-                || uint256(config.winnerBps) + config.recoveryBps + config.treasuryBps + config.buybackBps
-                        + config.operatorPurchaseBps != Constants.BPS
+                || config.winnerBps > Constants.BPS || config.nextRoundWinnerBps > Constants.BPS
+                || config.recoveryBps > Constants.BPS || config.treasuryBps > Constants.BPS
+                || config.buybackBps > Constants.BPS || config.operatorPurchaseBps > Constants.BPS
+                || config.recoveryBurnBps > Constants.BPS || config.recoveryTreasuryBps > Constants.BPS
+                || uint256(config.winnerBps) + config.nextRoundWinnerBps + config.recoveryBps + config.treasuryBps
+                        + config.buybackBps + config.operatorPurchaseBps != Constants.BPS
                 || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
         ) revert Errors.InvalidProtocolConfig();
     }
@@ -30,6 +30,7 @@ library LibConfig {
         target.emissionStepBps = config.emissionStepBps;
         target.emissionVestingDuration = config.emissionVestingDuration;
         target.winnerBps = config.winnerBps;
+        target.nextRoundWinnerBps = config.nextRoundWinnerBps;
         target.recoveryBps = config.recoveryBps;
         target.treasuryBps = config.treasuryBps;
         target.buybackBps = config.buybackBps;

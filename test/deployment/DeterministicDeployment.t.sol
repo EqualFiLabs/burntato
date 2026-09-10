@@ -30,7 +30,7 @@ import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
 import {BurntatoOperatorRewardsRouter} from "../../src/rewards/BurntatoOperatorRewardsRouter.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 
 interface IPoolManagerAuthority {
@@ -73,6 +73,10 @@ contract DeploymentConfigHarness {
         if (operatorRewardShareBps > type(uint16).max) revert();
         return BurntatoDeploymentConfig.hookOperatorRewardsRouter(uint16(operatorRewardShareBps), router);
     }
+
+    function defaultInitialWinnerReserve(ProtocolConfig memory protocol) external pure returns (uint256) {
+        return BurntatoDeploymentConfig.defaultInitialWinnerReserve(protocol);
+    }
 }
 
 contract DeterministicDeploymentTest is Test {
@@ -85,6 +89,7 @@ contract DeterministicDeploymentTest is Test {
     function setUp() public {
         deployScript = new DeployBurntato();
         config = deployScript.localDefaults();
+        vm.deal(address(deployScript), config.initialWinnerReserve);
         deployment = deployScript.deploy(config, address(deployScript));
     }
 
@@ -95,6 +100,8 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(IGovernance(deployment.diamond).foundationConfigured());
         assertFalse(IGovernance(deployment.diamond).purchasesInitialized());
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
+        assertEq(IGame(deployment.diamond).winnerReserveEth(), config.initialWinnerReserve);
+        assertEq(deployment.diamond.balance, config.initialWinnerReserve);
     }
 
     function test_DefaultEmissionVestsAtFourMinutesAndMintsOnce() public {
@@ -106,6 +113,8 @@ contract DeterministicDeploymentTest is Test {
         vm.prank(buyer);
         game.buyPotato{value: config.protocol.startingPrice}();
         Round memory round = game.getRound(1);
+        assertEq(round.winnerPool, 0.0105 ether);
+        assertEq(game.winnerReserveEth(), 0.0002 ether);
         assertEq(round.config.emissionVestingDuration, 4 minutes);
         assertEq(round.holderMaxReward, 10_000 ether);
 
@@ -287,12 +296,14 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.rewardAllocator, deployer);
         assertEq(testnet.protocol.emissionVestingDuration, 4 minutes);
         assertEq(testnet.protocol.winnerBps, 2_500);
+        assertEq(testnet.protocol.nextRoundWinnerBps, 200);
         assertEq(testnet.protocol.recoveryBps, 3_000);
-        assertEq(testnet.protocol.treasuryBps, 2_000);
+        assertEq(testnet.protocol.treasuryBps, 1_800);
         assertEq(testnet.protocol.buybackBps, 1_000);
         assertEq(testnet.protocol.operatorPurchaseBps, 1_500);
         assertEq(testnet.hookFeeBps, 100);
         assertEq(testnet.operatorRewardShareBps, 4_000);
+        assertEq(testnet.initialWinnerReserve, 0.008 ether);
         assertEq(testnet.initialTick, 170_280);
         assertEq(testnet.tickUpper, 170_280);
         assertEq(testnet.potatoSeed, 100_000_000 ether);
@@ -314,6 +325,7 @@ contract DeterministicDeploymentTest is Test {
         _selectRobinhoodTestnetFork();
         DeployBurntatoRobinhoodTestnet testnetScript = new DeployBurntatoRobinhoodTestnet();
         GenesisConfig memory testnetConfig = testnetScript.testnetConfig(address(testnetScript));
+        vm.deal(address(testnetScript), testnetConfig.initialWinnerReserve);
         CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
 
@@ -336,6 +348,7 @@ contract DeterministicDeploymentTest is Test {
         address poolManagerOwnerBefore = IPoolManagerAuthority(dependencies.poolManager).owner();
 
         GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
+        vm.deal(address(canonicalDeployScript), canonicalConfig.initialWinnerReserve);
         BurntatoDeployment memory canonicalDeployment =
             canonicalDeployScript.deployWithDependencies(canonicalConfig, address(canonicalDeployScript), dependencies);
         assertEq(IPoolManagerAuthority(dependencies.poolManager).owner(), poolManagerOwnerBefore);
@@ -366,6 +379,7 @@ contract DeterministicDeploymentTest is Test {
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
         GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
         canonicalConfig.operatorRewardShareBps = 4_000;
+        vm.deal(address(canonicalDeployScript), canonicalConfig.initialWinnerReserve);
 
         BurntatoDeployment memory canonicalDeployment = canonicalDeployScript.deployWithDependencies(
             canonicalConfig, address(canonicalDeployScript), dependencies, operatorDependencies
@@ -420,6 +434,7 @@ contract DeterministicDeploymentTest is Test {
         GenesisConfig memory maximumConfig = config;
         maximumConfig.hookFeeBps = 200;
         maximumConfig.buyback.callerRewardBps = 100;
+        vm.deal(address(deployScript), maximumConfig.initialWinnerReserve);
 
         BurntatoDeployment memory maximumDeployment = deployScript.deploy(maximumConfig, address(deployScript));
 
@@ -441,6 +456,7 @@ contract DeterministicDeploymentTest is Test {
     function test_DeploymentAcceptsIndependentFinalAdmin() public {
         GenesisConfig memory independentAdminConfig = config;
         independentAdminConfig.finalAdmin = makeAddr("independent-final-admin");
+        vm.deal(address(deployScript), independentAdminConfig.initialWinnerReserve);
 
         BurntatoDeployment memory independentAdminDeployment =
             deployScript.deploy(independentAdminConfig, address(deployScript));
@@ -545,6 +561,16 @@ contract DeterministicDeploymentTest is Test {
         harness.checkedInt24(int256(type(int24).min) - 1);
     }
 
+    function test_DefaultWinnerReserveTargetsFivePercentFirstGrabMargin() public {
+        DeploymentConfigHarness harness = new DeploymentConfigHarness();
+        ProtocolConfig memory protocol = config.protocol;
+        assertEq(harness.defaultInitialWinnerReserve(protocol), 0.008 ether);
+
+        protocol.startingPrice = 0.003 ether;
+        protocol.winnerBps = 3_500;
+        assertEq(harness.defaultInitialWinnerReserve(protocol), 0.0021 ether);
+    }
+
     function test_HookRouterConfigurationSupportsEveryRevenueCombination() public {
         DeploymentConfigHarness harness = new DeploymentConfigHarness();
         address router = makeAddr("operator-router");
@@ -603,6 +629,7 @@ contract DeterministicDeploymentTest is Test {
     function test_LocalDependenciesLaunchLockedSingleSidedMarket() public {
         GenesisConfig memory launchConfig = config;
         launchConfig.potatoSeed = 1 ether;
+        vm.deal(address(deployScript), launchConfig.initialWinnerReserve);
         BurntatoDeployment memory launchDeployment = deployScript.deploy(launchConfig, address(deployScript));
         IGame game = IGame(launchDeployment.diamond);
         IRecovery recovery = IRecovery(launchDeployment.diamond);
