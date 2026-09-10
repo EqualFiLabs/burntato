@@ -40,7 +40,6 @@ import {Constants} from "../src/shared/Constants.sol";
 import {LibMarketMath} from "../src/libraries/LibMarketMath.sol";
 import {
     BurntatoDeployment,
-    BurntatoOwnedCodeHashes,
     CanonicalV4Dependencies,
     GenesisConfig,
     StaticsOperatorDependencies
@@ -98,6 +97,23 @@ contract DeployBurntato is Script {
         _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
 
+    function deployWithLocalReplicaDependencies(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        CanonicalV4Dependencies memory dependencies,
+        StaticsOperatorDependencies memory operatorDependencies
+    ) public returns (BurntatoDeployment memory deployment) {
+        _validateConfig(config, bootstrapAuthority);
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
+            revert InvalidGenesisConfiguration();
+        }
+        RobinhoodDeploymentConfig.validate(dependencies);
+        StaticsOperatorDeploymentConfig.validateLocalReplica(operatorDependencies);
+        _populateCanonicalDependencies(dependencies, deployment);
+        deployment.admin = config.finalAdmin;
+        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
+    }
+
     function deployWithDependencies(
         GenesisConfig memory config,
         address bootstrapAuthority,
@@ -126,7 +142,6 @@ contract DeployBurntato is Script {
         _initializeDiamond(config, deployment);
         _deployHook(config, deployment);
         _configureProtocol(config, deployment);
-        _recordOwnedCodeHashes(deployment);
     }
 
     function _deployOperatorRewards(
@@ -245,42 +260,19 @@ contract DeployBurntato is Script {
         IMarket(deployment.diamond)
             .configureMarket(
                 IMarket.MarketConfig({
-                hook: deployment.hook,
-                poolManager: deployment.poolManager,
-                positionManager: deployment.positionManager,
-                permit2: deployment.permit2,
-                sqrtPriceX96: TickMath.getSqrtPriceAtTick(config.initialTick),
-                tickLower: config.tickLower,
-                tickUpper: config.tickUpper,
-                tickSpacing: config.tickSpacing,
-                potatoSeed: config.potatoSeed
-            })
+                    hook: deployment.hook,
+                    poolManager: deployment.poolManager,
+                    positionManager: deployment.positionManager,
+                    permit2: deployment.permit2,
+                    sqrtPriceX96: TickMath.getSqrtPriceAtTick(config.initialTick),
+                    tickLower: config.tickLower,
+                    tickUpper: config.tickUpper,
+                    tickSpacing: config.tickSpacing,
+                    potatoSeed: config.potatoSeed
+                })
             );
         ITreasuryRewards(deployment.diamond).setRewardAllocator(config.rewardAllocator);
         IGovernance(deployment.diamond).setAuthority(config.finalAdmin);
-    }
-
-    function _recordOwnedCodeHashes(BurntatoDeployment memory deployment) private view {
-        deployment.codeHashes = BurntatoOwnedCodeHashes({
-            diamond: deployment.diamond.codehash,
-            diamondCutFacet: deployment.diamondCutFacet.codehash,
-            diamondLoupeFacet: deployment.diamondLoupeFacet.codehash,
-            governanceFacet: deployment.governanceFacet.codehash,
-            marketFacet: deployment.marketFacet.codehash,
-            buybackFacet: deployment.buybackFacet.codehash,
-            potatoTokenFacet: deployment.potatoTokenFacet.codehash,
-            gameFacet: deployment.gameFacet.codehash,
-            recoveryFacet: deployment.recoveryFacet.codehash,
-            settlementFacet: deployment.settlementFacet.codehash,
-            claimsFacet: deployment.claimsFacet.codehash,
-            treasuryRewardsFacet: deployment.treasuryRewardsFacet.codehash,
-            foundationInit: deployment.foundationInit.codehash,
-            hookDeployer: deployment.hookDeployer.codehash,
-            hook: deployment.hook.codehash,
-            operatorRewardsRouter: deployment.operatorRewardsRouter == address(0)
-                ? bytes32(0)
-                : deployment.operatorRewardsRouter.codehash
-        });
     }
 
     function localDefaults() external pure returns (GenesisConfig memory config) {

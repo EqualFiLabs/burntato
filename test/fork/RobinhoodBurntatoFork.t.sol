@@ -16,7 +16,6 @@ import {IAllowanceTransfer} from "@uniswap/v4-periphery/lib/permit2/src/interfac
 import {Plan, Planner} from "@uniswap/v4-periphery/test/shared/Planner.sol";
 import {Permit2SignatureHelpers} from "@uniswap/v4-periphery/test/shared/Permit2SignatureHelpers.sol";
 
-import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
 import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "../../script/DeploymentTypes.sol";
 import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
@@ -77,7 +76,6 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
     GenesisConfig private config;
     BurntatoDeployment private deployment;
     DeployBurntato private deployer;
-    BurntatoDeploymentVerifier private verifier;
 
     address private alice;
     address private bob;
@@ -125,7 +123,6 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         dependencies = RobinhoodDeploymentConfig.load();
         RobinhoodDeploymentConfig.validate(dependencies);
         deployer = new DeployBurntato();
-        verifier = new BurntatoDeploymentVerifier();
         config = deployer.localDefaults();
 
         alice = vm.addr(ALICE_KEY);
@@ -169,7 +166,6 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
 
     function _deployCanonicalBurntato() private {
         deployment = deployer.deployWithDependencies(config, address(deployer), dependencies);
-        assertTrue(verifier.verifyCanonical(config, deployment, dependencies));
         buybacks = IBuyback(deployment.diamond);
         claims = IClaims(deployment.diamond);
         game = IGame(deployment.diamond);

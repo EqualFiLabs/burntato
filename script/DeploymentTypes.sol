@@ -54,25 +54,6 @@ struct CanonicalV4Dependencies {
     bytes32 wethCodeHash;
 }
 
-struct BurntatoOwnedCodeHashes {
-    bytes32 diamond;
-    bytes32 diamondCutFacet;
-    bytes32 diamondLoupeFacet;
-    bytes32 governanceFacet;
-    bytes32 marketFacet;
-    bytes32 buybackFacet;
-    bytes32 potatoTokenFacet;
-    bytes32 gameFacet;
-    bytes32 recoveryFacet;
-    bytes32 settlementFacet;
-    bytes32 claimsFacet;
-    bytes32 treasuryRewardsFacet;
-    bytes32 foundationInit;
-    bytes32 hookDeployer;
-    bytes32 hook;
-    bytes32 operatorRewardsRouter;
-}
-
 struct BurntatoDeployment {
     address diamond;
     address diamondCutFacet;
@@ -100,5 +81,4 @@ struct BurntatoDeployment {
     address stateView;
     address reservesLens;
     address universalRouter;
-    BurntatoOwnedCodeHashes codeHashes;
 }
