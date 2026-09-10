@@ -3,16 +3,17 @@ set -euo pipefail
 
 readonly CHAIN_ID=46630
 readonly ARTIFACT=artifacts/robinhood-testnet/deployment.json
+readonly DEFAULT_VERIFIER_URL=https://explorer.testnet.chain.robinhood.com/api/
 
 usage() {
-  echo "usage: ROBINHOOD_TESTNET_RPC_URL=... $0 --deploy|--verify|--launch|--initialize|--enable|--check" >&2
-  echo "all modes except --verify and --check also require PRIVATE_KEY" >&2
+  echo "usage: ROBINHOOD_TESTNET_RPC_URL=... $0 --deploy|--verify|--inspect|--launch|--initialize|--enable|--check" >&2
+  echo "deploy and state-changing modes require PRIVATE_KEY" >&2
 }
 
 [[ $# -eq 1 ]] || { usage; exit 2; }
 mode=$1
 case "$mode" in
-  --deploy|--verify|--launch|--initialize|--enable|--check) ;;
+  --deploy|--verify|--inspect|--launch|--initialize|--enable|--check) ;;
   *) usage; exit 2 ;;
 esac
 
@@ -39,8 +40,14 @@ jq -e --argjson chainId "$CHAIN_ID" '.chainId == $chainId and .diamond != null a
   >/dev/null
 
 if [[ "$mode" == "--verify" ]]; then
-  forge script script/VerifyBurntatoRobinhoodTestnet.s.sol:VerifyBurntatoRobinhoodTestnet \
-    --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" -vv
+  forge script script/DeployBurntatoRobinhoodTestnet.s.sol:DeployBurntatoRobinhoodTestnet \
+    --rpc-url "$rpc_url" --chain-id "$CHAIN_ID" --resume --verify --verify-external \
+    --verifier blockscout --verifier-url "${BLOCKSCOUT_API_URL:-$DEFAULT_VERIFIER_URL}" -vv
+  exit 0
+fi
+
+if [[ "$mode" == "--inspect" ]]; then
+  RPC_URL="$rpc_url" scripts/check-deployment.sh "$ARTIFACT"
   exit 0
 fi
 

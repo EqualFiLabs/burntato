@@ -6,15 +6,12 @@ import {Test} from "forge-std/Test.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
-import {BurntatoDeploymentVerifier} from "../../script/BurntatoDeploymentVerifier.sol";
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
 import {DeployBurntatoLocalFork} from "../../script/DeployBurntatoLocalFork.s.sol";
 import {DeployBurntatoRobinhoodTestnet} from "../../script/DeployBurntatoRobinhoodTestnet.s.sol";
 import {FinalizeBurntatoRobinhoodTestnet} from "../../script/FinalizeBurntatoRobinhoodTestnet.s.sol";
 import {BurntatoHookDeployer} from "../../script/helpers/BurntatoHookDeployer.sol";
 import {BurntatoDeploymentConfig} from "../../script/libraries/BurntatoDeploymentConfig.sol";
-import {BurntatoGenesisCodec} from "../../script/libraries/BurntatoGenesisCodec.sol";
-import {BurntatoSourceCodeHashes} from "../../script/libraries/BurntatoSourceCodeHashes.sol";
 import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "../../script/libraries/StaticsOperatorDeploymentConfig.sol";
 import {
@@ -32,11 +29,9 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
-import {GameFacet} from "../../src/facets/GameFacet.sol";
 import {BurntatoOperatorRewardsRouter} from "../../src/rewards/BurntatoOperatorRewardsRouter.sol";
-import {FacetCut, FacetCutAction, Round} from "../../src/shared/Types.sol";
+import {Round} from "../../src/shared/Types.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
 
 interface IPoolManagerAuthority {
     function owner() external view returns (address);
@@ -61,15 +56,10 @@ contract DeploymentConfigHarness {
         if (operatorRewardShareBps > type(uint16).max) revert();
         return BurntatoDeploymentConfig.hookOperatorRewardsRouter(uint16(operatorRewardShareBps), router);
     }
-
-    function roundTripGenesisConfig(GenesisConfig memory config) external pure returns (GenesisConfig memory) {
-        return BurntatoGenesisCodec.decode(BurntatoGenesisCodec.encode(config));
-    }
 }
 
 contract DeterministicDeploymentTest is Test {
     DeployBurntato internal deployScript;
-    BurntatoDeploymentVerifier internal verifier;
     GenesisConfig internal config;
     BurntatoDeployment internal deployment;
 
@@ -77,13 +67,11 @@ contract DeterministicDeploymentTest is Test {
 
     function setUp() public {
         deployScript = new DeployBurntato();
-        verifier = new BurntatoDeploymentVerifier();
         config = deployScript.localDefaults();
         deployment = deployScript.deploy(config, address(deployScript));
     }
 
-    function test_VerifierConfirmsCompleteGenesisDeployment() public view {
-        assertTrue(verifier.verify(config, deployment));
+    function test_DeploymentConfiguresCompleteGenesisState() public view {
         assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), config.finalAdmin);
         assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), config.finalAdmin);
         assertEq(deployment.admin, config.finalAdmin);
@@ -174,16 +162,6 @@ contract DeterministicDeploymentTest is Test {
         assertEq(loupe.facetAddress(bytes4(keccak256("purchasesPaused()"))), address(0));
         assertEq(loupe.facetAddress(bytes4(keccak256("commitmentsPaused()"))), address(0));
         assertEq(loupe.facetAddress(bytes4(keccak256("setPauseState(bool,bool)"))), address(0));
-    }
-
-    function test_GenericVerifierRejectsOperatorRewardsWithoutCanonicalDependencies() public {
-        config.operatorRewardShareBps = 1;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("OPERATOR_CANONICAL_REQUIRED")
-            )
-        );
-        verifier.verify(config, deployment);
     }
 
     function test_BuyPotatoBlockedUntilFinalAdminInitializesOnce() public {
@@ -325,10 +303,6 @@ contract DeterministicDeploymentTest is Test {
         BurntatoDeployment memory testnetDeployment = testnetScript.deployWithDependencies(
             testnetConfig, address(testnetScript), dependencies, operatorDependencies
         );
-        assertTrue(
-            (new BurntatoDeploymentVerifier())
-            .verifyCanonical(testnetConfig, testnetDeployment, dependencies, operatorDependencies)
-        );
         (bytes32 poolId, uint128 liquidity) = IMarket(testnetDeployment.diamond).launchMarket();
         (bytes32 actualPoolId,, bool launching, bool launched) = IMarket(testnetDeployment.diamond).marketState();
 
@@ -338,17 +312,15 @@ contract DeterministicDeploymentTest is Test {
         assertTrue(launched);
     }
 
-    function test_CanonicalDependenciesDeployOnlyOwnedContractsAndVerify() public {
+    function test_CanonicalDependenciesDeployOnlyOwnedContracts() public {
         _selectRobinhoodFork();
         DeployBurntato canonicalDeployScript = new DeployBurntato();
-        BurntatoDeploymentVerifier canonicalVerifier = new BurntatoDeploymentVerifier();
         CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
         address poolManagerOwnerBefore = IPoolManagerAuthority(dependencies.poolManager).owner();
 
         GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
         BurntatoDeployment memory canonicalDeployment =
             canonicalDeployScript.deployWithDependencies(canonicalConfig, address(canonicalDeployScript), dependencies);
-        assertTrue(canonicalVerifier.verifyCanonical(canonicalConfig, canonicalDeployment, dependencies));
         assertEq(IPoolManagerAuthority(dependencies.poolManager).owner(), poolManagerOwnerBefore);
         assertEq(canonicalDeployment.poolManager, dependencies.poolManager);
         assertEq(canonicalDeployment.positionManager, dependencies.positionManager);
@@ -370,10 +342,9 @@ contract DeterministicDeploymentTest is Test {
         assertEq(vm.getNonce(address(canonicalDeployScript)), deployScriptNonceBefore);
     }
 
-    function test_CanonicalOperatorDependenciesDeployRouterAndVerify() public {
+    function test_CanonicalOperatorDependenciesDeployRouter() public {
         _selectStaticsFork();
         DeployBurntato canonicalDeployScript = new DeployBurntato();
-        BurntatoDeploymentVerifier canonicalVerifier = new BurntatoDeploymentVerifier();
         CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
         GenesisConfig memory canonicalConfig = canonicalDeployScript.localDefaults();
@@ -381,9 +352,6 @@ contract DeterministicDeploymentTest is Test {
 
         BurntatoDeployment memory canonicalDeployment = canonicalDeployScript.deployWithDependencies(
             canonicalConfig, address(canonicalDeployScript), dependencies, operatorDependencies
-        );
-        assertTrue(
-            canonicalVerifier.verifyCanonical(canonicalConfig, canonicalDeployment, dependencies, operatorDependencies)
         );
         BurntatoOperatorRewardsRouter router =
             BurntatoOperatorRewardsRouter(payable(canonicalDeployment.operatorRewardsRouter));
@@ -420,7 +388,6 @@ contract DeterministicDeploymentTest is Test {
 
         BurntatoDeployment memory maximumDeployment = deployScript.deploy(maximumConfig, address(deployScript));
 
-        assertTrue(verifier.verify(maximumConfig, maximumDeployment));
         assertEq(BurntatoSwapFeeHook(payable(maximumDeployment.hook)).feeBps(), 200);
     }
 
@@ -543,20 +510,6 @@ contract DeterministicDeploymentTest is Test {
         harness.checkedInt24(int256(type(int24).min) - 1);
     }
 
-    function test_LocalArtifactGenesisConfigRoundTripsExactOverrides() public {
-        DeploymentConfigHarness harness = new DeploymentConfigHarness();
-        GenesisConfig memory overridden = config;
-        overridden.finalAdmin = makeAddr("artifact-final-admin");
-        overridden.protocol.startingPrice += 7;
-        overridden.protocol.treasuryBps -= 15;
-        overridden.protocol.operatorPurchaseBps += 15;
-        overridden.operatorRewardShareBps = 4_321;
-        overridden.potatoSeed += 99;
-
-        GenesisConfig memory decoded = harness.roundTripGenesisConfig(overridden);
-        assertEq(keccak256(abi.encode(decoded)), keccak256(abi.encode(overridden)));
-    }
-
     function test_HookRouterConfigurationSupportsEveryRevenueCombination() public {
         DeploymentConfigHarness harness = new DeploymentConfigHarness();
         address router = makeAddr("operator-router");
@@ -564,198 +517,6 @@ contract DeterministicDeploymentTest is Test {
         assertEq(harness.hookOperatorRewardsRouter(0, address(0)), address(0));
         assertEq(harness.hookOperatorRewardsRouter(0, router), address(0));
         assertEq(harness.hookOperatorRewardsRouter(4_000, router), router);
-    }
-
-    function test_VerifierRejectsProtocolConfigurationMismatch() public {
-        GenesisConfig memory mismatched = config;
-        mismatched.protocol.startingPrice += 1;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("STARTING_PRICE"))
-        );
-        verifier.verify(mismatched, deployment);
-    }
-
-    function test_VerifierRejectsMissingFoundationConfigurationFlag() public {
-        vm.store(deployment.diamond, keccak256("burntato.storage.initialization.v1"), bytes32(0));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("FOUNDATION_CONFIGURED")
-            )
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsPausedProtocol() public {
-        vm.prank(config.finalAdmin);
-        IGovernance(deployment.diamond).setPaused(true);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("PROTOCOL_UNPAUSED"))
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsCorruptedTokenMarketBindings() public {
-        bytes32 tokenSlot = keccak256("burntato.storage.token.v1");
-        vm.store(deployment.diamond, tokenSlot, bytes32(0));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("TOKEN_CANONICAL_HOOK")
-            )
-        );
-        verifier.verify(config, deployment);
-
-        vm.store(deployment.diamond, tokenSlot, bytes32(uint256(uint160(deployment.hook))));
-        vm.store(deployment.diamond, bytes32(uint256(tokenSlot) + 1), bytes32(0));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("TOKEN_POOL_MANAGER")
-            )
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsUnlaunchableSeedDomain() public {
-        GenesisConfig memory unsafeConfig = config;
-        unsafeConfig.potatoSeed = uint256(type(uint128).max) + 1;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("LAUNCH_LIQUIDITY_DOMAIN")
-            )
-        );
-        verifier.verify(unsafeConfig, deployment);
-    }
-
-    function test_SourceCodeHashManifestMatchesBuildArtifacts() public view {
-        _assertSourceHash("src/BurntatoDiamond.sol:BurntatoDiamond", BurntatoSourceCodeHashes.DIAMOND);
-        _assertSourceHash("src/facets/DiamondCutFacet.sol:DiamondCutFacet", BurntatoSourceCodeHashes.DIAMOND_CUT_FACET);
-        _assertSourceHash(
-            "src/facets/DiamondLoupeFacet.sol:DiamondLoupeFacet", BurntatoSourceCodeHashes.DIAMOND_LOUPE_FACET
-        );
-        _assertSourceHash("src/facets/GovernanceFacet.sol:GovernanceFacet", BurntatoSourceCodeHashes.GOVERNANCE_FACET);
-        _assertSourceHash("src/facets/MarketFacet.sol:MarketFacet", BurntatoSourceCodeHashes.MARKET_FACET);
-        _assertSourceHash("src/facets/BuybackFacet.sol:BuybackFacet", BurntatoSourceCodeHashes.BUYBACK_FACET);
-        _assertSourceHash(
-            "src/facets/PotatoTokenFacet.sol:PotatoTokenFacet", BurntatoSourceCodeHashes.POTATO_TOKEN_FACET
-        );
-        _assertSourceHash("src/facets/GameFacet.sol:GameFacet", BurntatoSourceCodeHashes.GAME_FACET);
-        _assertSourceHash("src/facets/RecoveryFacet.sol:RecoveryFacet", BurntatoSourceCodeHashes.RECOVERY_FACET);
-        _assertSourceHash("src/facets/SettlementFacet.sol:SettlementFacet", BurntatoSourceCodeHashes.SETTLEMENT_FACET);
-        _assertSourceHash("src/facets/ClaimsFacet.sol:ClaimsFacet", BurntatoSourceCodeHashes.CLAIMS_FACET);
-        _assertSourceHash(
-            "src/facets/TreasuryRewardsFacet.sol:TreasuryRewardsFacet", BurntatoSourceCodeHashes.TREASURY_REWARDS_FACET
-        );
-        _assertSourceHash(
-            "src/initializers/FoundationInit.sol:FoundationInit", BurntatoSourceCodeHashes.FOUNDATION_INIT
-        );
-        _assertSourceHash(
-            "script/helpers/BurntatoHookDeployer.sol:BurntatoHookDeployer",
-            BurntatoSourceCodeHashes.HOOK_DEPLOYER_NORMALIZED
-        );
-        _assertSourceHash(
-            "src/hooks/BurntatoSwapFeeHook.sol:BurntatoSwapFeeHook", BurntatoSourceCodeHashes.HOOK_NORMALIZED
-        );
-        _assertSourceHash(
-            "src/rewards/BurntatoOperatorRewardsRouter.sol:BurntatoOperatorRewardsRouter",
-            BurntatoSourceCodeHashes.OPERATOR_ROUTER_NORMALIZED
-        );
-    }
-
-    function test_VerifiersMeetEvmCodeSizeLimits() public view {
-        string[3] memory artifacts = [
-            "script/BurntatoDeploymentVerifier.sol:BurntatoDeploymentVerifier",
-            "script/BurntatoStructureVerifier.sol:BurntatoStructureVerifier",
-            "script/BurntatoMarketVerifier.sol:BurntatoMarketVerifier"
-        ];
-        for (uint256 i; i < artifacts.length; ++i) {
-            assertLe(vm.getDeployedCode(artifacts[i]).length, 24_576, artifacts[i]);
-            assertLe(vm.getCode(artifacts[i]).length, 49_152, artifacts[i]);
-        }
-    }
-
-    function test_VerifierRejectsRuntimeCodeMutation() public {
-        vm.etch(deployment.governanceFacet, hex"00");
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("GOVERNANCE_FACET_CODE_HASH")
-            )
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsSelfReportedHookCodeMutation() public {
-        bytes memory runtime = deployment.hook.code;
-        runtime[runtime.length - 1] = bytes1(uint8(runtime[runtime.length - 1]) ^ 1);
-        vm.etch(deployment.hook, runtime);
-        deployment.codeHashes.hook = deployment.hook.codehash;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("HOOK_CODE_HASH"))
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsCodeLessSelfReportedHookDeployer() public {
-        address codeLess = makeAddr("code-less-hook-deployer");
-        vm.deal(codeLess, 1 ether);
-        deployment.hookDeployer = codeLess;
-        deployment.codeHashes.hookDeployer = codeLess.codehash;
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("HOOK_DEPLOYER_CODE_HASH")
-            )
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsExpectedCodeHashMutation() public {
-        deployment.codeHashes.gameFacet = bytes32(uint256(deployment.codeHashes.gameFacet) ^ 1);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("GAME_FACET_CODE_HASH")
-            )
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsSelectorRoutingMutation() public {
-        FacetCut[] memory cuts = new FacetCut[](1);
-        cuts[0] = FacetCut({
-            facetAddress: address(new GameFacet()),
-            action: FacetCutAction.Replace,
-            functionSelectors: BurntatoSelectors.game()
-        });
-        vm.prank(config.finalAdmin);
-        IDiamondCut(deployment.diamond).diamondCut(cuts, address(0), "");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("SELECTOR_ROUTING"))
-        );
-        verifier.verify(config, deployment);
-    }
-
-    function test_VerifierRejectsDiminishingTimeoutMismatch() public {
-        GenesisConfig memory mismatched = config;
-        mismatched.protocol.roundTimeoutDecay += 1;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("ROUND_TIMEOUT_DECAY")
-            )
-        );
-        verifier.verify(mismatched, deployment);
-
-        mismatched = config;
-        mismatched.protocol.minimumRoundTimeout += 1;
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                BurntatoDeploymentVerifier.VerificationFailed.selector, bytes32("MINIMUM_ROUND_TIMEOUT")
-            )
-        );
-        verifier.verify(mismatched, deployment);
     }
 
     function test_GenesisPurchaseSnapshotsFixedEmissionBudget() public {
@@ -840,9 +601,5 @@ contract DeterministicDeploymentTest is Test {
     function _initializePurchases(BurntatoDeployment memory target, address finalAdmin) private {
         vm.prank(finalAdmin);
         IGovernance(target.diamond).initializePurchases();
-    }
-
-    function _assertSourceHash(string memory artifact, bytes32 expected) private view {
-        assertEq(keccak256(vm.getDeployedCode(artifact)), expected, artifact);
     }
 }

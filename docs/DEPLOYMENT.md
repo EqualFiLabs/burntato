@@ -118,8 +118,8 @@ BURNTATO_POTATO_SEED
 Numeric values use base units. Narrow BPS and tick inputs are range-checked
 before conversion. Tick spacing must be inside the PoolManager domain; bounds
 must be aligned to spacing, and the initial tick must equal the upper bound so
-the locked genesis position starts entirely in POTATO. Deployment and
-verification both reject a hook fee above 200 BPS or buyback caller reward above
+the locked genesis position starts entirely in POTATO. Deployment rejects a
+hook fee above 200 BPS or buyback caller reward above
 100 BPS. `BURNTATO_OPERATOR_REWARD_SHARE_BPS` remains independently configurable
 through 10,000 BPS because it divides the already-capped hook fee rather than
 increasing the fee charged to traders.
@@ -137,40 +137,9 @@ forge script script/DeployBurntato.s.sol:DeployBurntato \
   --rpc-url http://127.0.0.1:8545 --broadcast
 ```
 
-Set the emitted addresses before verification:
-
-```text
-BURNTATO_DIAMOND
-BURNTATO_ADMIN
-BURNTATO_DIAMOND_CUT_FACET
-BURNTATO_DIAMOND_LOUPE_FACET
-BURNTATO_GOVERNANCE_FACET
-BURNTATO_MARKET_FACET
-BURNTATO_BUYBACK_FACET
-BURNTATO_POTATO_TOKEN_FACET
-BURNTATO_GAME_FACET
-BURNTATO_RECOVERY_FACET
-BURNTATO_SETTLEMENT_FACET
-BURNTATO_CLAIMS_FACET
-BURNTATO_TREASURY_REWARDS_FACET
-BURNTATO_FOUNDATION_INIT
-BURNTATO_HOOK_DEPLOYER
-BURNTATO_POOL_MANAGER
-BURNTATO_POSITION_MANAGER
-BURNTATO_PERMIT2
-BURNTATO_HOOK
-BURNTATO_OPERATOR_REWARDS_ROUTER
-BURNTATO_HOOK_DEPLOYER_CODE_HASH
-BURNTATO_HOOK_CODE_HASH
-BURNTATO_OPERATOR_REWARDS_ROUTER_CODE_HASH
-```
-
-Then run:
+After inspecting the deployment, initialize purchases:
 
 ```bash
-forge script script/VerifyBurntato.s.sol:VerifyBurntato \
-  --rpc-url http://127.0.0.1:8545
-
 forge script script/InitializeBurntato.s.sol:InitializeBurntato \
   --rpc-url http://127.0.0.1:8545 --broadcast
 ```
@@ -215,17 +184,15 @@ BURNTATO_OPERATOR_REWARD_SHARE_BPS="<required-bps>" \
 forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
   --sig 'runLocalFork()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
 
-forge script script/VerifyBurntatoLocalFork.s.sol:VerifyBurntatoLocalFork \
-  --rpc-url http://127.0.0.1:8545 -vv
+RPC_URL=http://127.0.0.1:8545 \
+scripts/check-deployment.sh artifacts/robinhood-local/deployment.json
 ```
 
 The public-only frontend handoff is
 `artifacts/robinhood-local/deployment.json`. It contains the fork identity,
-the exact ABI-encoded genesis configuration used for repeatable verification,
 Diamond, final admin, hook, Operator router/share, Statics dependencies, facets,
-initializer, owned runtime hashes, and canonical dependency addresses. It never
-contains the RPC URL or private key. Verification reads the persisted genesis
-configuration, so one-shot shell overrides do not need to be re-exported.
+initializer, launch configuration, and canonical dependency addresses. It never
+contains the RPC URL or private key.
 
 Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
 instead. Run archive-RPC qualification locally; it is intentionally excluded
@@ -259,7 +226,7 @@ revenue is split 25% Winner, 30% Recovery, 20% Treasury, 10% buyback, and 15%
 Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent to the
 same Operator rewards router (0.4% of swap volume) and 60% sent to Treasury.
 
-Use the phased wrapper so deployment verification occurs before purchase
+Use the phased wrapper so deployment inspection occurs before purchase
 initialization. The final admin calls each post-deployment action directly:
 
 ```bash
@@ -267,6 +234,7 @@ export ROBINHOOD_TESTNET_RPC_URL="$ROBINHOOD_TESTNET"
 export PRIVATE_KEY="$PRIVATE_KEY"
 
 scripts/deploy-robinhood-testnet.sh --deploy
+scripts/deploy-robinhood-testnet.sh --inspect
 scripts/deploy-robinhood-testnet.sh --verify
 scripts/deploy-robinhood-testnet.sh --launch
 scripts/deploy-robinhood-testnet.sh --initialize
@@ -279,25 +247,20 @@ machine-readable handoff. It contains only public addresses and launch
 configuration; deployment transaction hashes and final live readback belong in
 the checked-in testnet deployment record.
 
-## Verification checks
+## Post-deployment inspection
 
-The verifier checks independently supplied owned-contract addresses and runtime
-hashes, exact selector routing, complete protocol configuration including the
-diminishing timeout domain, final-admin authority, guardian and unpaused global
-pause state,
-final-admin-owned hook, hook token/fee/tick configuration, exact uninitialized
-PoolKey, PositionManager dependencies, the configured genesis POTATO supply and
-Diamond reservation, disabled purchase activation, empty initial round state,
-disabled external buys, the
-exact Operator router/share and immutable Statics bindings, the initial
-Treasury distributor, independently configured reward allocator with zero
-reward escrow, and zeroed buyback state with the configured execution defaults.
-Self-contained verification additionally requires `finalAdmin` to own its
-newly deployed PoolManager. Robinhood verification instead pins the
-external canonical PoolManager and its dependency bindings without asserting
-Burntato ownership.
+`scripts/check-deployment.sh` performs read-only `cast` calls and emits compact
+`PASS` or `FAIL` lines. It checks receipt status when `BROADCAST_FILE` is set,
+deployed code presence, chain ID, governance roles, pause and foundation state,
+market readiness, Treasury and reward roles, hook configuration, PositionManager
+bindings, and Statics Operator bindings. It does not compare runtime code hashes
+or deploy helper contracts. Set `RPC_URL` and pass the deployment JSON path.
 
-After deployment verification, operations should execute the one-shot purchase
+The testnet wrapper's `--verify` mode uses Foundry's standard Blockscout source
+verification flow. Override `BLOCKSCOUT_API_URL` only when the explorer changes
+its API endpoint.
+
+After deployment inspection, operations should execute the one-shot purchase
 initializer from `finalAdmin`, then separately exercise an admin call to the
 Diamond and a hook fee update. A PoolManager owner function belongs only in the
 self-contained qualification path; Robinhood deployments must validate the

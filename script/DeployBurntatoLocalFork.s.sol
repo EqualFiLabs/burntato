@@ -10,7 +10,6 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
-import {BurntatoGenesisCodec} from "./libraries/BurntatoGenesisCodec.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
@@ -89,12 +88,15 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         vm.serializeUint(object, "schemaVersion", 2);
         vm.serializeUint(object, "chainId", dependencies.chainId);
         vm.serializeUint(object, "forkBlock", operatorDependencies.finalizedBlock);
-        vm.serializeBytes(object, "genesisConfig", BurntatoGenesisCodec.encode(config));
         vm.serializeAddress(object, "diamond", deployment.diamond);
         vm.serializeAddress(object, "admin", deployment.admin);
+        vm.serializeAddress(object, "guardian", config.guardian);
+        vm.serializeAddress(object, "treasuryRecipient", config.treasuryRecipient);
+        vm.serializeAddress(object, "rewardAllocator", config.rewardAllocator);
         vm.serializeAddress(object, "hook", deployment.hook);
         vm.serializeAddress(object, "hookDeployer", deployment.hookDeployer);
         vm.serializeAddress(object, "operatorRewardsRouter", deployment.operatorRewardsRouter);
+        vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
         vm.serializeUint(object, "operatorRewardShareBps", _operatorRewardShareBps(deployment));
         vm.serializeAddress(object, "operatorsNft", operatorDependencies.operatorsNft);
         vm.serializeAddress(object, "activationRegistry", operatorDependencies.activationRegistry);
@@ -110,7 +112,6 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         vm.serializeAddress(object, "claimsFacet", deployment.claimsFacet);
         vm.serializeAddress(object, "treasuryRewardsFacet", deployment.treasuryRewardsFacet);
         vm.serializeAddress(object, "foundationInit", deployment.foundationInit);
-        _serializeCodeHashes(object, deployment);
         vm.serializeAddress(object, "poolManager", deployment.poolManager);
         vm.serializeAddress(object, "positionDescriptor", deployment.positionDescriptor);
         vm.serializeAddress(object, "positionManager", deployment.positionManager);
@@ -125,24 +126,5 @@ contract DeployBurntatoLocalFork is DeployBurntato {
 
     function _operatorRewardShareBps(BurntatoDeployment memory deployment) private view returns (uint256) {
         return BurntatoSwapFeeHook(payable(deployment.hook)).operatorRewardShareBps();
-    }
-
-    function _serializeCodeHashes(string memory object, BurntatoDeployment memory deployment) private {
-        vm.serializeBytes32(object, "diamondCodeHash", deployment.codeHashes.diamond);
-        vm.serializeBytes32(object, "diamondCutFacetCodeHash", deployment.codeHashes.diamondCutFacet);
-        vm.serializeBytes32(object, "diamondLoupeFacetCodeHash", deployment.codeHashes.diamondLoupeFacet);
-        vm.serializeBytes32(object, "governanceFacetCodeHash", deployment.codeHashes.governanceFacet);
-        vm.serializeBytes32(object, "marketFacetCodeHash", deployment.codeHashes.marketFacet);
-        vm.serializeBytes32(object, "buybackFacetCodeHash", deployment.codeHashes.buybackFacet);
-        vm.serializeBytes32(object, "potatoTokenFacetCodeHash", deployment.codeHashes.potatoTokenFacet);
-        vm.serializeBytes32(object, "gameFacetCodeHash", deployment.codeHashes.gameFacet);
-        vm.serializeBytes32(object, "recoveryFacetCodeHash", deployment.codeHashes.recoveryFacet);
-        vm.serializeBytes32(object, "settlementFacetCodeHash", deployment.codeHashes.settlementFacet);
-        vm.serializeBytes32(object, "claimsFacetCodeHash", deployment.codeHashes.claimsFacet);
-        vm.serializeBytes32(object, "treasuryRewardsFacetCodeHash", deployment.codeHashes.treasuryRewardsFacet);
-        vm.serializeBytes32(object, "foundationInitCodeHash", deployment.codeHashes.foundationInit);
-        vm.serializeBytes32(object, "hookDeployerCodeHash", deployment.codeHashes.hookDeployer);
-        vm.serializeBytes32(object, "hookCodeHash", deployment.codeHashes.hook);
-        vm.serializeBytes32(object, "operatorRewardsRouterCodeHash", deployment.codeHashes.operatorRewardsRouter);
     }
 }
