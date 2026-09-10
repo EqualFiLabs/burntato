@@ -37,7 +37,34 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         deployment = deployWithDependencies(config, deployer, dependencies, operatorDependencies);
         vm.stopBroadcast();
 
-        _writeDeployment(deployment, config, dependencies);
+        _writeDeployment(deployment, config, dependencies, operatorDependencies);
+        _log(deployment);
+    }
+
+    function runLocalForkReplica() external returns (BurntatoDeployment memory deployment) {
+        CanonicalV4Dependencies memory dependencies = _localReplicaPreflight();
+        uint256 privateKey = vm.envUint("PRIVATE_KEY");
+        address deployer = vm.addr(privateKey);
+        GenesisConfig memory config = _environmentConfig();
+        config.deployer = deployer;
+        config.operatorRewardShareBps =
+            BurntatoDeploymentConfig.checkedUint16(vm.envUint("BURNTATO_OPERATOR_REWARD_SHARE_BPS"));
+        if (config.operatorRewardShareBps == 0) revert InvalidOperatorRewardShare();
+        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDependencies({
+            chainId: block.chainid,
+            finalizedBlock: block.number,
+            finalizedBlockHash: bytes32(0),
+            operatorsNft: vm.envAddress("STATICS_GENESIS_NFT_ADDRESS"),
+            operatorsNftCodeHash: bytes32(0),
+            activationRegistry: vm.envAddress("STATICS_GENESIS_ACTIVATION_REGISTRY_ADDRESS"),
+            activationRegistryCodeHash: bytes32(0)
+        });
+
+        vm.startBroadcast(privateKey);
+        deployment = deployWithLocalReplicaDependencies(config, deployer, dependencies, operatorDependencies);
+        vm.stopBroadcast();
+
+        _writeDeployment(deployment, config, dependencies, operatorDependencies);
         _log(deployment);
     }
 
@@ -47,6 +74,16 @@ contract DeployBurntatoLocalFork is DeployBurntato {
 
     function preflightDeployedLocalFork() external returns (CanonicalV4Dependencies memory dependencies) {
         return _localForkPreflight(false);
+    }
+
+    function _localReplicaPreflight() private returns (CanonicalV4Dependencies memory dependencies) {
+        if (block.chainid != RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
+            revert InvalidLocalForkChain(block.chainid);
+        }
+        bytes memory nodeInfo = vm.rpc("anvil_nodeInfo", "[]");
+        if (nodeInfo.length == 0) revert InvalidLocalForkRpc();
+        dependencies = RobinhoodDeploymentConfig.load();
+        RobinhoodDeploymentConfig.validate(dependencies);
     }
 
     function _localForkPreflight(bool requireExactBlock)
@@ -80,10 +117,10 @@ contract DeployBurntatoLocalFork is DeployBurntato {
     function _writeDeployment(
         BurntatoDeployment memory deployment,
         GenesisConfig memory config,
-        CanonicalV4Dependencies memory dependencies
+        CanonicalV4Dependencies memory dependencies,
+        StaticsOperatorDependencies memory operatorDependencies
     ) internal {
         vm.createDir("artifacts/robinhood-local", true);
-        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
         string memory object = "robinhoodLocal";
         vm.serializeUint(object, "schemaVersion", 2);
         vm.serializeUint(object, "chainId", dependencies.chainId);

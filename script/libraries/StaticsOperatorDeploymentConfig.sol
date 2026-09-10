@@ -65,6 +65,27 @@ library StaticsOperatorDeploymentConfig {
         if (!operators.launchFinalized()) revert StaticsLaunchNotFinalized();
     }
 
+    function validateLocalReplica(StaticsOperatorDependencies memory dependencies) internal view {
+        if (block.chainid != ROBINHOOD_MAINNET_CHAIN_ID || dependencies.chainId != ROBINHOOD_MAINNET_CHAIN_ID) {
+            revert InvalidStaticsChain(ROBINHOOD_MAINNET_CHAIN_ID, block.chainid);
+        }
+        if (block.number < dependencies.finalizedBlock) {
+            revert InvalidStaticsBlock(dependencies.finalizedBlock, block.number);
+        }
+        if (dependencies.operatorsNft.code.length == 0) {
+            revert InvalidStaticsDependency(dependencies.operatorsNft);
+        }
+        if (dependencies.activationRegistry.code.length == 0) {
+            revert InvalidStaticsDependency(dependencies.activationRegistry);
+        }
+
+        IStaticsOperators operators = IStaticsOperators(dependencies.operatorsNft);
+        IGenesisActivationRegistryView registry = IGenesisActivationRegistryView(dependencies.activationRegistry);
+        _validateBinding("ACTIVATION_REGISTRY", dependencies.activationRegistry, operators.activationRegistry());
+        _validateBinding("GENESIS_COLLECTION", dependencies.operatorsNft, registry.genesisCollection());
+        if (!operators.launchFinalized()) revert StaticsLaunchNotFinalized();
+    }
+
     function _validateCode(address dependency, bytes32 expectedCodeHash) private view {
         if (dependency.code.length == 0) revert InvalidStaticsDependency(dependency);
         bytes32 actualCodeHash = dependency.codehash;

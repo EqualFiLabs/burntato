@@ -43,6 +43,23 @@ interface IPositionOwner {
     function ownerOf(uint256 tokenId) external view returns (address);
 }
 
+contract LocalReplicaOperators {
+    address public immutable activationRegistry;
+    bool public launchFinalized = true;
+
+    constructor(address activationRegistry_) {
+        activationRegistry = activationRegistry_;
+    }
+}
+
+contract LocalReplicaRegistry {
+    address public genesisCollection;
+
+    function bind(address genesisCollection_) external {
+        genesisCollection = genesisCollection_;
+    }
+}
+
 contract DeploymentConfigHarness {
     function checkedUint16(uint256 value) external pure returns (uint16) {
         return BurntatoDeploymentConfig.checkedUint16(value);
@@ -365,6 +382,24 @@ contract DeterministicDeploymentTest is Test {
         vm.expectRevert(Errors.InvalidAddress.selector);
         hook.setFeeAddress(canonicalDeployment.operatorRewardsRouter);
         vm.stopPrank();
+    }
+
+    function test_LocalReplicaDependenciesValidateWithoutManifestHashes() public {
+        vm.chainId(4663);
+        LocalReplicaRegistry registry = new LocalReplicaRegistry();
+        LocalReplicaOperators operators = new LocalReplicaOperators(address(registry));
+        registry.bind(address(operators));
+
+        StaticsOperatorDependencies memory replica = StaticsOperatorDependencies({
+            chainId: block.chainid,
+            finalizedBlock: block.number,
+            finalizedBlockHash: bytes32(0),
+            operatorsNft: address(operators),
+            operatorsNftCodeHash: bytes32(0),
+            activationRegistry: address(registry),
+            activationRegistryCodeHash: bytes32(0)
+        });
+        StaticsOperatorDeploymentConfig.validateLocalReplica(replica);
     }
 
     function test_LocalDeploymentRejectsOperatorShareWithoutCanonicalDependencies() public {

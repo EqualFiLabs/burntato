@@ -188,6 +188,19 @@ RPC_URL=http://127.0.0.1:8545 \
 scripts/check-deployment.sh artifacts/robinhood-local/deployment.json
 ```
 
+To bind Burntato to a freshly deployed Genesis replica on the same fork, pass
+the replica addresses logged by `DeployStaticsGenesisLocalFork` and use the
+Anvil-only replica entry point:
+
+```bash
+PRIVATE_KEY="$ANVIL_PRIVATE_KEY" \
+STATICS_GENESIS_NFT_ADDRESS="<replica-genesis>" \
+STATICS_GENESIS_ACTIVATION_REGISTRY_ADDRESS="<replica-registry>" \
+BURNTATO_OPERATOR_REWARD_SHARE_BPS="<required-bps>" \
+forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
+  --sig 'runLocalForkReplica()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
+```
+
 The public-only frontend handoff is
 `artifacts/robinhood-local/deployment.json`. It contains the fork identity,
 Diamond, final admin, hook, Operator router/share, Statics dependencies, facets,

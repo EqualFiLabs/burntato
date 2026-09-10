@@ -97,6 +97,23 @@ contract DeployBurntato is Script {
         _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
     }
 
+    function deployWithLocalReplicaDependencies(
+        GenesisConfig memory config,
+        address bootstrapAuthority,
+        CanonicalV4Dependencies memory dependencies,
+        StaticsOperatorDependencies memory operatorDependencies
+    ) public returns (BurntatoDeployment memory deployment) {
+        _validateConfig(config, bootstrapAuthority);
+        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
+            revert InvalidGenesisConfiguration();
+        }
+        RobinhoodDeploymentConfig.validate(dependencies);
+        StaticsOperatorDeploymentConfig.validateLocalReplica(operatorDependencies);
+        _populateCanonicalDependencies(dependencies, deployment);
+        deployment.admin = config.finalAdmin;
+        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
+    }
+
     function deployWithDependencies(
         GenesisConfig memory config,
         address bootstrapAuthority,
