@@ -59,10 +59,17 @@ contract OperatorRewardsRobinhoodForkTest is Test {
         assertGt(firstWeight, 0);
         assertGt(secondWeight, 0);
 
+        if (secondOwner != firstOwner) {
+            vm.prank(secondOwner);
+            operators.transferFrom(secondOwner, firstOwner, SECOND_OPERATOR);
+            secondOwner = firstOwner;
+            secondWeight = registry.multiplierBps(SECOND_OPERATOR);
+        }
+        uint256[] memory operatorIds = new uint256[](2);
+        operatorIds[0] = FIRST_OPERATOR;
+        operatorIds[1] = SECOND_OPERATOR;
         vm.prank(firstOwner);
-        router.register(FIRST_OPERATOR);
-        vm.prank(secondOwner);
-        router.register(SECOND_OPERATOR);
+        router.registerBatch(operatorIds);
         (bool funded,) = address(router).call{value: 1 ether}("");
         assertTrue(funded);
 
@@ -72,7 +79,7 @@ contract OperatorRewardsRobinhoodForkTest is Test {
         assertEq(operators.ownerOf(FIRST_OPERATOR), nextOwner);
         assertEq(registry.multiplierBps(FIRST_OPERATOR), 10_000);
 
-        router.sync(FIRST_OPERATOR);
+        router.syncBatch(operatorIds);
         address secondReceiver = makeAddr("fork-second-operator-receiver");
         vm.prank(secondOwner);
         uint256 secondClaim = router.claim(SECOND_OPERATOR, secondReceiver);
