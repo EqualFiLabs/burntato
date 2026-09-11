@@ -1,5 +1,51 @@
 # Release qualification evidence
 
+## First-Grab and sponsored round reserves candidate
+
+Date: September 11, 2026
+
+Source candidate: `f9a8019` on `feat/sponsored-round-reserves`, based on
+merged `main` commit `6c857bc`.
+
+The first Grab of every Hot Potato round now funds the following round's
+Winner reserve with its complete price. The configured six-way BPS split
+applies from Grab two onward. Fresh deployment seeds Round 1 with
+`ceil(startingPrice * 105%)`, which is 0.0105 ETH at the 0.01 ETH default.
+
+Permissionless Winner and Recovery sponsorship now requires the expected
+target round. A stale target reverts rather than silently retargeting funds
+after settlement. Recovery sponsorship is tracked separately, applied exactly
+once at activation, paid through ordinary Recovery claims, and rolled forward
+when a round has no commitments. Both funding paths remain available before
+purchase initialization and while paused; zero values, direct facet calls, and
+raw native transfers do not create reserve credit.
+
+Local release validation used Foundry 1.8.2-nightly with Solidity 0.8.26 and
+the Cancun EVM:
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Format | `forge fmt --check` | Passed |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 78 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 74 passed; one pre-existing transient-storage test failed under the local nightly and also fails on clean `main` |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties passed at 1,000 runs each |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 15 properties passed at 256 runs and depth 50 |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 38 passed, 5 configured-RPC skips |
+| Formal sources | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` | Compiled; Forge correctly found no `test*` functions |
+
+The configured Robinhood RPC returned the exact pinned block hash. The pinned
+fork test did not proceed because the installed nightly Foundry returned zero
+for the prior-block `blockhash()` after creating the fork; this same local
+toolchain also causes the unrelated transient-storage baseline failure. CI pins
+Foundry 1.7.1. Halmos, Certora, and Slither were not installed, so no solver or
+static-tool result is claimed.
+
+The changed accounting was reviewed for purchase conservation, reserve
+backing, target-round ordering, pause behavior, direct-facet ETH traps, raw ETH,
+Diamond selector installation, and append-only storage. No confirmed issue
+remained after the review. This is a fresh-deployment ABI and storage change,
+not a live Diamond migration. Frontend sponsorship controls remain separate.
+
 ## Next-round Winner reserve candidate
 
 Date: September 10, 2026
