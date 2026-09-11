@@ -61,6 +61,14 @@ contract NativeFeeReceiver {
     receive() external payable {}
 }
 
+contract TransientAuthorizationProbe {
+    function authorizeTwice(IPotatoToken potato) external returns (uint256 allowance) {
+        potato.authorizePoolManagerTransfer(1);
+        potato.authorizePoolManagerTransfer(2);
+        return potato.transientPoolManagerAllowance();
+    }
+}
+
 contract IntegrationOperatorCollection {
     address public activationRegistry;
     bool public constant launchFinalized = true;
@@ -607,14 +615,11 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         _createTreasuryInventory();
         market.launchMarket();
 
-        vm.startPrank(address(hook));
-        potato.authorizePoolManagerTransfer(1);
-        potato.authorizePoolManagerTransfer(2);
-        vm.stopPrank();
-        assertEq(potato.transientPoolManagerAllowance(), 3);
-
-        vm.prank(address(manager));
-        potato.transfer(alice, 3);
+        TransientAuthorizationProbe probe = new TransientAuthorizationProbe();
+        // Nightly Foundry treats direct test-to-contract calls as separate transactions. The probe runs at the
+        // configured hook address so both authorizations are observed before EIP-1153 clears them at return.
+        vm.etch(address(hook), address(probe).code);
+        assertEq(TransientAuthorizationProbe(address(hook)).authorizeTwice(potato), 3);
         assertEq(potato.transientPoolManagerAllowance(), 0);
     }
 
