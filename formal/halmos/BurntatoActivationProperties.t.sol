@@ -113,6 +113,8 @@ contract BurntatoActivationProperties is Test {
 
         assertEq(game.currentRoundId(), 1);
         assertEq(address(diamond).balance, 1);
+        assertEq(game.getRound(1).winnerPool, 0);
+        assertEq(game.winnerReserveEth(), 1);
     }
 
     function check_nonPurchaseViewsRemainAvailable() public view {

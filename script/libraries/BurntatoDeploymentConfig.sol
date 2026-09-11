@@ -57,9 +57,7 @@ library BurntatoDeploymentConfig {
     }
 
     function defaultInitialWinnerReserve(ProtocolConfig memory protocol) internal pure returns (uint256) {
-        uint256 targetWinnerPool = LibMath.mulBpsUp(protocol.startingPrice, INITIAL_WINNER_TARGET_BPS);
-        uint256 firstPurchaseWinnerShare = LibMath.mulBpsDown(protocol.startingPrice, protocol.winnerBps);
-        return targetWinnerPool - firstPurchaseWinnerShare;
+        return LibMath.mulBpsUp(protocol.startingPrice, INITIAL_WINNER_TARGET_BPS);
     }
 
     function checkedUint16(uint256 value) internal pure returns (uint16 narrowed) {

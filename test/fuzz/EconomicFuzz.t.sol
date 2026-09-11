@@ -162,11 +162,16 @@ contract EconomicFuzzTest is DiamondTestSetup {
         vm.deal(alice, amount);
         vm.prank(alice);
         game.buyPotato{value: amount}();
+        assertEq(game.winnerReserveEth(), amount);
+
+        vm.deal(alice, amount);
+        vm.prank(alice);
+        game.buyPotato{value: amount}();
 
         Round memory round = game.getRound(1);
         uint256 treasuryShare = IClaims(address(diamond)).treasuryEthAvailable();
         uint256 buybackShare = IBuyback(address(diamond)).buybackReserveEth();
-        uint256 nextRoundWinnerShare = game.winnerReserveEth();
+        uint256 nextRoundWinnerShare = game.winnerReserveEth() - amount;
         assertEq(round.winnerPool, amount * 2_500 / 10_000);
         assertEq(round.recoveryPool, amount * 4_000 / 10_000);
         assertEq(buybackShare, amount * 1_000 / 10_000);

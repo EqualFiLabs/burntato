@@ -17,8 +17,9 @@ winnerBps / nextRoundWinnerBps / recoveryBps / treasuryBps / buybackBps / operat
 recoveryBurnBps / recoveryTreasuryBps
 ```
 
-The six purchase shares must sum to 10,000 BPS and the two Recovery shares
-must sum to 10,000 BPS. Every `ProtocolConfig` BPS value is bounded by 10,000;
+The six configured purchase shares must sum to 10,000 BPS and apply from the
+second purchase of each round onward. The two Recovery shares must sum to
+10,000 BPS. Every `ProtocolConfig` BPS value is bounded by 10,000;
 the separate hook fee and installed buyback facet use narrower ceilings
 described below. The latter becomes immutable only after Diamond cuts are
 finalized.
@@ -48,7 +49,7 @@ The local genesis defaults are:
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 4 minutes |
 | Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 2% / 40% / 23% / 10% / 0% |
-| Initial Winner reserve | 0.008 ETH; targets a 5% first-grab margin |
+| Initial Winner reserve | 0.0105 ETH; opens Round 1 at 105% of its first-Grab price |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
 | Operator share of hook fee | Disabled; required for Robinhood deployment |
@@ -59,8 +60,17 @@ The local genesis defaults are:
 ## Purchases
 
 A successful purchase pays exactly `nextPrice`, finalizes the outgoing holder's
-emission, allocates ETH under the round snapshot, installs the new holder,
-resets the deadline, and calculates the next price:
+emission, allocates ETH, installs the new holder, resets the deadline, and
+calculates the next price. The first purchase of every round funds the next
+round's Winner reserve in full:
+
+```text
+if purchaseIndex == 0:
+    nextRoundWinnerShare = price
+    winnerShare = recoveryShare = buybackShare = operatorShare = treasuryShare = 0
+```
+
+The second and later purchases use the round's configured six-way split:
 
 ```text
 winnerShare          = floor(price * winnerBps / 10_000)
@@ -87,18 +97,22 @@ deadline or elapsed time. Every successful purchase counts, including multiple
 purchases at one timestamp. Failed transactions do not count, and a new round
 starts again with the initial timeout.
 
-The Treasury receives deterministic split dust so the six allocations always
-equal the purchase exactly. `nextRoundWinnerShare` and permissionless direct
-funding accumulate in the Winner reserve. Round activation moves the complete
-reserve into that round's Winner pool and clears it exactly once. Direct
-funding before Round 1 therefore seeds Round 1; funding during Round N targets
-Round N+1. Raw ETH transfers do not enter reserve accounting.
+The Treasury receives deterministic split dust on configured splits so the six
+allocations always equal the purchase exactly. First-purchase funding,
+`nextRoundWinnerShare`, and permissionless direct funding accumulate in the
+Winner reserve. Round activation moves the complete reserve into that round's
+Winner pool and clears it exactly once. `fundWinnerReserve(expectedRoundId)`
+targets Round 1 before launch and Round N+1 during Round N; it reverts if the
+expected target became stale before execution. Raw ETH transfers do not enter
+reserve accounting.
 
-Fresh deployments fund the initial reserve so the first purchase makes its
-Winner pool 105% of the starting price, using upward rounding for the target
-and downward rounding for the purchase share. At 0.01 ETH and 25% Winner this
-is 0.008 ETH; at 0.003 ETH and 35% Winner it is 0.0021 ETH. Buyback ETH remains
-separate from Winner, Recovery, Treasury-claim, and launch-seed accounting.
+Fresh deployments fund the initial reserve to `ceil(startingPrice * 105%)`, so
+Round 1 opens with a Winner pool above its first-Grab price before any purchase.
+At 0.01 ETH the default seed is 0.0105 ETH; at 0.003 ETH it is 0.00315 ETH.
+With an unchanged next-round starting price, a one-Grab round funds the next
+opening Winner pool exactly 1:1; later Grabs or direct sponsorship increase it.
+Buyback ETH remains separate from Winner, Recovery, Treasury-claim, and
+launch-seed accounting.
 
 ## Holder-time emission budget
 
@@ -152,6 +166,14 @@ budget. At the default, actual round emission is at most 100,000 POTATO.
 POTATO commitments are forward-only to `currentRoundId + 1`. The target terms
 have already been snapshotted before commitment opens. POTATO moves into Diamond
 escrow through an exact transaction-scoped protocol transfer.
+
+Anyone may sponsor the next round's Recovery ETH through
+`fundRecoveryReserve(expectedRoundId)`. The expected-round guard prevents a
+transaction from silently retargeting after settlement. Multiple contributions
+are additive, remain available while paused, and are consumed exactly once into
+the target round's Recovery pool at activation. Raw ETH transfers are not
+credited. Sponsored ETH follows the ordinary claim rules and rolls forward with
+the pool when the round has no commitments.
 
 Commitments normally remain irrevocable once the predecessor receives its first
 holder. There is one liveness escape for an activated predecessor that has never

@@ -25,7 +25,7 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {BuybackConfig, FacetCut, FacetCutAction, Round} from "../../src/shared/Types.sol";
+import {BuybackConfig, FacetCut, FacetCutAction, ProtocolConfig, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
 
@@ -946,14 +946,23 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     }
 
     function _createTreasuryInventory() internal {
+        ProtocolConfig memory config = _defaultConfig();
+        config.priceIncreaseBps = 0;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
         vm.prank(alice);
         game.buyPotato{value: 0.01 ether}();
         vm.warp(block.timestamp + 120);
         game.materializeMaturedEmission();
         vm.prank(alice);
         recovery.commitRecovery(10_000 ether);
+        vm.prank(alice);
+        game.buyPotato{value: 0.01 ether}();
         _expireAndSettle();
 
+        vm.prank(bob);
+        game.buyPotato{value: 0.01 ether}();
         vm.prank(bob);
         game.buyPotato{value: 0.01 ether}();
         _expireAndSettle();

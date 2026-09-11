@@ -76,7 +76,7 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
         key = market.canonicalPoolKey();
 
         vm.deal(buyer, 1 ether);
-        vm.deal(funder, 2 ether);
+        vm.deal(funder, 2.01 ether);
         vm.deal(address(manager), 100 ether);
     }
 
@@ -97,11 +97,13 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
         assertEq(potato.balanceOf(treasury) - treasuryPotatoBefore, bootstrapBought);
         assertGt(keeper.balance - keeperNativeBefore, 0);
 
+        vm.prank(funder);
+        game.buyPotato{value: 0.01 ether}();
         uint256 reserveBeforePurchase = buybacks.buybackReserveEth();
         vm.prank(buyer);
-        game.buyPotato{value: 0.01 ether}();
+        game.buyPotato{value: 0.011 ether}();
         uint256 purchaseBuybackContribution = buybacks.buybackReserveEth() - reserveBeforePurchase;
-        assertEq(purchaseBuybackContribution, 0.001 ether);
+        assertEq(purchaseBuybackContribution, 0.0011 ether);
 
         Round memory round = game.getRound(1);
         assertEq(round.config.emissionVestingDuration, 4 minutes);

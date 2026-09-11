@@ -56,8 +56,9 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 | Round emission budget | 100,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 4 minutes |
-| Purchase split | 2,500 Winner / 200 next Winner / 4,000 Recovery / 2,300 Treasury / 1,000 buyback / 0 Operator BPS |
-| Initial Winner reserve | 0.008 ETH |
+| Purchase split from Grab 2 | 2,500 Winner / 200 next Winner / 4,000 Recovery / 2,300 Treasury / 1,000 buyback / 0 Operator BPS |
+| First Grab | 100% to the next round Winner reserve |
+| Initial Winner reserve | 0.0105 ETH |
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |
 | Operator share of hook fee | Disabled locally; required Robinhood input |
@@ -74,7 +75,8 @@ remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
 safety. Minimum timeout cannot exceed the initial timeout, and timeout decay
 cannot exceed the initial timeout. Zero timeout decay is valid and produces
 fixed resets. Protocol and Operator-share BPS values are bounded to 10,000; the
-six-way purchase split and Recovery split must each sum to 10,000. The
+six-way purchase split used from Grab two onward and the Recovery split must
+each sum to 10,000. The
 bilateral hook fee has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
 narrower 0-to-100 BPS domain. Zero price growth, emission step, emission budget,
 or hook fee is valid. The genesis POTATO allocation must fit the PositionManager
@@ -129,10 +131,11 @@ hook fee above 200 BPS or buyback caller reward above
 through 10,000 BPS because it divides the already-capped hook fee rather than
 increasing the fee charged to traders.
 
-When `BURNTATO_INITIAL_WINNER_RESERVE` is absent, deployment derives the value
-after all price and Winner overrides so the first valid purchase creates a
-Winner pool equal to 105% of its price. The variable can explicitly override
-that funding amount. The broadcaster must hold the reserve in addition to gas.
+When `BURNTATO_INITIAL_WINNER_RESERVE` is absent, deployment derives
+`ceil(startingPrice * 105%)` after the final price override so Round 1 opens
+with a Winner pool equal to 105% of its first-Grab price. The variable can
+explicitly override that funding amount. The broadcaster must hold the reserve
+in addition to gas.
 
 The CREATE2 hook helper accepts deployment only from the address that created
 it. This keeps the mined hook address available to the same local broadcast

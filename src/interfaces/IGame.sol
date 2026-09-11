@@ -27,7 +27,7 @@ interface IGame {
     event WinnerReserveApplied(uint256 indexed roundId, uint256 amount, uint256 winnerPool);
 
     function buyPotato() external payable;
-    function fundWinnerReserve() external payable;
+    function fundWinnerReserve(uint256 expectedRoundId) external payable;
     function winnerReserveEth() external view returns (uint256);
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned);
     function currentRoundId() external view returns (uint256);

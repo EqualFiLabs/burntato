@@ -42,6 +42,7 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) recoveryPaid;
         mapping(uint256 => uint256) claimedCommitments;
         mapping(uint256 => uint256) stalledWithdrawalAt;
+        uint256 recoveryReserveEth;
     }
 
     struct TreasuryStorage {

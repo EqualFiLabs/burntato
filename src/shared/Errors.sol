@@ -55,6 +55,7 @@ library Errors {
     error SelectorDoesNotExist(bytes4 selector);
     error SelectorUnchanged(bytes4 selector);
     error TransferRestricted(address from, address to);
+    error UnexpectedTargetRound(uint256 expectedRoundId, uint256 actualRoundId);
     error UnpauseRequiresAuthority(address caller);
     error UnsafeAuthorityRenunciation();
     error TokenOperationFailed();

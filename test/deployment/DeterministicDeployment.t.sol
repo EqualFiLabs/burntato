@@ -114,7 +114,7 @@ contract DeterministicDeploymentTest is Test {
         game.buyPotato{value: config.protocol.startingPrice}();
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 0.0105 ether);
-        assertEq(game.winnerReserveEth(), 0.0002 ether);
+        assertEq(game.winnerReserveEth(), 0.01 ether);
         assertEq(round.config.emissionVestingDuration, 4 minutes);
         assertEq(round.holderMaxReward, 10_000 ether);
 
@@ -303,7 +303,7 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.protocol.operatorPurchaseBps, 1_500);
         assertEq(testnet.hookFeeBps, 100);
         assertEq(testnet.operatorRewardShareBps, 4_000);
-        assertEq(testnet.initialWinnerReserve, 0.008 ether);
+        assertEq(testnet.initialWinnerReserve, 0.0105 ether);
         assertEq(testnet.initialTick, 170_280);
         assertEq(testnet.tickUpper, 170_280);
         assertEq(testnet.potatoSeed, 100_000_000 ether);
@@ -561,14 +561,14 @@ contract DeterministicDeploymentTest is Test {
         harness.checkedInt24(int256(type(int24).min) - 1);
     }
 
-    function test_DefaultWinnerReserveTargetsFivePercentFirstGrabMargin() public {
+    function test_DefaultWinnerReserveOpensAtFivePercentAboveFirstGrab() public {
         DeploymentConfigHarness harness = new DeploymentConfigHarness();
         ProtocolConfig memory protocol = config.protocol;
-        assertEq(harness.defaultInitialWinnerReserve(protocol), 0.008 ether);
+        assertEq(harness.defaultInitialWinnerReserve(protocol), 0.0105 ether);
 
         protocol.startingPrice = 0.003 ether;
         protocol.winnerBps = 3_500;
-        assertEq(harness.defaultInitialWinnerReserve(protocol), 0.0021 ether);
+        assertEq(harness.defaultInitialWinnerReserve(protocol), 0.00315 ether);
     }
 
     function test_HookRouterConfigurationSupportsEveryRevenueCombination() public {
