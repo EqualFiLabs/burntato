@@ -23,7 +23,7 @@ jobs:
           submodules: recursive
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          version: 1.7.1
+          version: nightly
       - run: forge test --match-path 'test/unit/*.t.sol' -j 1
       - run: forge test --match-path 'test/integration/*.t.sol' -j 1
       - run: forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1
