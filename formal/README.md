@@ -14,7 +14,8 @@ The Halmos properties execute production `LibMath`, the production Diamond,
 - rejection of every pre-activation `buyPotato()` payment;
 - configured-foundation visibility and current-authority-only, one-shot
   purchase activation; and
-- a successful first purchase after activation without gating read surfaces.
+- a successful first purchase after activation that routes its complete value
+  to the next-round Winner reserve without gating read surfaces.
 
 The Halmos suite also executes the production Diamond and `BuybackFacet` to
 establish that any caller's positive direct funding increases both the tracked

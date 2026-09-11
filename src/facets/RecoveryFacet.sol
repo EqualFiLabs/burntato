@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {IRecovery} from "../interfaces/IRecovery.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
+import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Constants} from "../shared/Constants.sol";
@@ -30,6 +31,25 @@ contract RecoveryFacet is IRecovery {
         rs.commitments[targetRoundId][msg.sender] += amount;
         rs.totalCommitments[targetRoundId] += amount;
         emit RecoveryCommitted(targetRoundId, msg.sender, amount, rs.totalCommitments[targetRoundId]);
+    }
+
+    function fundRecoveryReserve(uint256 expectedRoundId) external payable {
+        if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
+        if (msg.value == 0) revert Errors.ZeroAmount();
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        uint256 targetRoundId = gs.currentRoundId == 0 ? 1 : gs.currentRoundId + 1;
+        if (expectedRoundId != targetRoundId) revert Errors.UnexpectedTargetRound(expectedRoundId, targetRoundId);
+        LibProtocolStorage.ReentrancyStorage storage guard = LibProtocolStorage.reentrancy();
+        if (guard.status == 2) revert Errors.Reentrancy();
+        guard.status = 2;
+        LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
+        rs.recoveryReserveEth += msg.value;
+        emit RecoveryReserveFunded(msg.sender, targetRoundId, msg.value, rs.recoveryReserveEth);
+        guard.status = 1;
+    }
+
+    function recoveryReserveEth() external view returns (uint256) {
+        return LibProtocolStorage.recovery().recoveryReserveEth;
     }
 
     function withdrawStalledRecovery(uint256 targetRoundId) external returns (uint256 amount) {

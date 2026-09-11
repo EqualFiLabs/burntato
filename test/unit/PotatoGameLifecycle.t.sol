@@ -338,19 +338,14 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(potato.balanceOf(alice), 0);
     }
 
-    function test_PurchaseConservesNativeAllocationAndRaisesPrice() public {
+    function test_FirstPurchaseFundsNextRoundAndRaisesPrice() public {
         _buy(alice, 0.01 ether);
         Round memory round = game.getRound(1);
-        assertEq(round.winnerPool, 0.0025 ether);
-        assertEq(round.recoveryPool, 0.004 ether);
-        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0023 ether);
-        assertEq(uint256(vm.load(address(diamond), BUYBACK_SLOT)), 0.001 ether);
-        assertEq(game.winnerReserveEth(), 0.0002 ether);
-        assertEq(
-            round.winnerPool + round.recoveryPool + IClaims(address(diamond)).treasuryEthAvailable()
-                + uint256(vm.load(address(diamond), BUYBACK_SLOT)) + game.winnerReserveEth(),
-            0.01 ether
-        );
+        assertEq(round.winnerPool, 0);
+        assertEq(round.recoveryPool, 0);
+        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0);
+        assertEq(uint256(vm.load(address(diamond), BUYBACK_SLOT)), 0);
+        assertEq(game.winnerReserveEth(), 0.01 ether);
         assertEq(round.nextPrice, 0.011 ether);
         assertEq(round.deadline, block.timestamp + 1 hours);
     }
@@ -358,15 +353,17 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
     function test_PurchaseSplitAssignsAllRoundingDustToTreasury() public {
         ProtocolConfig memory config = _defaultConfig();
         config.startingPrice = 10_003;
+        config.priceIncreaseBps = 0;
         vm.prank(authority);
         IGovernance(address(diamond)).setProtocolConfig(config);
 
         _buy(alice, 10_003);
+        _buy(bob, 10_003);
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 2_500);
         assertEq(round.recoveryPool, 4_001);
         assertEq(uint256(vm.load(address(diamond), BUYBACK_SLOT)), 1_000);
-        assertEq(game.winnerReserveEth(), 200);
+        assertEq(game.winnerReserveEth(), 10_203);
         assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 2_302);
     }
 
@@ -386,6 +383,7 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         IGovernance(address(diamond)).setProtocolConfig(config);
 
         _buy(alice, 0.01 ether);
+        _buy(alice, 0.01 ether);
         Round memory round = game.getRound(1);
         assertEq(round.nextPrice, 0.01 ether);
         assertEq(round.deadline, block.timestamp + 300);
@@ -394,7 +392,7 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(round.winnerPool, 0.001 ether);
         assertEq(round.recoveryPool, 0.002 ether);
         assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0055 ether);
-        assertEq(game.winnerReserveEth(), 0.0005 ether);
+        assertEq(game.winnerReserveEth(), 0.0105 ether);
 
         vm.warp(block.timestamp + 40);
         game.materializeMaturedEmission();

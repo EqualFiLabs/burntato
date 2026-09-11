@@ -12,8 +12,8 @@ Important state reads include:
   `winnerReserveEth()`;
 - `IGovernance.protocolConfig()`, `foundationConfigured()`, purchase
   initialization, authority, guardian, pause, and finalization views;
-- `IRecovery.recoveryCommitment()`, `totalRecoveryCommitment()`, and
-  `stalledRecoveryWithdrawalAt()`;
+- `IRecovery.recoveryCommitment()`, `totalRecoveryCommitment()`,
+  `recoveryReserveEth()`, and `stalledRecoveryWithdrawalAt()`;
 - `IClaims.winnerClaimed()`, `recoveryClaimed()`, and
   `claimableRecovery()` for account claim state;
 - Treasury claimable ETH and POTATO views; and
@@ -39,16 +39,24 @@ The canonical hook is a separate administered contract. Read `owner()`,
 `operatorRewardsRouter()`, `operatorRewardShareBps()`, `deploymentBlock()`, and
 `externalBuysEnabled()` from the hook itself.
 
-`fundWinnerReserve()` permissionlessly adds positive native value to the
-tracked Winner reserve even while the protocol is paused. Before Round 1 it
-targets Round 1; once a round is active it targets the following round. The
-complete reserve moves into `Round.winnerPool` when that target activates.
-Integrators should index `WinnerReserveFunded`, `NextRoundWinnerFunded`, and
-`WinnerReserveApplied`; a plain native transfer is deliberately untracked.
+`fundWinnerReserve(expectedRoundId)` and
+`fundRecoveryReserve(expectedRoundId)` permissionlessly add positive native
+value to their tracked reserves even while the protocol is paused. Before
+Round 1 the target is 1; once a round is active the target is
+`currentRoundId + 1`. A stale expected target reverts instead of funding a
+different round. The complete reserves move into `Round.winnerPool` and
+`Round.recoveryPool` when that target activates. Integrators should index
+`WinnerReserveFunded`, `NextRoundWinnerFunded`, `WinnerReserveApplied`,
+`RecoveryReserveFunded`, and `RecoveryReserveApplied`; a plain native transfer
+is deliberately untracked.
 
-Adding `nextRoundWinnerBps` expands both configuration tuples and is a
-fresh-deployment ABI and Diamond-storage change. Integrators must update their
-ABI before connecting to this version; it is not an in-place upgrade package.
+The first Grab of every round contributes its complete price to the following
+round's Winner reserve. The configured Winner, next-Winner, Recovery, Treasury,
+buyback, and Operator BPS split applies only from the second Grab onward.
+
+The guarded funding signatures and Recovery reserve expand the ABI, selector
+manifest, and Diamond storage. Integrators must update their ABI before
+connecting to this fresh-deployment package; it is not an in-place upgrade.
 
 ## POTATO behavior
 

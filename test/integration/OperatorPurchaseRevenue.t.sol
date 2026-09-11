@@ -92,6 +92,15 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         vm.prank(operatorOwner);
         router.register(OPERATOR_ID);
 
+        ProtocolConfig memory config = _initialConfig();
+        config.priceIncreaseBps = 0;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
+        vm.prank(buyer);
+        game.buyPotato{value: 0.01 ether}();
+        assertEq(router.totalReceived(), 0);
+
         vm.expectEmit(true, true, false, true, address(diamond));
         emit IGame.OperatorPurchaseRevenueQueued(1, address(router), 0.0015 ether);
         vm.prank(buyer);
@@ -102,10 +111,10 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         assertEq(round.recoveryPool, 0.003 ether);
         assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0018 ether);
         assertEq(IBuyback(address(diamond)).buybackReserveEth(), 0.001 ether);
-        assertEq(game.winnerReserveEth(), 0.0002 ether);
+        assertEq(game.winnerReserveEth(), 0.0102 ether);
         assertEq(router.pendingRevenue(), 0.0015 ether);
         assertEq(router.totalReceived(), 0.0015 ether);
-        assertEq(address(diamond).balance, 0.0085 ether);
+        assertEq(address(diamond).balance, 0.0185 ether);
         assertEq(address(router).balance, 0.0015 ether);
         assertEq(game.purchaseOperatorRewardsRouter(), address(router));
 
@@ -117,6 +126,13 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         vm.prank(operatorOwner);
         router.register(OPERATOR_ID);
 
+        ProtocolConfig memory config = _initialConfig();
+        config.priceIncreaseBps = 0;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
+        vm.prank(buyer);
+        game.buyPotato{value: 0.01 ether}();
         vm.prank(buyer);
         game.buyPotato{value: 0.01 ether}();
         vm.deal(address(this), 0.004 ether);
@@ -128,6 +144,13 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
     }
 
     function testNoRegisteredWeightCreditsPurchaseRevenueToTreasury() public {
+        ProtocolConfig memory config = _initialConfig();
+        config.priceIncreaseBps = 0;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
+        vm.prank(buyer);
+        game.buyPotato{value: 0.01 ether}();
         vm.prank(buyer);
         game.buyPotato{value: 0.01 ether}();
         router.accrue();
@@ -169,6 +192,9 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         vm.deal(buyer, 7);
         vm.prank(buyer);
         game.buyPotato{value: 7}();
+        vm.deal(buyer, 7);
+        vm.prank(buyer);
+        game.buyPotato{value: 7}();
 
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 1);
@@ -176,7 +202,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         assertEq(IBuyback(address(diamond)).buybackReserveEth(), 0);
         assertEq(router.pendingRevenue(), 1);
         assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 3);
-        assertEq(address(diamond).balance + address(router).balance, 7);
+        assertEq(address(diamond).balance + address(router).balance, 14);
     }
 
     function testOperatorShareChangeAppliesOnlyToFutureRoundSnapshot() public {
@@ -189,23 +215,27 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
 
         vm.prank(buyer);
         game.buyPotato{value: 0.011 ether}();
-        assertEq(router.totalReceived(), 0.00315 ether);
+        assertEq(router.totalReceived(), 0.00165 ether);
 
         vm.warp(game.getRound(1).deadline);
         ISettlement(address(diamond)).settleRound();
         vm.prank(buyer);
         game.buyPotato{value: 0.01 ether}();
-        assertEq(router.totalReceived(), 0.00465 ether);
+        vm.prank(buyer);
+        game.buyPotato{value: 0.011 ether}();
+        assertEq(router.totalReceived(), 0.0033 ether);
 
         vm.warp(game.getRound(2).deadline);
         ISettlement(address(diamond)).settleRound();
         vm.prank(buyer);
         game.buyPotato{value: 0.01 ether}();
+        vm.prank(buyer);
+        game.buyPotato{value: 0.011 ether}();
 
         assertEq(game.getRound(1).config.operatorPurchaseBps, 1_500);
         assertEq(game.getRound(2).config.operatorPurchaseBps, 1_500);
         assertEq(game.getRound(3).config.operatorPurchaseBps, 0);
-        assertEq(router.totalReceived(), 0.00465 ether);
+        assertEq(router.totalReceived(), 0.0033 ether);
     }
 
     function testFuzzSixWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {
@@ -219,11 +249,16 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         vm.deal(buyer, amount);
         vm.prank(buyer);
         game.buyPotato{value: amount}();
+        assertEq(game.winnerReserveEth(), amount);
+
+        vm.deal(buyer, amount);
+        vm.prank(buyer);
+        game.buyPotato{value: amount}();
 
         Round memory round = game.getRound(1);
         uint256 treasuryShare = IClaims(address(diamond)).treasuryEthAvailable();
         uint256 buybackShare = IBuyback(address(diamond)).buybackReserveEth();
-        uint256 nextRoundWinnerShare = game.winnerReserveEth();
+        uint256 nextRoundWinnerShare = game.winnerReserveEth() - amount;
         uint256 operatorShare = address(router).balance;
         assertEq(round.winnerPool, amount * 2_500 / 10_000);
         assertEq(round.recoveryPool, amount * 3_000 / 10_000);

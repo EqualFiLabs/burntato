@@ -63,13 +63,13 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
 
         uint256 aliceBefore = alice.balance;
         vm.prank(alice);
-        assertEq(claims.claimRecovery(2, alice), 0.0124 ether);
-        assertEq(alice.balance - aliceBefore, 0.0124 ether);
+        assertEq(claims.claimRecovery(2, alice), 0.0044 ether);
+        assertEq(alice.balance - aliceBefore, 0.0044 ether);
 
         uint256 carolBefore = carol.balance;
         vm.prank(carol);
-        assertEq(claims.claimWinner(2, carol), 0.00545 ether);
-        assertEq(carol.balance - carolBefore, 0.00545 ether);
+        assertEq(claims.claimWinner(2, carol), 0.01275 ether);
+        assertEq(carol.balance - carolBefore, 0.01275 ether);
         assertEq(game.getRound(3).remainingEmission, 100_000 ether);
     }
 
@@ -112,23 +112,26 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
 
     function test_ZeroCommitmentRecoveryRollsUntilACommittedRoundConsumesIt() public {
         _buy(alice);
+        _buy(alice);
         _expireAndSettle();
-        assertEq(game.getRound(2).recoveryCarryIn, 0.004 ether);
+        assertEq(game.getRound(2).recoveryCarryIn, 0.0044 ether);
 
         _buy(bob);
         _advance(120);
         game.materializeMaturedEmission();
         vm.prank(bob);
         recovery.commitRecovery(10_000 ether);
+        _buy(bob);
         _expireAndSettle();
-        assertEq(game.getRound(3).recoveryCarryIn, 0.008 ether);
+        assertEq(game.getRound(3).recoveryCarryIn, 0.0088 ether);
 
         _buy(carol);
+        _buy(carol);
         _expireAndSettle();
-        assertEq(game.getRound(3).recoveryPool, 0.012 ether);
+        assertEq(game.getRound(3).recoveryPool, 0.0132 ether);
         assertEq(game.getRound(4).recoveryCarryIn, 0);
         vm.prank(bob);
-        assertEq(claims.claimRecovery(3, bob), 0.012 ether);
+        assertEq(claims.claimRecovery(3, bob), 0.0132 ether);
     }
 
     function test_RoundActivationSnapshotsNextRoundBeforeAnyCommitment() public {
@@ -201,16 +204,23 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
     }
 
     function test_GlobalPauseStopsLifecycleAndClaimsUntilAuthorityUnpauses() public {
+        ProtocolConfig memory fixedPrice = _defaultConfig();
+        fixedPrice.priceIncreaseBps = 0;
+        vm.prank(authority);
+        governance.setProtocolConfig(fixedPrice);
+
         _buy(alice);
         _advance(120);
         game.materializeMaturedEmission();
         vm.prank(alice);
         recovery.commitRecovery(10_000 ether);
+        _buy(alice);
         _expireAndSettle();
 
         _buy(bob);
         _advance(120);
         game.materializeMaturedEmission();
+        _buy(bob);
         _expireAndSettle();
 
         _buy(carol);
@@ -275,7 +285,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         vm.prank(alice);
         assertEq(claims.claimRecovery(2, alice), 0.008 ether);
         vm.prank(bob);
-        assertEq(claims.claimWinner(2, bob), 0.0027 ether);
+        assertEq(claims.claimWinner(2, bob), 0.0127 ether);
         assertEq(claims.claimTreasury(), treasuryEthBefore);
         assertEq(claims.claimTreasuryPotato(), treasuryPotatoBefore);
 
@@ -295,6 +305,9 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         game.materializeMaturedEmission();
         vm.prank(alice);
         recovery.commitRecovery(10_000 ether);
+        vm.deal(alice, alice.balance + 0.008 ether);
+        vm.prank(alice);
+        recovery.fundRecoveryReserve{value: 0.008 ether}(2);
         _expireAndSettle();
         _buy(bob);
         _expireAndSettle();

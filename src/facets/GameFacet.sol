@@ -24,21 +24,27 @@ contract GameFacet is IGame {
 
         if (round.currentHolder != address(0)) LibGame.finalizeEmission(round);
 
-        uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
-        uint256 nextRoundWinnerShare = LibMath.mulBpsDown(msg.value, round.config.nextRoundWinnerBps);
-        uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
-        uint256 buybackShare = LibMath.mulBpsDown(msg.value, round.config.buybackBps);
-        uint256 operatorShare = LibMath.mulBpsDown(msg.value, round.config.operatorPurchaseBps);
-        uint256 treasuryShare =
-            msg.value - winnerShare - nextRoundWinnerShare - recoveryShare - buybackShare - operatorShare;
-        round.winnerPool += winnerShare;
-        round.recoveryPool += recoveryShare;
-        gs.winnerReserveEth += nextRoundWinnerShare;
-        emit NextRoundWinnerFunded(round.roundId, round.roundId + 1, nextRoundWinnerShare, gs.winnerReserveEth);
-        LibProtocolStorage.treasury().purchaseEth += treasuryShare;
-        LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
-        bs.reserveEth += buybackShare;
-        emit BuybackFunded(round.roundId, buybackShare, bs.reserveEth);
+        uint256 operatorShare;
+        if (round.purchaseIndex == 0) {
+            gs.winnerReserveEth += msg.value;
+            emit NextRoundWinnerFunded(round.roundId, round.roundId + 1, msg.value, gs.winnerReserveEth);
+        } else {
+            uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
+            uint256 nextRoundWinnerShare = LibMath.mulBpsDown(msg.value, round.config.nextRoundWinnerBps);
+            uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
+            uint256 buybackShare = LibMath.mulBpsDown(msg.value, round.config.buybackBps);
+            operatorShare = LibMath.mulBpsDown(msg.value, round.config.operatorPurchaseBps);
+            uint256 treasuryShare =
+                msg.value - winnerShare - nextRoundWinnerShare - recoveryShare - buybackShare - operatorShare;
+            round.winnerPool += winnerShare;
+            round.recoveryPool += recoveryShare;
+            gs.winnerReserveEth += nextRoundWinnerShare;
+            emit NextRoundWinnerFunded(round.roundId, round.roundId + 1, nextRoundWinnerShare, gs.winnerReserveEth);
+            LibProtocolStorage.treasury().purchaseEth += treasuryShare;
+            LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
+            bs.reserveEth += buybackShare;
+            emit BuybackFunded(round.roundId, buybackShare, bs.reserveEth);
+        }
 
         round.currentHolder = msg.sender;
         round.holderSince = block.timestamp;
@@ -72,15 +78,16 @@ contract GameFacet is IGame {
         rs.status = 1;
     }
 
-    function fundWinnerReserve() external payable {
+    function fundWinnerReserve(uint256 expectedRoundId) external payable {
         if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
         if (msg.value == 0) revert Errors.ZeroAmount();
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        uint256 targetRoundId = gs.currentRoundId == 0 ? 1 : gs.currentRoundId + 1;
+        if (expectedRoundId != targetRoundId) revert Errors.UnexpectedTargetRound(expectedRoundId, targetRoundId);
         LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
         if (rs.status == 2) revert Errors.Reentrancy();
         rs.status = 2;
-        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         gs.winnerReserveEth += msg.value;
-        uint256 targetRoundId = gs.currentRoundId == 0 ? 1 : gs.currentRoundId + 1;
         emit WinnerReserveFunded(msg.sender, targetRoundId, msg.value, gs.winnerReserveEth);
         rs.status = 1;
     }

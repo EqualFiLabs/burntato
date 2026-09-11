@@ -40,7 +40,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         Round memory roundTwo = game.getRound(2);
         assertEq(roundTwo.remainingEmission, 100_000 ether);
-        assertEq(roundTwo.recoveryCarryIn, 0.004 ether);
+        assertEq(roundTwo.recoveryCarryIn, 0);
+        assertEq(roundTwo.recoveryPool, 0.008 ether);
         assertFalse(claims.winnerClaimed(2));
         assertFalse(claims.recoveryClaimed(2, alice));
         assertEq(claims.claimableRecovery(2, alice), 0);
@@ -67,13 +68,11 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         uint256 bobEthBefore = bob.balance;
         vm.prank(bob);
-        assertEq(claims.claimWinner(2, bob), 0.0027 ether);
-        assertEq(bob.balance - bobEthBefore, 0.0027 ether);
+        assertEq(claims.claimWinner(2, bob), 0.01 ether);
+        assertEq(bob.balance - bobEthBefore, 0.01 ether);
         assertTrue(claims.winnerClaimed(2));
 
-        uint256 treasuryEthBefore = treasury.balance;
-        assertEq(claims.claimTreasury(), 0.0046 ether);
-        assertEq(treasury.balance - treasuryEthBefore, 0.0046 ether);
+        assertEq(claims.treasuryEthAvailable(), 0);
 
         assertEq(claims.claimTreasuryPotato(), 1_000 ether);
         assertEq(potato.balanceOf(treasury), 1_000 ether);
@@ -114,9 +113,52 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         _buy(alice, 0.01 ether);
         _expireAndSettle();
         Round memory roundTwo = game.getRound(2);
-        assertEq(roundTwo.recoveryCarryIn, 0.004 ether);
-        assertEq(roundTwo.recoveryPool, 0.004 ether);
+        assertEq(roundTwo.recoveryCarryIn, 0);
+        assertEq(roundTwo.recoveryPool, 0);
         assertEq(claims.treasuryPotatoAvailable(), 0);
+    }
+
+    function test_SponsoredRecoveryAppliesOnceAndPaysCommittedRecovery() public {
+        _buy(alice, 0.01 ether);
+        vm.warp(block.timestamp + 120);
+        game.materializeMaturedEmission();
+        vm.prank(alice);
+        recovery.commitRecovery(10_000 ether);
+
+        vm.prank(bob);
+        recovery.fundRecoveryReserve{value: 0.5 ether}(2);
+        assertEq(recovery.recoveryReserveEth(), 0.5 ether);
+
+        vm.expectEmit(true, false, false, true, address(diamond));
+        emit IRecovery.RecoveryReserveApplied(2, 0.5 ether, 0.5 ether);
+        _expireAndSettle();
+        Round memory roundTwo = game.getRound(2);
+        assertEq(roundTwo.recoveryCarryIn, 0);
+        assertEq(roundTwo.recoveryPool, 0.5 ether);
+        assertEq(recovery.recoveryReserveEth(), 0);
+
+        _buy(bob, 0.01 ether);
+        _expireAndSettle();
+
+        uint256 aliceBefore = alice.balance;
+        vm.prank(alice);
+        assertEq(claims.claimRecovery(2, alice), 0.5 ether);
+        assertEq(alice.balance - aliceBefore, 0.5 ether);
+    }
+
+    function test_SponsoredRecoveryRollsForwardWhenRoundHasNoCommitments() public {
+        _buy(alice, 0.01 ether);
+        vm.prank(bob);
+        recovery.fundRecoveryReserve{value: 0.5 ether}(2);
+        _expireAndSettle();
+
+        _buy(bob, 0.01 ether);
+        _expireAndSettle();
+
+        Round memory roundThree = game.getRound(3);
+        assertEq(roundThree.recoveryCarryIn, 0.5 ether);
+        assertEq(roundThree.recoveryPool, 0.5 ether);
+        assertEq(recovery.recoveryReserveEth(), 0);
     }
 
     function test_ConfiguredRecoverySplitCanRouteAllCommittedPotatoToTreasury() public {
@@ -303,9 +345,9 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
     function test_ForcedEthDoesNotBecomeTreasuryRevenue() public {
         _buy(alice, 0.01 ether);
-        assertEq(claims.treasuryEthAvailable(), 0.0023 ether);
+        assertEq(claims.treasuryEthAvailable(), 0);
         vm.deal(address(diamond), address(diamond).balance + 7 ether);
-        assertEq(claims.treasuryEthAvailable(), 0.0023 ether);
+        assertEq(claims.treasuryEthAvailable(), 0);
     }
 
     function _assertExactRecoveryClaims(uint256 recoveryPool, address first, uint256 firstCommitment, address last)
@@ -344,6 +386,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         game.materializeMaturedEmission();
         vm.prank(alice);
         recovery.commitRecovery(10_000 ether);
+        vm.prank(bob);
+        recovery.fundRecoveryReserve{value: 0.008 ether}(2);
     }
 
     function _prepareStalledRecovery(uint256 amount) internal returns (uint256 availableAt) {

@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IGame} from "../interfaces/IGame.sol";
+import {IRecovery} from "../interfaces/IRecovery.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../interfaces/ITreasuryRewards.sol";
 import {LibConfig} from "./LibConfig.sol";
@@ -33,6 +34,13 @@ library LibGame {
         round.remainingTreasuryEmission = treasuryBudget;
         round.recoveryCarryIn = recoveryCarryIn;
         round.recoveryPool = recoveryCarryIn;
+        LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
+        uint256 recoveryReserve = rs.recoveryReserveEth;
+        if (recoveryReserve != 0) {
+            rs.recoveryReserveEth = 0;
+            round.recoveryPool += recoveryReserve;
+            emit IRecovery.RecoveryReserveApplied(roundId, recoveryReserve, round.recoveryPool);
+        }
         uint256 winnerReserve = gs.winnerReserveEth;
         if (winnerReserve != 0) {
             gs.winnerReserveEth = 0;

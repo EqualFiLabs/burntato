@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {GameFacet} from "../../src/facets/GameFacet.sol";
-import {IGame} from "../../src/interfaces/IGame.sol";
+import {RecoveryFacet} from "../../src/facets/RecoveryFacet.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
+import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
-contract WinnerReserveFundingTest is DiamondTestSetup {
-    address internal funder = makeAddr("winner-reserve-funder");
+contract RecoveryReserveFundingTest is DiamondTestSetup {
+    address internal funder = makeAddr("recovery-reserve-funder");
 
-    IGame internal game;
+    IRecovery internal recovery;
 
     function setUp() public {
         _deployCoreWithoutPurchaseInitialization();
-        game = IGame(address(diamond));
+        recovery = IRecovery(address(diamond));
     }
 
     function test_DirectFundingBeforeFirstRoundIsAdditiveAndExactlyBacked() public {
@@ -22,33 +22,43 @@ contract WinnerReserveFundingTest is DiamondTestSetup {
 
         vm.startPrank(funder);
         vm.expectEmit(true, true, false, true, address(diamond));
-        emit IGame.WinnerReserveFunded(funder, 1, 1 ether, 1 ether);
-        game.fundWinnerReserve{value: 1 ether}(1);
-        game.fundWinnerReserve{value: 2 ether}(1);
+        emit IRecovery.RecoveryReserveFunded(funder, 1, 1 ether, 1 ether);
+        recovery.fundRecoveryReserve{value: 1 ether}(1);
+        recovery.fundRecoveryReserve{value: 2 ether}(1);
         vm.stopPrank();
 
-        assertEq(game.winnerReserveEth(), 3 ether);
+        assertEq(recovery.recoveryReserveEth(), 3 ether);
         assertEq(address(diamond).balance, 3 ether);
-        assertEq(game.currentRoundId(), 0);
     }
 
     function test_ZeroFundingRevertsWithoutMutation() public {
         vm.prank(funder);
         vm.expectRevert(Errors.ZeroAmount.selector);
-        game.fundWinnerReserve{value: 0}(1);
+        recovery.fundRecoveryReserve{value: 0}(1);
 
-        assertEq(game.winnerReserveEth(), 0);
+        assertEq(recovery.recoveryReserveEth(), 0);
         assertEq(address(diamond).balance, 0);
     }
 
-    function test_RawNativeTransferDoesNotEnterWinnerReserveAccounting() public {
+    function test_StaleTargetRevertsWithoutMutation() public {
+        vm.deal(funder, 1 ether);
+
+        vm.prank(funder);
+        vm.expectRevert(abi.encodeWithSelector(Errors.UnexpectedTargetRound.selector, 2, 1));
+        recovery.fundRecoveryReserve{value: 1 ether}(2);
+
+        assertEq(recovery.recoveryReserveEth(), 0);
+        assertEq(address(diamond).balance, 0);
+    }
+
+    function test_RawNativeTransferDoesNotEnterRecoveryReserveAccounting() public {
         vm.deal(funder, 1 ether);
         vm.prank(funder);
         (bool success,) = address(diamond).call{value: 1 ether}("");
 
         assertTrue(success);
         assertEq(address(diamond).balance, 1 ether);
-        assertEq(game.winnerReserveEth(), 0);
+        assertEq(recovery.recoveryReserveEth(), 0);
     }
 
     function test_FundingRemainsAvailableWhilePaused() public {
@@ -57,29 +67,18 @@ contract WinnerReserveFundingTest is DiamondTestSetup {
         vm.deal(funder, 1 ether);
 
         vm.prank(funder);
-        game.fundWinnerReserve{value: 1 ether}(1);
+        recovery.fundRecoveryReserve{value: 1 ether}(1);
 
-        assertEq(game.winnerReserveEth(), 1 ether);
-    }
-
-    function test_StaleTargetRevertsWithoutMutation() public {
-        vm.deal(funder, 1 ether);
-
-        vm.prank(funder);
-        vm.expectRevert(abi.encodeWithSelector(Errors.UnexpectedTargetRound.selector, 2, 1));
-        game.fundWinnerReserve{value: 1 ether}(2);
-
-        assertEq(game.winnerReserveEth(), 0);
-        assertEq(address(diamond).balance, 0);
+        assertEq(recovery.recoveryReserveEth(), 1 ether);
     }
 
     function test_FacetImplementationCannotAcceptReserveFunding() public {
-        GameFacet implementation = new GameFacet();
+        RecoveryFacet implementation = new RecoveryFacet();
         vm.deal(funder, 1 ether);
 
         vm.prank(funder);
         vm.expectRevert(Errors.InvalidAddress.selector);
-        implementation.fundWinnerReserve{value: 1 ether}(1);
+        implementation.fundRecoveryReserve{value: 1 ether}(1);
 
         assertEq(address(implementation).balance, 0);
     }

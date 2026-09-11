@@ -37,6 +37,7 @@ contract ProtocolHandler is Test {
     uint256 public nativeIn;
     uint256 public nativeOut;
     uint256 public directBuybackFunding;
+    uint256 public directRecoveryFunding;
     uint256 public directWinnerFunding;
     uint256 public forcedNative;
     uint256 public selfBurned;
@@ -47,6 +48,7 @@ contract ProtocolHandler is Test {
     bool public remainingIncreased;
     bool public recoveryWithdrawalMismatch;
     bool public buybackFundingMismatch;
+    bool public recoveryFundingMismatch;
     bool public winnerFundingMismatch;
     uint256 internal observedRound;
     uint256 internal observedRemaining;
@@ -200,15 +202,34 @@ contract ProtocolHandler is Test {
         uint256 amount = bound(uint256(rawAmount), 1, 10 ether);
         uint256 reserveBefore = game.winnerReserveEth();
         uint256 balanceBefore = diamond.balance;
+        uint256 targetRoundId = game.currentRoundId() == 0 ? 1 : game.currentRoundId() + 1;
         vm.deal(actor, actor.balance + amount);
         vm.prank(actor);
-        try game.fundWinnerReserve{value: amount}() {
+        try game.fundWinnerReserve{value: amount}(targetRoundId) {
             directWinnerFunding += amount;
             if (game.winnerReserveEth() != reserveBefore + amount || diamond.balance != balanceBefore + amount) {
                 winnerFundingMismatch = true;
             }
         } catch {
             winnerFundingMismatch = true;
+        }
+    }
+
+    function fundRecoveryReserve(uint256 actorSeed, uint256 rawAmount) external {
+        address actor = actors[actorSeed % actors.length];
+        uint256 amount = bound(uint256(rawAmount), 1, 10 ether);
+        uint256 reserveBefore = recovery.recoveryReserveEth();
+        uint256 balanceBefore = diamond.balance;
+        uint256 targetRoundId = game.currentRoundId() == 0 ? 1 : game.currentRoundId() + 1;
+        vm.deal(actor, actor.balance + amount);
+        vm.prank(actor);
+        try recovery.fundRecoveryReserve{value: amount}(targetRoundId) {
+            directRecoveryFunding += amount;
+            if (recovery.recoveryReserveEth() != reserveBefore + amount || diamond.balance != balanceBefore + amount) {
+                recoveryFundingMismatch = true;
+            }
+        } catch {
+            recoveryFundingMismatch = true;
         }
     }
 
@@ -271,8 +292,8 @@ contract ProtocolInvariantTest is DiamondTestSetup {
     function invariant_NativeAssetAccountingIsExactlyConserved() public view {
         assertEq(
             address(diamond).balance,
-            handler.nativeIn() + handler.directBuybackFunding() + handler.directWinnerFunding() + handler.forcedNative()
-                - handler.nativeOut()
+            handler.nativeIn() + handler.directBuybackFunding() + handler.directRecoveryFunding()
+                + handler.directWinnerFunding() + handler.forcedNative() - handler.nativeOut()
         );
     }
 
@@ -334,6 +355,12 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertLe(reserve, handler.nativeIn() + handler.directWinnerFunding());
     }
 
+    function invariant_RecoveryReserveRemainsBackedAndFundingBounded() public view {
+        uint256 reserve = IRecovery(address(diamond)).recoveryReserveEth();
+        assertLe(reserve, address(diamond).balance);
+        assertLe(reserve, handler.directRecoveryFunding());
+    }
+
     function invariant_RecoveryNeverOverpaysAnyRound() public view {
         IGame game = IGame(address(diamond));
         uint256 current = game.currentRoundId();
@@ -355,6 +382,7 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertFalse(handler.remainingIncreased());
         assertFalse(handler.recoveryWithdrawalMismatch());
         assertFalse(handler.buybackFundingMismatch());
+        assertFalse(handler.recoveryFundingMismatch());
         assertFalse(handler.winnerFundingMismatch());
     }
 }
