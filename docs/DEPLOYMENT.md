@@ -41,7 +41,10 @@ environment-overridable. Canonical deployment validates code plus PoolManager,
 Permit2, PositionDescriptor, and WETH bindings before deploying any Burntato
 contract. `deployments/statics-operators-robinhood-4663.json` separately pins
 the finalized Statics integration at block `47690599`, including the Operators
-NFT and Activation Registry hashes and their reciprocal bindings.
+NFT and Activation Registry hashes and their reciprocal bindings. Both
+validators read Robinhood's L2 block number and recent block hashes from the
+ArbSys precompile; Solidity's `block.number` exposes the Ethereum parent height
+on Robinhood and is not comparable to the manifest's L2 block height.
 
 ## Local defaults
 

@@ -10,6 +10,7 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
+import {RobinhoodBlockProvenance} from "./libraries/RobinhoodBlockProvenance.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
@@ -99,11 +100,12 @@ contract DeployBurntatoLocalFork is DeployBurntato {
 
         dependencies = RobinhoodDeploymentConfig.load();
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
+        uint256 currentBlock = RobinhoodBlockProvenance.blockNumber();
         if (
-            block.number < operatorDependencies.finalizedBlock
-                || (requireExactBlock && block.number != operatorDependencies.finalizedBlock)
+            currentBlock < operatorDependencies.finalizedBlock
+                || (requireExactBlock && currentBlock != operatorDependencies.finalizedBlock)
         ) {
-            revert InvalidLocalForkBlock(operatorDependencies.finalizedBlock, block.number);
+            revert InvalidLocalForkBlock(operatorDependencies.finalizedBlock, currentBlock);
         }
         string memory pinnedBlock = vm.rpcJson("eth_getBlockByNumber", "[\"0x2d7b367\",false]");
         bytes32 actualBlockHash = vm.parseJsonBytes32(pinnedBlock, ".hash");

@@ -5,6 +5,7 @@ import {Vm} from "forge-std/Vm.sol";
 
 import {IGenesisActivationRegistryView, IStaticsOperators} from "../../src/interfaces/IOperatorRewards.sol";
 import {StaticsOperatorDependencies} from "../DeploymentTypes.sol";
+import {RobinhoodBlockProvenance} from "./RobinhoodBlockProvenance.sol";
 
 library StaticsOperatorDeploymentConfig {
     error InvalidStaticsChain(uint256 expected, uint256 actual);
@@ -45,12 +46,13 @@ library StaticsOperatorDeploymentConfig {
         if (block.chainid != dependencies.chainId || !_isSupportedChain(dependencies.chainId)) {
             revert InvalidStaticsChain(dependencies.chainId, block.chainid);
         }
-        if (block.number < dependencies.finalizedBlock) {
-            revert InvalidStaticsBlock(dependencies.finalizedBlock, block.number);
+        uint256 currentBlock = RobinhoodBlockProvenance.blockNumber();
+        if (currentBlock < dependencies.finalizedBlock) {
+            revert InvalidStaticsBlock(dependencies.finalizedBlock, currentBlock);
         }
-        uint256 blockDistance = block.number - dependencies.finalizedBlock;
+        uint256 blockDistance = currentBlock - dependencies.finalizedBlock;
         if (blockDistance > 0 && blockDistance <= 256) {
-            bytes32 actualBlockHash = blockhash(dependencies.finalizedBlock);
+            bytes32 actualBlockHash = RobinhoodBlockProvenance.blockHash(dependencies.finalizedBlock);
             if (actualBlockHash != dependencies.finalizedBlockHash) {
                 revert InvalidStaticsBlockHash(dependencies.finalizedBlockHash, actualBlockHash);
             }

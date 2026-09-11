@@ -9,6 +9,7 @@ import {IStateView} from "@uniswap/v4-periphery/src/interfaces/IStateView.sol";
 import {IV4Quoter} from "@uniswap/v4-periphery/src/interfaces/IV4Quoter.sol";
 
 import {CanonicalV4Dependencies} from "../DeploymentTypes.sol";
+import {RobinhoodBlockProvenance} from "./RobinhoodBlockProvenance.sol";
 
 interface IPositionManagerBindings {
     function poolManager() external view returns (address);
@@ -79,10 +80,11 @@ library RobinhoodDeploymentConfig {
         if (block.chainid != dependencies.chainId || !_isSupportedChain(dependencies.chainId)) {
             revert InvalidCanonicalChain(dependencies.chainId, block.chainid);
         }
-        if (block.number < dependencies.forkBlock) revert InvalidCanonicalBlock(dependencies.forkBlock, block.number);
-        uint256 blockDistance = block.number - dependencies.forkBlock;
+        uint256 currentBlock = RobinhoodBlockProvenance.blockNumber();
+        if (currentBlock < dependencies.forkBlock) revert InvalidCanonicalBlock(dependencies.forkBlock, currentBlock);
+        uint256 blockDistance = currentBlock - dependencies.forkBlock;
         if (blockDistance > 0 && blockDistance <= 256) {
-            bytes32 actualBlockHash = blockhash(dependencies.forkBlock);
+            bytes32 actualBlockHash = RobinhoodBlockProvenance.blockHash(dependencies.forkBlock);
             if (actualBlockHash != dependencies.forkBlockHash) {
                 revert InvalidCanonicalBlockHash(dependencies.forkBlockHash, actualBlockHash);
             }
