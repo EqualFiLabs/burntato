@@ -18,6 +18,7 @@ import {Permit2SignatureHelpers} from "@uniswap/v4-periphery/test/shared/Permit2
 
 import {DeployBurntato} from "../../script/DeployBurntato.s.sol";
 import {BurntatoDeployment, CanonicalV4Dependencies, GenesisConfig} from "../../script/DeploymentTypes.sol";
+import {IArbSys, RobinhoodBlockProvenance} from "../../script/libraries/RobinhoodBlockProvenance.sol";
 import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
 import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
 import {IBuyback} from "../../src/interfaces/IBuyback.sol";
@@ -104,21 +105,23 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         uint256 overrideBlock = vm.envOr("ROBINHOOD_FORK_BLOCK", uint256(0));
         if (overrideBlock != 0) assertEq(overrideBlock, FORK_BLOCK, "ROBINHOOD_FORK_BLOCK drift");
 
-        if (block.chainid == RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID && block.number == FORK_BLOCK) {
-            string memory pinnedBlock = vm.rpcJson("eth_getBlockByNumber", "[\"0x2b23aa7\",false]");
-            assertEq(vm.parseJsonBytes32(pinnedBlock, ".hash"), FORK_BLOCK_HASH, "pinned block hash drift");
-        } else {
+        bool pinnedFork;
+        if (block.chainid == RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
+            (bool success, bytes memory result) = address(100).staticcall(abi.encodeCall(IArbSys.arbBlockNumber, ()));
+            pinnedFork = success && result.length == 32 && abi.decode(result, (uint256)) == FORK_BLOCK;
+        }
+        if (!pinnedFork) {
             string memory rpc = vm.envOr("ROBINHOOD_MAINNET", string(""));
             if (bytes(rpc).length == 0) {
                 if (vm.envOr("REQUIRE_ROBINHOOD_FORK", false)) fail("Robinhood fork required");
                 vm.skip(true, "ROBINHOOD_MAINNET is not configured");
             }
-            uint256 forkId = vm.createSelectFork(rpc, FORK_BLOCK + 1);
-            assertEq(blockhash(FORK_BLOCK), FORK_BLOCK_HASH, "pinned block hash drift");
-            vm.rollFork(forkId, FORK_BLOCK);
+            vm.createSelectFork(rpc, FORK_BLOCK);
         }
+        string memory pinnedBlock = vm.rpcJson("eth_getBlockByNumber", "[\"0x2b23aa7\",false]");
+        assertEq(vm.parseJsonBytes32(pinnedBlock, ".hash"), FORK_BLOCK_HASH, "pinned block hash drift");
         assertEq(block.chainid, 4663);
-        assertEq(block.number, FORK_BLOCK);
+        assertEq(RobinhoodBlockProvenance.blockNumber(), FORK_BLOCK);
 
         dependencies = RobinhoodDeploymentConfig.load();
         RobinhoodDeploymentConfig.validate(dependencies);
@@ -213,11 +216,13 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         Round memory roundOne = game.getRound(1);
         assertEq(roundOne.deadline - roundOne.holderSince, 60 minutes);
         vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
-        _buyGame(bob, 0.011 ether);
+        uint256 secondPrice = 0.011 ether;
+        _buyGame(bob, secondPrice);
         roundOne = game.getRound(1);
         assertEq(roundOne.deadline - roundOne.holderSince, 55 minutes);
         vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration / 2);
-        _buyGame(carol, 0.0121 ether);
+        uint256 thirdPrice = 0.0121 ether;
+        _buyGame(carol, thirdPrice);
         roundOne = game.getRound(1);
         assertEq(roundOne.deadline - roundOne.holderSince, 50 minutes);
         vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
@@ -232,7 +237,9 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         recovery.commitRecovery(bobCommitment);
         _settleCurrentRound();
         assertEq(game.currentRoundId(), 2);
-        assertEq(game.getRound(2).recoveryCarryIn, 0.01324 ether);
+        uint256 expectedRecoveryCarryIn =
+            (secondPrice * config.protocol.recoveryBps / 10_000) + (thirdPrice * config.protocol.recoveryBps / 10_000);
+        assertEq(game.getRound(2).recoveryCarryIn, expectedRecoveryCarryIn);
 
         _buyGame(dave, 0.01 ether);
         vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration / 2);
