@@ -10,6 +10,7 @@ import {Errors} from "../shared/Errors.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {ProtocolConfig} from "../shared/Types.sol";
 import {IOperatorRewards} from "../interfaces/IOperatorRewards.sol";
+import {IGame} from "../interfaces/IGame.sol";
 
 contract FoundationInit is ERC20 {
     event GenesisMarketSupplyMinted(uint256 amount);
@@ -27,7 +28,8 @@ contract FoundationInit is ERC20 {
         ProtocolConfig calldata config,
         address treasury,
         address operatorRewardsRouter,
-        uint256 marketPotatoSeed
+        uint256 marketPotatoSeed,
+        uint256 initialWinnerReserve
     ) external {
         LibProtocolStorage.InitializationStorage storage initialization = LibProtocolStorage.initialization();
         if (initialization.foundationInitialized) revert Errors.AlreadyInitialized();
@@ -35,6 +37,7 @@ contract FoundationInit is ERC20 {
         LibRecipients.enforceExternal(treasury);
         if (treasury == operatorRewardsRouter) revert Errors.InvalidAddress();
         if (marketPotatoSeed == 0) revert Errors.ZeroAmount();
+        if (initialWinnerReserve > address(this).balance) revert Errors.InsufficientBalance();
         LibConfig.validate(config);
         if (operatorRewardsRouter == address(0)) {
             if (config.operatorPurchaseBps != 0) revert Errors.InvalidProtocolConfig();
@@ -46,6 +49,7 @@ contract FoundationInit is ERC20 {
         }
         initialization.foundationInitialized = true;
         gs.config = config;
+        gs.winnerReserveEth = initialWinnerReserve;
         LibProtocolStorage.operatorRevenue().router = operatorRewardsRouter;
 
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
@@ -55,6 +59,9 @@ contract FoundationInit is ERC20 {
         LibProtocolStorage.market().potatoSeed = marketPotatoSeed;
         _mint(address(this), marketPotatoSeed);
         emit GenesisMarketSupplyMinted(marketPotatoSeed);
+        if (initialWinnerReserve != 0) {
+            emit IGame.WinnerReserveFunded(msg.sender, 1, initialWinnerReserve, initialWinnerReserve);
+        }
         emit FoundationConfigured();
     }
 }

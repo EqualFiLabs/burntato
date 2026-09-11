@@ -151,7 +151,7 @@ contract EconomicFuzzTest is DiamondTestSetup {
         assertEq(buybacks.lastBuybackBlock(), 0);
     }
 
-    function testFuzz_FourWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {
+    function testFuzz_SixPoolPurchaseSplitConservesEveryWei(uint128 rawAmount) public {
         uint256 amount = bound(uint256(rawAmount), 1, 1_000 ether);
         ProtocolConfig memory config = _defaultConfig();
         config.startingPrice = amount;
@@ -166,9 +166,11 @@ contract EconomicFuzzTest is DiamondTestSetup {
         Round memory round = game.getRound(1);
         uint256 treasuryShare = IClaims(address(diamond)).treasuryEthAvailable();
         uint256 buybackShare = IBuyback(address(diamond)).buybackReserveEth();
+        uint256 nextRoundWinnerShare = game.winnerReserveEth();
         assertEq(round.winnerPool, amount * 2_500 / 10_000);
         assertEq(round.recoveryPool, amount * 4_000 / 10_000);
         assertEq(buybackShare, amount * 1_000 / 10_000);
-        assertEq(round.winnerPool + round.recoveryPool + treasuryShare + buybackShare, amount);
+        assertEq(nextRoundWinnerShare, amount * 200 / 10_000);
+        assertEq(round.winnerPool + nextRoundWinnerShare + round.recoveryPool + treasuryShare + buybackShare, amount);
     }
 }

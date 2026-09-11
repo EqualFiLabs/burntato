@@ -11,6 +11,7 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {LibProtocolStorage} from "../../src/libraries/LibProtocolStorage.sol";
 import {LibMath} from "../../src/libraries/LibMath.sol";
+import {Errors} from "../../src/shared/Errors.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 
 contract StorageFacetV1 {
@@ -92,7 +93,7 @@ contract DiamondFoundationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), 1 ether))
+                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), 1 ether, 0))
             );
     }
 
@@ -105,8 +106,9 @@ contract DiamondFoundationTest is Test {
             emissionStepBps: 1_000,
             emissionVestingDuration: 120 seconds,
             winnerBps: 2_500,
+            nextRoundWinnerBps: 200,
             recoveryBps: 4_000,
-            treasuryBps: 2_500,
+            treasuryBps: 2_300,
             buybackBps: 1_000,
             operatorPurchaseBps: 0,
             recoveryBurnBps: 9_000,
@@ -128,6 +130,24 @@ contract DiamondFoundationTest is Test {
         FacetCut[] memory cuts = new FacetCut[](0);
         vm.expectRevert();
         IDiamondCut(address(diamond)).diamondCut(cuts, address(0), "");
+    }
+
+    function test_RejectsUnbackedInitialWinnerReserve() public {
+        BurntatoDiamond candidate = new BurntatoDiamond(authority, address(cutFacet));
+        FacetCut[] memory cuts = new FacetCut[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                Errors.InitializationFailed.selector, abi.encodeWithSelector(Errors.InsufficientBalance.selector)
+            )
+        );
+        vm.prank(authority);
+        IDiamondCut(address(candidate))
+            .diamondCut(
+                cuts,
+                address(initializer),
+                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), 1 ether, 1 wei))
+            );
     }
 
     function test_PreservesNamespacedStateAcrossFacetReplacement() public {

@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 
 import {GenesisConfig} from "../DeploymentTypes.sol";
+import {LibMath} from "../../src/libraries/LibMath.sol";
 import {BuybackConfig, ProtocolConfig} from "../../src/shared/Types.sol";
 
 library BurntatoDeploymentConfig {
@@ -15,6 +16,7 @@ library BurntatoDeploymentConfig {
 
     int24 internal constant DEFAULT_TICK_SPACING = 60;
     int24 internal constant DEFAULT_INITIAL_TICK = 170_280;
+    uint256 internal constant INITIAL_WINNER_TARGET_BPS = 10_500;
 
     function localDefaults() internal pure returns (GenesisConfig memory config) {
         config = GenesisConfig({
@@ -31,8 +33,9 @@ library BurntatoDeploymentConfig {
                 emissionStepBps: 1_000,
                 emissionVestingDuration: 4 minutes,
                 winnerBps: 2_500,
+                nextRoundWinnerBps: 200,
                 recoveryBps: 4_000,
-                treasuryBps: 2_500,
+                treasuryBps: 2_300,
                 buybackBps: 1_000,
                 operatorPurchaseBps: 0,
                 recoveryBurnBps: 9_000,
@@ -40,6 +43,7 @@ library BurntatoDeploymentConfig {
                 roundTimeoutDecay: 5 minutes,
                 minimumRoundTimeout: 5 minutes
             }),
+            initialWinnerReserve: 0,
             buyback: BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1}),
             hookFeeBps: 100,
             operatorRewardShareBps: 0,
@@ -49,6 +53,13 @@ library BurntatoDeploymentConfig {
             tickUpper: DEFAULT_INITIAL_TICK,
             potatoSeed: 100_000_000 ether
         });
+        config.initialWinnerReserve = defaultInitialWinnerReserve(config.protocol);
+    }
+
+    function defaultInitialWinnerReserve(ProtocolConfig memory protocol) internal pure returns (uint256) {
+        uint256 targetWinnerPool = LibMath.mulBpsUp(protocol.startingPrice, INITIAL_WINNER_TARGET_BPS);
+        uint256 firstPurchaseWinnerShare = LibMath.mulBpsDown(protocol.startingPrice, protocol.winnerBps);
+        return targetWinnerPool - firstPurchaseWinnerShare;
     }
 
     function checkedUint16(uint256 value) internal pure returns (uint16 narrowed) {

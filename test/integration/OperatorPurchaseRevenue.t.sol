@@ -79,7 +79,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
     function _initialConfig() internal pure override returns (ProtocolConfig memory config) {
         config = _defaultConfig();
         config.recoveryBps = 3_000;
-        config.treasuryBps = 2_000;
+        config.treasuryBps = 1_800;
         config.operatorPurchaseBps = 1_500;
     }
 
@@ -88,7 +88,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         return address(router);
     }
 
-    function testPurchaseRoutesExactFiveWaySplitToSharedRouter() public {
+    function testPurchaseRoutesExactSixWaySplitToSharedRouter() public {
         vm.prank(operatorOwner);
         router.register(OPERATOR_ID);
 
@@ -100,8 +100,9 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 0.0025 ether);
         assertEq(round.recoveryPool, 0.003 ether);
-        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.002 ether);
+        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0018 ether);
         assertEq(IBuyback(address(diamond)).buybackReserveEth(), 0.001 ether);
+        assertEq(game.winnerReserveEth(), 0.0002 ether);
         assertEq(router.pendingRevenue(), 0.0015 ether);
         assertEq(router.totalReceived(), 0.0015 ether);
         assertEq(address(diamond).balance, 0.0085 ether);
@@ -158,7 +159,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         IGovernance(address(diamond)).setTreasuryRecipient(address(router));
     }
 
-    function testTinyPurchaseAssignsAllFiveWayDustToTreasury() public {
+    function testTinyPurchaseAssignsAllSixWayDustToTreasury() public {
         ProtocolConfig memory next = _initialConfig();
         next.startingPrice = 7;
         next.priceIncreaseBps = 0;
@@ -207,7 +208,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         assertEq(router.totalReceived(), 0.00465 ether);
     }
 
-    function testFuzzFiveWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {
+    function testFuzzSixWayPurchaseSplitConservesEveryWei(uint128 rawAmount) public {
         uint256 amount = bound(uint256(rawAmount), 1, 1_000 ether);
         ProtocolConfig memory next = _initialConfig();
         next.startingPrice = amount;
@@ -222,12 +223,17 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         Round memory round = game.getRound(1);
         uint256 treasuryShare = IClaims(address(diamond)).treasuryEthAvailable();
         uint256 buybackShare = IBuyback(address(diamond)).buybackReserveEth();
+        uint256 nextRoundWinnerShare = game.winnerReserveEth();
         uint256 operatorShare = address(router).balance;
         assertEq(round.winnerPool, amount * 2_500 / 10_000);
         assertEq(round.recoveryPool, amount * 3_000 / 10_000);
         assertEq(buybackShare, amount * 1_000 / 10_000);
+        assertEq(nextRoundWinnerShare, amount * 200 / 10_000);
         assertEq(operatorShare, amount * 1_500 / 10_000);
-        assertEq(round.winnerPool + round.recoveryPool + treasuryShare + buybackShare + operatorShare, amount);
+        assertEq(
+            round.winnerPool + nextRoundWinnerShare + round.recoveryPool + treasuryShare + buybackShare + operatorShare,
+            amount
+        );
     }
 
     function _expectInitializationFailure(ProtocolConfig memory config, address candidateRouter, bytes4 expectedError)
@@ -255,7 +261,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
             .diamondCut(
                 noCuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (config, candidateTreasury, candidateRouter, 1 ether))
+                abi.encodeCall(FoundationInit.initialize, (config, candidateTreasury, candidateRouter, 1 ether, 0))
             );
     }
 }

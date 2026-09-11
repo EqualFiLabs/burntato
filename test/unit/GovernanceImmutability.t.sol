@@ -51,7 +51,9 @@ contract GovernanceAdministrationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether))
+                abi.encodeCall(
+                    FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether, 0)
+                )
             );
 
         vm.startPrank(bootstrap);
@@ -74,6 +76,7 @@ contract GovernanceAdministrationTest is Test {
         config.roundEmissionBudget = 0;
         config.emissionStepBps = 0;
         config.winnerBps = 0;
+        config.nextRoundWinnerBps = 0;
         config.recoveryBps = 0;
         config.treasuryBps = 10_000;
         config.buybackBps = 0;
@@ -125,6 +128,11 @@ contract GovernanceAdministrationTest is Test {
         _expectInvalidConfig(config);
 
         config = _config(0.02 ether, 1_000);
+        config.nextRoundWinnerBps = 10_001;
+        config.treasuryBps = 0;
+        _expectInvalidConfig(config);
+
+        config = _config(0.02 ether, 1_000);
         config.operatorPurchaseBps = 10_001;
         config.treasuryBps = 0;
         _expectInvalidConfig(config);
@@ -141,7 +149,7 @@ contract GovernanceAdministrationTest is Test {
     function test_ProtocolConfigurationCannotEnablePurchaseRewardsWithoutRouter() public {
         ProtocolConfig memory config = _config(0.02 ether, 1_000);
         config.recoveryBps = 3_000;
-        config.treasuryBps = 2_000;
+        config.treasuryBps = 1_800;
         config.operatorPurchaseBps = 1_500;
 
         _expectInvalidConfig(config);
@@ -316,7 +324,9 @@ contract GovernanceAdministrationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether))
+                abi.encodeCall(
+                    FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether, 0)
+                )
             );
     }
 
@@ -329,8 +339,9 @@ contract GovernanceAdministrationTest is Test {
             emissionStepBps: 1_000,
             emissionVestingDuration: 120 seconds,
             winnerBps: 2_500,
+            nextRoundWinnerBps: 200,
             recoveryBps: 4_000,
-            treasuryBps: 2_500,
+            treasuryBps: 2_300,
             buybackBps: 1_000,
             operatorPurchaseBps: 0,
             recoveryBurnBps: 9_000,

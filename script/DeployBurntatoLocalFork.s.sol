@@ -134,6 +134,8 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         vm.serializeAddress(object, "hookDeployer", deployment.hookDeployer);
         vm.serializeAddress(object, "operatorRewardsRouter", deployment.operatorRewardsRouter);
         vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
+        vm.serializeUint(object, "nextRoundWinnerBps", config.protocol.nextRoundWinnerBps);
+        vm.serializeUint(object, "initialWinnerReserve", config.initialWinnerReserve);
         vm.serializeUint(object, "operatorRewardShareBps", _operatorRewardShareBps(deployment));
         vm.serializeAddress(object, "operatorsNft", operatorDependencies.operatorsNft);
         vm.serializeAddress(object, "activationRegistry", operatorDependencies.activationRegistry);

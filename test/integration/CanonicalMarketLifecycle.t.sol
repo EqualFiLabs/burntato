@@ -361,7 +361,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
 
     function test_ConfiguredReservesCannotBeClaimedAndStillLaunchAfterExcessClaims() public {
         _createTreasuryInventory();
-        assertEq(claims.treasuryEthAvailable(), 0.005 ether);
+        assertEq(claims.treasuryEthAvailable(), 0.0046 ether);
         assertEq(claims.treasuryPotatoAvailable(), 1_000 ether);
         assertEq(buybacks.buybackReserveEth(), 0.002 ether);
 

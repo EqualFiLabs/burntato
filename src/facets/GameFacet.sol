@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IGame} from "../interfaces/IGame.sol";
+import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
@@ -24,12 +25,16 @@ contract GameFacet is IGame {
         if (round.currentHolder != address(0)) LibGame.finalizeEmission(round);
 
         uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
+        uint256 nextRoundWinnerShare = LibMath.mulBpsDown(msg.value, round.config.nextRoundWinnerBps);
         uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
         uint256 buybackShare = LibMath.mulBpsDown(msg.value, round.config.buybackBps);
         uint256 operatorShare = LibMath.mulBpsDown(msg.value, round.config.operatorPurchaseBps);
-        uint256 treasuryShare = msg.value - winnerShare - recoveryShare - buybackShare - operatorShare;
+        uint256 treasuryShare =
+            msg.value - winnerShare - nextRoundWinnerShare - recoveryShare - buybackShare - operatorShare;
         round.winnerPool += winnerShare;
         round.recoveryPool += recoveryShare;
+        gs.winnerReserveEth += nextRoundWinnerShare;
+        emit NextRoundWinnerFunded(round.roundId, round.roundId + 1, nextRoundWinnerShare, gs.winnerReserveEth);
         LibProtocolStorage.treasury().purchaseEth += treasuryShare;
         LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
         bs.reserveEth += buybackShare;
@@ -65,6 +70,23 @@ contract GameFacet is IGame {
             if (!success) revert Errors.OperatorRevenueTransferFailed(router, operatorShare);
         }
         rs.status = 1;
+    }
+
+    function fundWinnerReserve() external payable {
+        if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
+        if (msg.value == 0) revert Errors.ZeroAmount();
+        LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
+        if (rs.status == 2) revert Errors.Reentrancy();
+        rs.status = 2;
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        gs.winnerReserveEth += msg.value;
+        uint256 targetRoundId = gs.currentRoundId == 0 ? 1 : gs.currentRoundId + 1;
+        emit WinnerReserveFunded(msg.sender, targetRoundId, msg.value, gs.winnerReserveEth);
+        rs.status = 1;
+    }
+
+    function winnerReserveEth() external view returns (uint256) {
+        return LibProtocolStorage.game().winnerReserveEth;
     }
 
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {

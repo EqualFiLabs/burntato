@@ -67,13 +67,13 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         uint256 bobEthBefore = bob.balance;
         vm.prank(bob);
-        assertEq(claims.claimWinner(2, bob), 0.0025 ether);
-        assertEq(bob.balance - bobEthBefore, 0.0025 ether);
+        assertEq(claims.claimWinner(2, bob), 0.0027 ether);
+        assertEq(bob.balance - bobEthBefore, 0.0027 ether);
         assertTrue(claims.winnerClaimed(2));
 
         uint256 treasuryEthBefore = treasury.balance;
-        assertEq(claims.claimTreasury(), 0.005 ether);
-        assertEq(treasury.balance - treasuryEthBefore, 0.005 ether);
+        assertEq(claims.claimTreasury(), 0.0046 ether);
+        assertEq(treasury.balance - treasuryEthBefore, 0.0046 ether);
 
         assertEq(claims.claimTreasuryPotato(), 1_000 ether);
         assertEq(potato.balanceOf(treasury), 1_000 ether);
@@ -303,9 +303,9 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
     function test_ForcedEthDoesNotBecomeTreasuryRevenue() public {
         _buy(alice, 0.01 ether);
-        assertEq(claims.treasuryEthAvailable(), 0.0025 ether);
+        assertEq(claims.treasuryEthAvailable(), 0.0023 ether);
         vm.deal(address(diamond), address(diamond).balance + 7 ether);
-        assertEq(claims.treasuryEthAvailable(), 0.0025 ether);
+        assertEq(claims.treasuryEthAvailable(), 0.0023 ether);
     }
 
     function _assertExactRecoveryClaims(uint256 recoveryPool, address first, uint256 firstCommitment, address last)

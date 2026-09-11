@@ -7,6 +7,8 @@ router, initializer, CREATE2 hook deployer, and mined-address canonical hook. It
 installs the selector manifest, configures the market, enables the initial
 Treasury distributor, configures buybacks, appoints the reward allocator and
 guardian, and transfers Diamond authority to the configured `finalAdmin`.
+The payable Diamond creation also funds the configured initial Winner reserve,
+which foundation initialization records before purchases can be enabled.
 
 No `TimelockController` is deployed automatically. `finalAdmin` may be an EOA,
 Safe, or governance contract. The hook and self-contained PoolManager are
@@ -54,7 +56,8 @@ NFT and Activation Registry hashes and their reciprocal bindings.
 | Round emission budget | 100,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 4 minutes |
-| Purchase split | 2,500 / 4,000 / 2,500 / 1,000 / 0 BPS |
+| Purchase split | 2,500 Winner / 200 next Winner / 4,000 Recovery / 2,300 Treasury / 1,000 buyback / 0 Operator BPS |
+| Initial Winner reserve | 0.008 ETH |
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |
 | Operator share of hook fee | Disabled locally; required Robinhood input |
@@ -71,8 +74,8 @@ remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
 safety. Minimum timeout cannot exceed the initial timeout, and timeout decay
 cannot exceed the initial timeout. Zero timeout decay is valid and produces
 fixed resets. Protocol and Operator-share BPS values are bounded to 10,000; the
-purchase and Recovery splits must each sum to 10,000. The bilateral hook fee
-has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
+six-way purchase split and Recovery split must each sum to 10,000. The
+bilateral hook fee has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
 narrower 0-to-100 BPS domain. Zero price growth, emission step, emission budget,
 or hook fee is valid. The genesis POTATO allocation must fit the PositionManager
 `uint128` amount domain and produce nonzero, `uint128`-representable liquidity
@@ -97,12 +100,14 @@ BURNTATO_ROUND_EMISSION_BUDGET
 BURNTATO_EMISSION_STEP_BPS
 BURNTATO_EMISSION_VESTING_DURATION
 BURNTATO_WINNER_BPS
+BURNTATO_NEXT_ROUND_WINNER_BPS
 BURNTATO_RECOVERY_BPS
 BURNTATO_TREASURY_BPS
 BURNTATO_BUYBACK_BPS
 BURNTATO_OPERATOR_PURCHASE_BPS
 BURNTATO_RECOVERY_BURN_BPS
 BURNTATO_RECOVERY_TREASURY_BPS
+BURNTATO_INITIAL_WINNER_RESERVE
 BURNTATO_BUYBACK_MAX_SPEND
 BURNTATO_BUYBACK_CALLER_REWARD_BPS
 BURNTATO_BUYBACK_DELAY_BLOCKS
@@ -123,6 +128,11 @@ hook fee above 200 BPS or buyback caller reward above
 100 BPS. `BURNTATO_OPERATOR_REWARD_SHARE_BPS` remains independently configurable
 through 10,000 BPS because it divides the already-capped hook fee rather than
 increasing the fee charged to traders.
+
+When `BURNTATO_INITIAL_WINNER_RESERVE` is absent, deployment derives the value
+after all price and Winner overrides so the first valid purchase creates a
+Winner pool equal to 105% of its price. The variable can explicitly override
+that funding amount. The broadcaster must hold the reserve in addition to gas.
 
 The CREATE2 hook helper accepts deployment only from the address that created
 it. This keeps the mined hook address available to the same local broadcast

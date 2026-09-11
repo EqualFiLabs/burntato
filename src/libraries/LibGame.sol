@@ -20,6 +20,7 @@ library LibGame {
     }
 
     function activateRound(uint256 roundId, uint256 recoveryCarryIn) internal returns (Round storage round) {
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         round = snapshotFutureRound(roundId);
         LibProtocolStorage.TreasuryRewardsStorage storage trs = LibProtocolStorage.treasuryRewards();
         trs.activePerRound += trs.perRoundIncrease[roundId];
@@ -32,6 +33,12 @@ library LibGame {
         round.remainingTreasuryEmission = treasuryBudget;
         round.recoveryCarryIn = recoveryCarryIn;
         round.recoveryPool = recoveryCarryIn;
+        uint256 winnerReserve = gs.winnerReserveEth;
+        if (winnerReserve != 0) {
+            gs.winnerReserveEth = 0;
+            round.winnerPool += winnerReserve;
+            emit IGame.WinnerReserveApplied(roundId, winnerReserve, round.winnerPool);
+        }
         snapshotFutureRound(roundId + 1);
         emit IGame.RoundStarted(roundId, round.nextPrice, round.remainingEmission);
         emit ITreasuryRewards.TreasuryRewardRoundActivated(roundId, treasuryBudget, trs.escrowedPotato);

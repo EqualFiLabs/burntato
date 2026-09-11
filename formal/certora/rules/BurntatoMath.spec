@@ -4,8 +4,8 @@ methods {
     function linearEarned(uint128, uint64, uint64) external returns (uint256) envfree;
     function diminishingTimeout(uint64, uint64, uint64, uint64) external returns (uint256) envfree;
     function splitRecovery(uint128, uint16) external returns (uint256, uint256) envfree;
-    function purchaseSplit(uint128, uint16, uint16, uint16, uint16)
-        external returns (uint256, uint256, uint256, uint256, uint256) envfree;
+    function purchaseSplit(uint128, uint16, uint16, uint16, uint16, uint16)
+        external returns (uint256, uint256, uint256, uint256, uint256, uint256) envfree;
 }
 
 rule bpsRoundingBounds(uint128 amount, uint16 bps) {
@@ -28,53 +28,61 @@ rule fullBpsIsIdentity(uint128 amount) {
 rule purchaseSplitConservesEveryWei(
     uint128 amount,
     uint16 winnerBps,
+    uint16 nextRoundWinnerBps,
     uint16 recoveryBps,
     uint16 buybackBps,
     uint16 operatorBps
 ) {
     require winnerBps <= 10000;
+    require nextRoundWinnerBps <= 10000;
     require recoveryBps <= 10000;
     require buybackBps <= 10000;
     require operatorBps <= 10000;
-    require winnerBps + recoveryBps + buybackBps + operatorBps <= 10000;
+    require winnerBps + nextRoundWinnerBps + recoveryBps + buybackBps + operatorBps <= 10000;
 
     uint256 winner;
+    uint256 nextRoundWinner;
     uint256 recovery;
     uint256 treasury;
     uint256 buyback;
     uint256 operator;
-    winner, recovery, treasury, buyback, operator =
-        purchaseSplit(amount, winnerBps, recoveryBps, buybackBps, operatorBps);
+    winner, nextRoundWinner, recovery, treasury, buyback, operator =
+        purchaseSplit(amount, winnerBps, nextRoundWinnerBps, recoveryBps, buybackBps, operatorBps);
 
-    assert winner + recovery + treasury + buyback + operator == amount,
+    assert winner + nextRoundWinner + recovery + treasury + buyback + operator == amount,
         "purchase split loses or creates wei";
 }
 
 rule purchaseDustBelongsToTreasury(
     uint128 amount,
     uint16 winnerBps,
+    uint16 nextRoundWinnerBps,
     uint16 recoveryBps,
     uint16 buybackBps,
     uint16 operatorBps
 ) {
     require winnerBps <= 10000;
+    require nextRoundWinnerBps <= 10000;
     require recoveryBps <= 10000;
     require buybackBps <= 10000;
     require operatorBps <= 10000;
-    require winnerBps + recoveryBps + buybackBps + operatorBps <= 10000;
+    require winnerBps + nextRoundWinnerBps + recoveryBps + buybackBps + operatorBps <= 10000;
 
     uint256 winner;
+    uint256 nextRoundWinner;
     uint256 recovery;
     uint256 treasury;
     uint256 buyback;
     uint256 operator;
-    winner, recovery, treasury, buyback, operator =
-        purchaseSplit(amount, winnerBps, recoveryBps, buybackBps, operatorBps);
+    winner, nextRoundWinner, recovery, treasury, buyback, operator =
+        purchaseSplit(amount, winnerBps, nextRoundWinnerBps, recoveryBps, buybackBps, operatorBps);
 
-    uint16 treasuryBps = assert_uint16(10000 - winnerBps - recoveryBps - buybackBps - operatorBps);
+    uint16 treasuryBps = assert_uint16(
+        10000 - winnerBps - nextRoundWinnerBps - recoveryBps - buybackBps - operatorBps
+    );
     uint256 nominalTreasury = mulBpsDown(amount, treasuryBps);
     assert treasury >= nominalTreasury, "purchase dust is not assigned to Treasury";
-    assert treasury - nominalTreasury <= 4, "purchase dust exceeds four floor remainders";
+    assert treasury - nominalTreasury <= 5, "purchase dust exceeds five floor remainders";
 }
 
 rule linearEarnedBoundsAndSaturates(uint128 maximum, uint64 heldSeconds, uint64 vestingDuration) {

@@ -13,11 +13,11 @@ minimumRoundTimeout
 roundEmissionBudget
 emissionStepBps
 emissionVestingDuration
-winnerBps / recoveryBps / treasuryBps / buybackBps / operatorPurchaseBps
+winnerBps / nextRoundWinnerBps / recoveryBps / treasuryBps / buybackBps / operatorPurchaseBps
 recoveryBurnBps / recoveryTreasuryBps
 ```
 
-The five purchase shares must sum to 10,000 BPS and the two Recovery shares
+The six purchase shares must sum to 10,000 BPS and the two Recovery shares
 must sum to 10,000 BPS. Every `ProtocolConfig` BPS value is bounded by 10,000;
 the separate hook fee and installed buyback facet use narrower ceilings
 described below. The latter becomes immutable only after Diamond cuts are
@@ -47,7 +47,8 @@ The local genesis defaults are:
 | Round emission budget | 100,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 4 minutes |
-| Winner / Recovery / Treasury / buyback / Operator split | 25% / 40% / 25% / 10% / 0% |
+| Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 2% / 40% / 23% / 10% / 0% |
+| Initial Winner reserve | 0.008 ETH; targets a 5% first-grab margin |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
 | Operator share of hook fee | Disabled; required for Robinhood deployment |
@@ -62,11 +63,12 @@ emission, allocates ETH under the round snapshot, installs the new holder,
 resets the deadline, and calculates the next price:
 
 ```text
-winnerShare   = floor(price * winnerBps / 10_000)
-recoveryShare = floor(price * recoveryBps / 10_000)
-buybackShare  = floor(price * buybackBps / 10_000)
-operatorShare = floor(price * operatorPurchaseBps / 10_000)
-treasuryShare = price - winnerShare - recoveryShare - buybackShare - operatorShare
+winnerShare          = floor(price * winnerBps / 10_000)
+nextRoundWinnerShare = floor(price * nextRoundWinnerBps / 10_000)
+recoveryShare        = floor(price * recoveryBps / 10_000)
+buybackShare         = floor(price * buybackBps / 10_000)
+operatorShare        = floor(price * operatorPurchaseBps / 10_000)
+treasuryShare        = price - all five rounded-down shares
 
 priorPurchaseCount = purchaseIndex
 maximumReduction = roundTimeout - minimumRoundTimeout
@@ -85,12 +87,18 @@ deadline or elapsed time. Every successful purchase counts, including multiple
 purchases at one timestamp. Failed transactions do not count, and a new round
 starts again with the initial timeout.
 
-The Treasury receives deterministic split dust so the five allocations always
-equal the purchase exactly. Buyback ETH is held in a dedicated reserve and is
-not Winner, Recovery, Treasury-claim, or launch-seed accounting. Purchase count
-and price progression do not consume POTATO emission. Purchase count also
-drives the urgency schedule, but same-timestamp cycling still earns zero and
-leaves both base and Treasury-funded emission budgets unchanged.
+The Treasury receives deterministic split dust so the six allocations always
+equal the purchase exactly. `nextRoundWinnerShare` and permissionless direct
+funding accumulate in the Winner reserve. Round activation moves the complete
+reserve into that round's Winner pool and clears it exactly once. Direct
+funding before Round 1 therefore seeds Round 1; funding during Round N targets
+Round N+1. Raw ETH transfers do not enter reserve accounting.
+
+Fresh deployments fund the initial reserve so the first purchase makes its
+Winner pool 105% of the starting price, using upward rounding for the target
+and downward rounding for the purchase share. At 0.01 ETH and 25% Winner this
+is 0.008 ETH; at 0.003 ETH and 35% Winner it is 0.0021 ETH. Buyback ETH remains
+separate from Winner, Recovery, Treasury-claim, and launch-seed accounting.
 
 ## Holder-time emission budget
 

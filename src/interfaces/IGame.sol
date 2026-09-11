@@ -18,8 +18,17 @@ interface IGame {
     );
     event BuybackFunded(uint256 indexed roundId, uint256 amount, uint256 reserveEth);
     event OperatorPurchaseRevenueQueued(uint256 indexed roundId, address indexed router, uint256 amount);
+    event WinnerReserveFunded(
+        address indexed funder, uint256 indexed targetRoundId, uint256 amount, uint256 reserveEth
+    );
+    event NextRoundWinnerFunded(
+        uint256 indexed roundId, uint256 indexed targetRoundId, uint256 amount, uint256 reserveEth
+    );
+    event WinnerReserveApplied(uint256 indexed roundId, uint256 amount, uint256 winnerPool);
 
     function buyPotato() external payable;
+    function fundWinnerReserve() external payable;
+    function winnerReserveEth() external view returns (uint256);
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned);
     function currentRoundId() external view returns (uint256);
     function getRound(uint256 roundId) external view returns (Round memory);

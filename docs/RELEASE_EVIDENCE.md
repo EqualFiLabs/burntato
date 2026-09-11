@@ -1,5 +1,57 @@
 # Release qualification evidence
 
+## Next-round Winner reserve candidate
+
+Date: September 10, 2026
+
+Source candidate: `1076a35` on `feat/next-round-winner-reserve`, based on
+merged `main` commit `8bb1ac8`.
+
+Each Hot Potato purchase now allocates a snapshotted, configurable
+`nextRoundWinnerBps` share to a dedicated ETH reserve. The complete reserve
+moves into the next round's Winner pool at activation and clears exactly once.
+Anyone may add positive ETH through `fundWinnerReserve()` before or after
+purchase initialization, including while paused; raw native transfers remain
+outside reserve accounting.
+
+Fresh deployments atomically fund and record a configurable genesis reserve.
+The default derives that reserve from the final starting price and Winner share
+so the first purchase creates a Winner pool worth 105% of its price. With the
+0.01 ETH starting price and 25% Winner share, the seed is 0.008 ETH. The local
+purchase split is now 25% Winner, 2% next Winner, 40% Recovery, 23% Treasury,
+10% buyback, and 0% Operator. The Robinhood testnet profile uses 25%, 2%, 30%,
+18%, 10%, and 15%, respectively.
+
+Execution validation used Foundry 1.7.1, the version pinned by CI, with
+Solidity 0.8.26 and the Cancun EVM. Formatting used the installed formatter:
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Format | `forge fmt --check` | Passed with the installed formatter |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 71 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 72 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties, 1,000 runs each |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 14 properties passed at 256 runs and depth 50 |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 38 passed, 5 configured-RPC skips |
+| Pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1` | 3 passed |
+| Formal sources | Focused Foundry builds | Certora harness and Halmos property sources compile |
+
+The tests cover additive direct funding, pause independence, direct-facet ETH
+trap prevention, untracked forced ETH, initializer backing, exact six-way
+purchase conservation, Treasury rounding dust, governance snapshots, reserve
+application across real rounds, claims, fresh deployment funding, and a full
+canonical Robinhood lifecycle. The invariant suite includes the reserve in
+exact native-asset accounting and proves the recorded liability remains backed
+through randomized lifecycle actions.
+
+This is intentionally a fresh-deployment change: the configuration tuples,
+initializer ABI, selectors, and Diamond storage differ from prior deployments.
+It is not an in-place upgrade package. The frontend ABI is outside this
+candidate. The formal sources compile, but the Certora and Halmos solvers were
+not installed and therefore were not executed. The pinned fork is read-only
+evidence; no live transaction or deployment was performed. Remote CI and an
+independent third-party audit are not yet proven.
+
 ## Economic and Recovery safety candidate
 
 Date: September 4, 2026

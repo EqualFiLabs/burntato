@@ -37,6 +37,7 @@ contract ProtocolHandler is Test {
     uint256 public nativeIn;
     uint256 public nativeOut;
     uint256 public directBuybackFunding;
+    uint256 public directWinnerFunding;
     uint256 public forcedNative;
     uint256 public selfBurned;
     mapping(uint256 => uint256) public recoveryPaid;
@@ -46,6 +47,7 @@ contract ProtocolHandler is Test {
     bool public remainingIncreased;
     bool public recoveryWithdrawalMismatch;
     bool public buybackFundingMismatch;
+    bool public winnerFundingMismatch;
     uint256 internal observedRound;
     uint256 internal observedRemaining;
 
@@ -193,6 +195,23 @@ contract ProtocolHandler is Test {
         }
     }
 
+    function fundWinnerReserve(uint256 actorSeed, uint256 rawAmount) external {
+        address actor = actors[actorSeed % actors.length];
+        uint256 amount = bound(uint256(rawAmount), 1, 10 ether);
+        uint256 reserveBefore = game.winnerReserveEth();
+        uint256 balanceBefore = diamond.balance;
+        vm.deal(actor, actor.balance + amount);
+        vm.prank(actor);
+        try game.fundWinnerReserve{value: amount}() {
+            directWinnerFunding += amount;
+            if (game.winnerReserveEth() != reserveBefore + amount || diamond.balance != balanceBefore + amount) {
+                winnerFundingMismatch = true;
+            }
+        } catch {
+            winnerFundingMismatch = true;
+        }
+    }
+
     function forceNative(uint96 rawAmount) external {
         uint256 amount = bound(uint256(rawAmount), 0, 10 ether);
         vm.deal(address(this), address(this).balance + amount);
@@ -252,7 +271,8 @@ contract ProtocolInvariantTest is DiamondTestSetup {
     function invariant_NativeAssetAccountingIsExactlyConserved() public view {
         assertEq(
             address(diamond).balance,
-            handler.nativeIn() + handler.directBuybackFunding() + handler.forcedNative() - handler.nativeOut()
+            handler.nativeIn() + handler.directBuybackFunding() + handler.directWinnerFunding() + handler.forcedNative()
+                - handler.nativeOut()
         );
     }
 
@@ -308,6 +328,12 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertLe(reserve, handler.nativeIn() + handler.directBuybackFunding());
     }
 
+    function invariant_WinnerReserveRemainsBackedAndPurchaseBounded() public view {
+        uint256 reserve = IGame(address(diamond)).winnerReserveEth();
+        assertLe(reserve, address(diamond).balance);
+        assertLe(reserve, handler.nativeIn() + handler.directWinnerFunding());
+    }
+
     function invariant_RecoveryNeverOverpaysAnyRound() public view {
         IGame game = IGame(address(diamond));
         uint256 current = game.currentRoundId();
@@ -329,5 +355,6 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertFalse(handler.remainingIncreased());
         assertFalse(handler.recoveryWithdrawalMismatch());
         assertFalse(handler.buybackFundingMismatch());
+        assertFalse(handler.winnerFundingMismatch());
     }
 }

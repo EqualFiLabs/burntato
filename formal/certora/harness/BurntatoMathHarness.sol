@@ -42,15 +42,30 @@ contract BurntatoMathHarness {
     function purchaseSplit(
         uint128 amount,
         uint16 winnerBps,
+        uint16 nextRoundWinnerBps,
         uint16 recoveryBps,
         uint16 buybackBps,
         uint16 operatorBps
-    ) external pure returns (uint256 winner, uint256 recovery, uint256 treasury, uint256 buyback, uint256 operator) {
-        require(uint256(winnerBps) + recoveryBps + buybackBps + operatorBps <= Constants.BPS);
+    )
+        external
+        pure
+        returns (
+            uint256 winner,
+            uint256 nextRoundWinner,
+            uint256 recovery,
+            uint256 treasury,
+            uint256 buyback,
+            uint256 operator
+        )
+    {
+        require(
+            uint256(winnerBps) + nextRoundWinnerBps + recoveryBps + buybackBps + operatorBps <= Constants.BPS
+        );
         winner = LibMath.mulBpsDown(amount, winnerBps);
+        nextRoundWinner = LibMath.mulBpsDown(amount, nextRoundWinnerBps);
         recovery = LibMath.mulBpsDown(amount, recoveryBps);
         buyback = LibMath.mulBpsDown(amount, buybackBps);
         operator = LibMath.mulBpsDown(amount, operatorBps);
-        treasury = amount - winner - recovery - buyback - operator;
+        treasury = amount - winner - nextRoundWinner - recovery - buyback - operator;
     }
 }
