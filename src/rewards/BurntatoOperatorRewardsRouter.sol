@@ -36,6 +36,8 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
     error InvalidOperatorWeight(uint256 operatorId);
     error OperatorAlreadyRegistered(uint256 operatorId);
     error OperatorNotRegistered(uint256 operatorId);
+    error EmptyOperatorBatch();
+    error InvalidOperatorOrder(uint256 previousOperatorId, uint256 operatorId);
     error InvalidReceiver(address receiver);
     error NativeTransferFailed(address receiver, uint256 amount);
 
@@ -96,25 +98,45 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
     }
 
     function claim(uint256 operatorId, address receiver) external nonReentrant returns (uint256 amount) {
-        if (receiver == address(0) || receiver == address(this)) revert InvalidReceiver(receiver);
+        _validateReceiver(receiver);
         _accrue();
-        Registration storage registration = _registrations[operatorId];
-        if (registration.owner == address(0)) revert OperatorNotRegistered(operatorId);
+        bool remainsRegistered;
+        (amount, remainsRegistered) = _collectOperatorReward(operatorId, msg.sender);
+        _payOperatorRewards(receiver, amount);
+        if (remainsRegistered) emit OperatorRewardClaimed(operatorId, msg.sender, receiver, amount);
+    }
 
-        address currentOwner = operators.ownerOf(operatorId);
-        if (currentOwner != msg.sender) revert InvalidOperatorOwner(operatorId, msg.sender, currentOwner);
-        (SyncResult result,,) = _syncKnownOwner(operatorId, registration, currentOwner);
-        if (result == SyncResult.Invalidated) return 0;
+    function claimBatch(uint256[] calldata operatorIds, address receiver)
+        external
+        nonReentrant
+        returns (uint256 amount)
+    {
+        _validateReceiver(receiver);
+        uint256 length = operatorIds.length;
+        if (length == 0) revert EmptyOperatorBatch();
+        _accrue();
 
-        amount = registration.claimable;
-        registration.claimable = 0;
-        if (amount != 0) {
-            accountedBalance -= amount;
-            totalOperatorClaimed += amount;
-            (bool success,) = receiver.call{value: amount}("");
-            if (!success) revert NativeTransferFailed(receiver, amount);
+        uint256[] memory claimedAmounts = new uint256[](length);
+        bool[] memory claimedRegistrations = new bool[](length);
+        uint256 previousOperatorId;
+        for (uint256 i; i < length; ++i) {
+            uint256 operatorId = operatorIds[i];
+            if (i != 0 && operatorId <= previousOperatorId) {
+                revert InvalidOperatorOrder(previousOperatorId, operatorId);
+            }
+            previousOperatorId = operatorId;
+            (uint256 claimedAmount, bool remainsRegistered) = _collectOperatorReward(operatorId, msg.sender);
+            claimedAmounts[i] = claimedAmount;
+            claimedRegistrations[i] = remainsRegistered;
+            amount += claimedAmount;
         }
-        emit OperatorRewardClaimed(operatorId, currentOwner, receiver, amount);
+
+        _payOperatorRewards(receiver, amount);
+        for (uint256 i; i < length; ++i) {
+            if (claimedRegistrations[i]) {
+                emit OperatorRewardClaimed(operatorIds[i], msg.sender, receiver, claimedAmounts[i]);
+            }
+        }
     }
 
     function accrue() external returns (uint256 amount) {
@@ -196,6 +218,35 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
         registration.rewardIndex = rewardIndex;
         emit OperatorWeightUpdated(operatorId, previousWeight, currentWeight);
         return (SyncResult.WeightIncreased, currentOwner, currentWeight);
+    }
+
+    function _collectOperatorReward(uint256 operatorId, address claimant)
+        private
+        returns (uint256 amount, bool remainsRegistered)
+    {
+        Registration storage registration = _registrations[operatorId];
+        if (registration.owner == address(0)) revert OperatorNotRegistered(operatorId);
+
+        address currentOwner = operators.ownerOf(operatorId);
+        if (currentOwner != claimant) revert InvalidOperatorOwner(operatorId, claimant, currentOwner);
+        (SyncResult result,,) = _syncKnownOwner(operatorId, registration, currentOwner);
+        if (result == SyncResult.Invalidated) return (0, false);
+
+        amount = registration.claimable;
+        registration.claimable = 0;
+        remainsRegistered = true;
+    }
+
+    function _validateReceiver(address receiver) private view {
+        if (receiver == address(0) || receiver == address(this)) revert InvalidReceiver(receiver);
+    }
+
+    function _payOperatorRewards(address receiver, uint256 amount) private {
+        if (amount == 0) return;
+        accountedBalance -= amount;
+        totalOperatorClaimed += amount;
+        (bool success,) = receiver.call{value: amount}("");
+        if (!success) revert NativeTransferFailed(receiver, amount);
     }
 
     function _invalidate(

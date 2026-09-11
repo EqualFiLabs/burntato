@@ -50,6 +50,7 @@ interface IOperatorRewards {
     function register(uint256 operatorId) external;
     function sync(uint256 operatorId) external returns (SyncResult result);
     function claim(uint256 operatorId, address receiver) external returns (uint256 amount);
+    function claimBatch(uint256[] calldata operatorIds, address receiver) external returns (uint256 amount);
     function accrue() external returns (uint256 amount);
     function claimTreasury() external returns (uint256 amount);
     function registrationOf(uint256 operatorId) external view returns (Registration memory registration);

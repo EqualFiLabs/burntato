@@ -144,6 +144,110 @@ contract OperatorRewardsRouterTest is Test {
         assertEq(address(router).balance, 0);
     }
 
+    function test_BatchClaimPaysMultipleOperatorsThroughOneReceiver() public {
+        operators.setOwner(BOB_OPERATOR, alice);
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, alice);
+        _sendRevenue(20 ether);
+
+        uint256[] memory operatorIds = new uint256[](2);
+        operatorIds[0] = ALICE_OPERATOR;
+        operatorIds[1] = BOB_OPERATOR;
+        uint256 beforeBalance = carol.balance;
+        vm.prank(alice);
+        assertEq(router.claimBatch(operatorIds, carol), 20 ether);
+
+        assertEq(carol.balance - beforeBalance, 20 ether);
+        assertEq(router.totalOperatorClaimed(), 20 ether);
+        assertEq(address(router).balance, 0);
+        (,,, uint256 aliceClaimable,,) = router.previewRewards(ALICE_OPERATOR);
+        (,,, uint256 bobClaimable,,) = router.previewRewards(BOB_OPERATOR);
+        assertEq(aliceClaimable, 0);
+        assertEq(bobClaimable, 0);
+    }
+
+    function test_BatchClaimRequiresNonemptyStrictlyIncreasingIds() public {
+        uint256[] memory empty = new uint256[](0);
+        vm.prank(alice);
+        vm.expectRevert(BurntatoOperatorRewardsRouter.EmptyOperatorBatch.selector);
+        router.claimBatch(empty, alice);
+
+        operators.setOwner(BOB_OPERATOR, alice);
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, alice);
+
+        uint256[] memory duplicate = new uint256[](2);
+        duplicate[0] = ALICE_OPERATOR;
+        duplicate[1] = ALICE_OPERATOR;
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOrder.selector, ALICE_OPERATOR, ALICE_OPERATOR
+            )
+        );
+        router.claimBatch(duplicate, alice);
+
+        uint256[] memory descending = new uint256[](2);
+        descending[0] = BOB_OPERATOR;
+        descending[1] = ALICE_OPERATOR;
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOrder.selector, BOB_OPERATOR, ALICE_OPERATOR
+            )
+        );
+        router.claimBatch(descending, alice);
+    }
+
+    function test_BatchClaimRevertsAtomicallyWhenAnyOperatorIsNotOwned() public {
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, bob);
+        _sendRevenue(20 ether);
+
+        uint256[] memory operatorIds = new uint256[](2);
+        operatorIds[0] = ALICE_OPERATOR;
+        operatorIds[1] = BOB_OPERATOR;
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOwner.selector, BOB_OPERATOR, alice, bob
+            )
+        );
+        router.claimBatch(operatorIds, alice);
+
+        assertEq(router.totalOperatorClaimed(), 0);
+        assertEq(address(router).balance, 20 ether);
+        (,,, uint256 aliceClaimable,,) = router.previewRewards(ALICE_OPERATOR);
+        (,,, uint256 bobClaimable,,) = router.previewRewards(BOB_OPERATOR);
+        assertEq(aliceClaimable, 10 ether);
+        assertEq(bobClaimable, 10 ether);
+    }
+
+    function test_BatchClaimRollsBackWhenReceiverRejectsPayment() public {
+        operators.setOwner(BOB_OPERATOR, alice);
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, alice);
+        _sendRevenue(20 ether);
+        RejectingRewardReceiver rejecting = new RejectingRewardReceiver();
+
+        uint256[] memory operatorIds = new uint256[](2);
+        operatorIds[0] = ALICE_OPERATOR;
+        operatorIds[1] = BOB_OPERATOR;
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.NativeTransferFailed.selector, address(rejecting), 20 ether
+            )
+        );
+        router.claimBatch(operatorIds, address(rejecting));
+
+        assertEq(router.totalOperatorClaimed(), 0);
+        (,,, uint256 aliceClaimable,,) = router.previewRewards(ALICE_OPERATOR);
+        (,,, uint256 bobClaimable,,) = router.previewRewards(BOB_OPERATOR);
+        assertEq(aliceClaimable, 10 ether);
+        assertEq(bobClaimable, 10 ether);
+    }
+
     function test_RegistersEverySupportedActivationTier() public {
         uint16[5] memory weights = [uint16(10_000), 11_000, 11_500, 12_000, 12_500];
         for (uint256 i; i < weights.length; ++i) {
