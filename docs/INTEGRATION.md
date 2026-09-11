@@ -165,8 +165,12 @@ Winner, Recovery, Treasury, and buyback obligations have been recorded.
 
 - `register(operatorId)` is current-owner-only and starts at the current
   `multiplierBps` without historical rewards.
+- `registerBatch(operatorIds)` applies the same registration rules atomically
+  to a nonempty, strictly increasing list owned by one caller.
 - `sync(operatorId)` is permissionless. Higher weights apply only after old
   weight accrual settles.
+- `syncBatch(operatorIds)` applies the same permissionless synchronization
+  rules atomically to a nonempty, strictly increasing registered list.
 - `claim(operatorId, receiver)` is current-owner-only and permits an explicit
   receiver.
 - `claimBatch(operatorIds, receiver)` claims a nonempty, strictly increasing

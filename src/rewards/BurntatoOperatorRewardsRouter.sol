@@ -68,8 +68,45 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
 
     function register(uint256 operatorId) external {
         _accrue();
+        _register(operatorId, msg.sender);
+    }
+
+    function registerBatch(uint256[] calldata operatorIds) external {
+        uint256 length = operatorIds.length;
+        if (length == 0) revert EmptyOperatorBatch();
+        _accrue();
+
+        uint256 previousOperatorId = 0;
+        for (uint256 i; i < length; ++i) {
+            uint256 operatorId = operatorIds[i];
+            _validateOperatorOrder(i, previousOperatorId, operatorId);
+            previousOperatorId = operatorId;
+            _register(operatorId, msg.sender);
+        }
+    }
+
+    function sync(uint256 operatorId) external returns (SyncResult result) {
+        _accrue();
+        return _syncRegistered(operatorId);
+    }
+
+    function syncBatch(uint256[] calldata operatorIds) external {
+        uint256 length = operatorIds.length;
+        if (length == 0) revert EmptyOperatorBatch();
+        _accrue();
+
+        uint256 previousOperatorId = 0;
+        for (uint256 i; i < length; ++i) {
+            uint256 operatorId = operatorIds[i];
+            _validateOperatorOrder(i, previousOperatorId, operatorId);
+            previousOperatorId = operatorId;
+            _syncRegistered(operatorId);
+        }
+    }
+
+    function _register(uint256 operatorId, address caller) private {
         address currentOwner = operators.ownerOf(operatorId);
-        if (currentOwner != msg.sender) revert InvalidOperatorOwner(operatorId, msg.sender, currentOwner);
+        if (currentOwner != caller) revert InvalidOperatorOwner(operatorId, caller, currentOwner);
 
         Registration storage registration = _registrations[operatorId];
         if (registration.owner != address(0)) {
@@ -90,8 +127,7 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
         emit OperatorRegistered(operatorId, currentOwner, weight);
     }
 
-    function sync(uint256 operatorId) external returns (SyncResult result) {
-        _accrue();
+    function _syncRegistered(uint256 operatorId) private returns (SyncResult result) {
         Registration storage registration = _registrations[operatorId];
         if (registration.owner == address(0)) revert OperatorNotRegistered(operatorId);
         (result,,) = _sync(operatorId, registration);
@@ -118,12 +154,10 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
 
         uint256[] memory claimedAmounts = new uint256[](length);
         bool[] memory claimedRegistrations = new bool[](length);
-        uint256 previousOperatorId;
+        uint256 previousOperatorId = 0;
         for (uint256 i; i < length; ++i) {
             uint256 operatorId = operatorIds[i];
-            if (i != 0 && operatorId <= previousOperatorId) {
-                revert InvalidOperatorOrder(previousOperatorId, operatorId);
-            }
+            _validateOperatorOrder(i, previousOperatorId, operatorId);
             previousOperatorId = operatorId;
             (uint256 claimedAmount, bool remainsRegistered) = _collectOperatorReward(operatorId, msg.sender);
             claimedAmounts[i] = claimedAmount;
@@ -239,6 +273,12 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
 
     function _validateReceiver(address receiver) private view {
         if (receiver == address(0) || receiver == address(this)) revert InvalidReceiver(receiver);
+    }
+
+    function _validateOperatorOrder(uint256 index, uint256 previousOperatorId, uint256 operatorId) private pure {
+        if (index != 0 && operatorId <= previousOperatorId) {
+            revert InvalidOperatorOrder(previousOperatorId, operatorId);
+        }
     }
 
     function _payOperatorRewards(address receiver, uint256 amount) private {

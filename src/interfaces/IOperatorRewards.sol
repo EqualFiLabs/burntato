@@ -48,7 +48,9 @@ interface IOperatorRewards {
 
     function burntato() external view returns (address);
     function register(uint256 operatorId) external;
+    function registerBatch(uint256[] calldata operatorIds) external;
     function sync(uint256 operatorId) external returns (SyncResult result);
+    function syncBatch(uint256[] calldata operatorIds) external;
     function claim(uint256 operatorId, address receiver) external returns (uint256 amount);
     function claimBatch(uint256[] calldata operatorIds, address receiver) external returns (uint256 amount);
     function accrue() external returns (uint256 amount);

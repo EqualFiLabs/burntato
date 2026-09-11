@@ -144,6 +144,158 @@ contract OperatorRewardsRouterTest is Test {
         assertEq(address(router).balance, 0);
     }
 
+    function test_BatchRegisterStartsOwnedOperatorsProspectively() public {
+        operators.setOwner(BOB_OPERATOR, alice);
+        registry.setWeight(BOB_OPERATOR, 12_500);
+        _sendRevenue(3 ether);
+
+        uint256[] memory operatorIds = _twoOperatorIds();
+        vm.expectEmit(false, false, false, true, address(router));
+        emit IOperatorRewards.RevenueAccrued(3 ether, 0, 0);
+        vm.expectEmit(true, true, false, true, address(router));
+        emit IOperatorRewards.OperatorRegistered(ALICE_OPERATOR, alice, 10_000);
+        vm.expectEmit(true, true, false, true, address(router));
+        emit IOperatorRewards.OperatorRegistered(BOB_OPERATOR, alice, 12_500);
+        vm.prank(alice);
+        router.registerBatch(operatorIds);
+
+        assertEq(router.registrationOf(ALICE_OPERATOR).owner, alice);
+        assertEq(router.registrationOf(BOB_OPERATOR).owner, alice);
+        assertEq(router.totalRegisteredWeight(), 22_500);
+        assertEq(router.treasuryClaimable(), 3 ether);
+        _sendRevenue(22.5 ether);
+        vm.prank(alice);
+        assertEq(router.claimBatch(operatorIds, alice), 22.5 ether);
+    }
+
+    function test_BatchRegisterRequiresNonemptyStrictlyIncreasingIds() public {
+        uint256[] memory empty = new uint256[](0);
+        vm.prank(alice);
+        vm.expectRevert(BurntatoOperatorRewardsRouter.EmptyOperatorBatch.selector);
+        router.registerBatch(empty);
+
+        operators.setOwner(BOB_OPERATOR, alice);
+        uint256[] memory duplicate = new uint256[](2);
+        duplicate[0] = ALICE_OPERATOR;
+        duplicate[1] = ALICE_OPERATOR;
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOrder.selector, ALICE_OPERATOR, ALICE_OPERATOR
+            )
+        );
+        router.registerBatch(duplicate);
+        assertEq(router.registrationOf(ALICE_OPERATOR).owner, address(0));
+
+        uint256[] memory descending = new uint256[](2);
+        descending[0] = BOB_OPERATOR;
+        descending[1] = ALICE_OPERATOR;
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOrder.selector, BOB_OPERATOR, ALICE_OPERATOR
+            )
+        );
+        router.registerBatch(descending);
+        assertEq(router.registrationOf(BOB_OPERATOR).owner, address(0));
+    }
+
+    function test_BatchRegisterRevertsAtomicallyWhenAnyOperatorIsNotOwned() public {
+        _sendRevenue(3 ether);
+        uint256[] memory operatorIds = _twoOperatorIds();
+
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOwner.selector, BOB_OPERATOR, alice, bob
+            )
+        );
+        router.registerBatch(operatorIds);
+
+        assertEq(router.registrationOf(ALICE_OPERATOR).owner, address(0));
+        assertEq(router.registrationOf(BOB_OPERATOR).owner, address(0));
+        assertEq(router.totalRegisteredWeight(), 0);
+        assertEq(router.pendingRevenue(), 3 ether);
+        assertEq(router.treasuryClaimable(), 0);
+    }
+
+    function test_BatchRegisterReplacesTransferredRegistration() public {
+        _register(ALICE_OPERATOR, alice);
+        _sendRevenue(4 ether);
+        operators.setOwner(ALICE_OPERATOR, carol);
+        operators.setOwner(BOB_OPERATOR, carol);
+
+        uint256[] memory operatorIds = _twoOperatorIds();
+        vm.prank(carol);
+        router.registerBatch(operatorIds);
+
+        assertEq(router.registrationOf(ALICE_OPERATOR).owner, carol);
+        assertEq(router.registrationOf(BOB_OPERATOR).owner, carol);
+        assertEq(router.totalRegisteredWeight(), 20_000);
+        assertEq(router.treasuryClaimable(), 4 ether);
+    }
+
+    function test_BatchSyncAppliesMixedCanonicalTransitions() public {
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, bob);
+        _sendRevenue(20 ether);
+        registry.setWeight(ALICE_OPERATOR, 12_500);
+        operators.setOwner(BOB_OPERATOR, carol);
+
+        router.syncBatch(_twoOperatorIds());
+
+        assertEq(router.registrationOf(ALICE_OPERATOR).weight, 12_500);
+        assertEq(router.registrationOf(BOB_OPERATOR).owner, address(0));
+        assertEq(router.totalRegisteredWeight(), 12_500);
+        vm.prank(alice);
+        assertEq(router.claim(ALICE_OPERATOR, alice), 20 ether);
+    }
+
+    function test_BatchSyncRevertsAtomicallyWhenAnyOperatorIsUnregistered() public {
+        _register(ALICE_OPERATOR, alice);
+        _sendRevenue(10 ether);
+        registry.setWeight(ALICE_OPERATOR, 12_500);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(BurntatoOperatorRewardsRouter.OperatorNotRegistered.selector, BOB_OPERATOR)
+        );
+        router.syncBatch(_twoOperatorIds());
+
+        assertEq(router.registrationOf(ALICE_OPERATOR).weight, 10_000);
+        assertEq(router.totalRegisteredWeight(), 10_000);
+        assertEq(router.pendingRevenue(), 10 ether);
+        (,,, uint256 claimable,,) = router.previewRewards(ALICE_OPERATOR);
+        assertEq(claimable, 10 ether);
+    }
+
+    function test_BatchSyncRequiresNonemptyStrictlyIncreasingIds() public {
+        uint256[] memory empty = new uint256[](0);
+        vm.expectRevert(BurntatoOperatorRewardsRouter.EmptyOperatorBatch.selector);
+        router.syncBatch(empty);
+
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, bob);
+        uint256[] memory duplicate = new uint256[](2);
+        duplicate[0] = ALICE_OPERATOR;
+        duplicate[1] = ALICE_OPERATOR;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOrder.selector, ALICE_OPERATOR, ALICE_OPERATOR
+            )
+        );
+        router.syncBatch(duplicate);
+
+        uint256[] memory descending = new uint256[](2);
+        descending[0] = BOB_OPERATOR;
+        descending[1] = ALICE_OPERATOR;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BurntatoOperatorRewardsRouter.InvalidOperatorOrder.selector, BOB_OPERATOR, ALICE_OPERATOR
+            )
+        );
+        router.syncBatch(descending);
+    }
+
     function test_BatchClaimPaysMultipleOperatorsThroughOneReceiver() public {
         operators.setOwner(BOB_OPERATOR, alice);
         _register(ALICE_OPERATOR, alice);
@@ -446,6 +598,12 @@ contract OperatorRewardsRouterTest is Test {
     function _register(uint256 operatorId, address owner) private {
         vm.prank(owner);
         router.register(operatorId);
+    }
+
+    function _twoOperatorIds() private pure returns (uint256[] memory operatorIds) {
+        operatorIds = new uint256[](2);
+        operatorIds[0] = ALICE_OPERATOR;
+        operatorIds[1] = BOB_OPERATOR;
     }
 
     function _sendRevenue(uint256 amount) private {

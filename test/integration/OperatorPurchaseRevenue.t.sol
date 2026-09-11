@@ -146,23 +146,33 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         assertEq(router.claim(OPERATOR_ID, operatorOwner), 0.0055 ether);
     }
 
-    function testPurchaseRevenueCanBeClaimedForMultipleOperatorsAtOnce() public {
-        vm.startPrank(operatorOwner);
-        router.register(OPERATOR_ID);
-        router.register(SECOND_OPERATOR_ID);
-        vm.stopPrank();
-
-        vm.prank(buyer);
-        game.buyPotato{value: 0.01 ether}();
-
+    function testPurchaseRevenueSupportsBatchOperatorLifecycle() public {
         uint256[] memory operatorIds = new uint256[](2);
         operatorIds[0] = OPERATOR_ID;
         operatorIds[1] = SECOND_OPERATOR_ID;
+        vm.prank(operatorOwner);
+        router.registerBatch(operatorIds);
+
+        registry.setWeight(OPERATOR_ID, 12_500);
+        router.syncBatch(operatorIds);
+        assertEq(router.registrationOf(OPERATOR_ID).weight, 12_500);
+        assertEq(router.registrationOf(SECOND_OPERATOR_ID).weight, 10_000);
+
+        ProtocolConfig memory config = _initialConfig();
+        config.priceIncreaseBps = 0;
+        vm.prank(authority);
+        IGovernance(address(diamond)).setProtocolConfig(config);
+
+        vm.prank(buyer);
+        game.buyPotato{value: 0.01 ether}();
+        vm.prank(buyer);
+        game.buyPotato{value: 0.01 ether}();
+
         uint256 beforeBalance = operatorOwner.balance;
         vm.prank(operatorOwner);
-        assertEq(router.claimBatch(operatorIds, operatorOwner), 0.0015 ether);
-        assertEq(operatorOwner.balance - beforeBalance, 0.0015 ether);
-        assertEq(address(router).balance, 0);
+        assertEq(router.claimBatch(operatorIds, operatorOwner), 0.0015 ether - 1);
+        assertEq(operatorOwner.balance - beforeBalance, 0.0015 ether - 1);
+        assertEq(router.totalReceived(), router.totalOperatorClaimed() + address(router).balance);
     }
 
     function testNoRegisteredWeightCreditsPurchaseRevenueToTreasury() public {
