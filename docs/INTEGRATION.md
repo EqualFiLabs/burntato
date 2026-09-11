@@ -161,6 +161,8 @@ Winner, Recovery, Treasury, and buyback obligations have been recorded.
   weight accrual settles.
 - `claim(operatorId, receiver)` is current-owner-only and permits an explicit
   receiver.
+- `claimBatch(operatorIds, receiver)` claims a nonempty, strictly increasing
+  list of currently owned registrations through one native transfer.
 - `accrue()` recognizes queued and force-sent native revenue.
 - `claimTreasury()` pays zero-registration and sole-forfeiture revenue to the
   Diamond's current Treasury recipient.

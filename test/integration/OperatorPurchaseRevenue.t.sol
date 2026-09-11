@@ -54,6 +54,7 @@ contract WrongBurntatoRouter {
 
 contract OperatorPurchaseRevenueTest is DiamondTestSetup {
     uint256 private constant OPERATOR_ID = 1;
+    uint256 private constant SECOND_OPERATOR_ID = 2;
 
     address private operatorOwner = makeAddr("operator-owner");
     address private buyer = makeAddr("buyer");
@@ -69,7 +70,9 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         operators.configure(address(registry));
         registry.configure(address(operators));
         operators.setOwner(OPERATOR_ID, operatorOwner);
+        operators.setOwner(SECOND_OPERATOR_ID, operatorOwner);
         registry.setWeight(OPERATOR_ID, 10_000);
+        registry.setWeight(SECOND_OPERATOR_ID, 10_000);
 
         _deployCore();
         game = IGame(address(diamond));
@@ -125,6 +128,25 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
 
         vm.prank(operatorOwner);
         assertEq(router.claim(OPERATOR_ID, operatorOwner), 0.0055 ether);
+    }
+
+    function testPurchaseRevenueCanBeClaimedForMultipleOperatorsAtOnce() public {
+        vm.startPrank(operatorOwner);
+        router.register(OPERATOR_ID);
+        router.register(SECOND_OPERATOR_ID);
+        vm.stopPrank();
+
+        vm.prank(buyer);
+        game.buyPotato{value: 0.01 ether}();
+
+        uint256[] memory operatorIds = new uint256[](2);
+        operatorIds[0] = OPERATOR_ID;
+        operatorIds[1] = SECOND_OPERATOR_ID;
+        uint256 beforeBalance = operatorOwner.balance;
+        vm.prank(operatorOwner);
+        assertEq(router.claimBatch(operatorIds, operatorOwner), 0.0015 ether);
+        assertEq(operatorOwner.balance - beforeBalance, 0.0015 ether);
+        assertEq(address(router).balance, 0);
     }
 
     function testNoRegisteredWeightCreditsPurchaseRevenueToTreasury() public {
