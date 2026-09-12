@@ -272,8 +272,8 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         game.materializeMaturedEmission();
         assertEq(roundOne.nextPrice, 0.01331 ether);
 
-        uint256 aliceCommitment = 3_333 ether + 1;
-        uint256 bobCommitment = 2_222 ether + 2;
+        uint256 aliceCommitment = 333 ether + 1;
+        uint256 bobCommitment = 222 ether + 2;
         vm.prank(alice);
         recovery.commitRecovery(aliceCommitment);
         vm.prank(bob);
@@ -307,11 +307,11 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertEq(potato.balanceOf(config.treasuryRecipient) - treasuryBefore, treasuryPotato);
 
         vm.prank(config.rewardAllocator);
-        uint256 scheduleA = rewards.allocateTreasuryRewards(400 ether + 1, 4, 2);
+        uint256 scheduleA = rewards.allocateTreasuryRewards(40 ether + 1, 4, 2);
         vm.prank(config.rewardAllocator);
-        uint256 scheduleB = rewards.allocateTreasuryRewards(33 ether + 7, 6, 3);
+        uint256 scheduleB = rewards.allocateTreasuryRewards(3 ether + 7, 6, 3);
         vm.prank(config.rewardAllocator);
-        assertEq(rewards.cancelTreasuryRewards(scheduleB), 33 ether + 7);
+        assertEq(rewards.cancelTreasuryRewards(scheduleB), 3 ether + 7);
         RewardSchedule memory schedule = rewards.rewardSchedule(scheduleA);
         assertEq(schedule.firstRoundRemainder, 1);
 
@@ -319,7 +319,7 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         _settleCurrentRound();
         assertEq(game.currentRoundId(), 4);
         Round memory roundFour = game.getRound(4);
-        assertEq(roundFour.treasuryEmissionBudget, 200 ether + 1);
+        assertEq(roundFour.treasuryEmissionBudget, 20 ether + 1);
         uint256 supplyBefore = potato.totalSupply();
         _buyGame(alice, 0.01 ether);
         vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration / 2);
@@ -327,9 +327,9 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         vm.warp(vm.getBlockTimestamp() + config.protocol.emissionVestingDuration);
         _settleCurrentRound();
         roundFour = game.getRound(4);
-        assertEq(roundFour.treasuryEmittedPotato, 29 ether);
-        assertEq(roundFour.treasuryReleasedPotato, 171 ether + 1);
-        assertEq(potato.totalSupply() - supplyBefore, 14_500 ether);
+        assertEq(roundFour.treasuryEmittedPotato, 2.9 ether);
+        assertEq(roundFour.treasuryReleasedPotato, 17.1 ether + 1);
+        assertEq(potato.totalSupply() - supplyBefore, 1_450 ether);
     }
 
     function _launchAndTradeCanonicalMarket() private {
