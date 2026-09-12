@@ -56,7 +56,7 @@ on Robinhood and is not comparable to the manifest's L2 block height.
 | Round timeout | 1 hour |
 | Round timeout decay | 5 minutes |
 | Minimum round timeout | 5 minutes |
-| Round emission budget | 100,000 POTATO |
+| Round emission budget | 10,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 4 minutes |
 | Purchase split from Grab 2 | 2,500 Winner / 200 next Winner / 4,000 Recovery / 2,300 Treasury / 1,000 buyback / 0 Operator BPS |
@@ -68,10 +68,10 @@ on Robinhood and is not comparable to the manifest's L2 block height.
 | Buyback cap / reward / delay | 2 ETH / 50 BPS / 1 block |
 | Tick spacing | 60 |
 | Initial tick | 170,280 |
-| Genesis POTATO launch allocation | 100,000,000 POTATO |
+| Genesis POTATO launch allocation | 100,000,000 POTATO across 56 locked positions |
 | Reward allocator | Treasury recipient |
 
-Defaults are operational inputs, not protocol immutability claims. The final
+Game defaults are operational inputs, not protocol immutability claims. The final
 admin must be nonzero and may equal the bootstrap authority. Starting price,
 round timeout, minimum round timeout, and emission vesting must
 remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
@@ -82,9 +82,10 @@ six-way purchase split used from Grab two onward and the Recovery split must
 each sum to 10,000. The
 bilateral hook fee has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
 narrower 0-to-100 BPS domain. Zero price growth, emission step, emission budget,
-or hook fee is valid. The genesis POTATO allocation must fit the PositionManager
-`uint128` amount domain and produce nonzero, `uint128`-representable liquidity
-at the configured launch ticks.
+or hook fee is valid. The launch uses the fixed aggressive six-band profile at
+tick spacing 60 and initial tick 170,280. The genesis allocation must fit the
+aggregate `uint128` domain, and each of its 56 derived positions must have a
+nonzero `uint128` amount maximum and liquidity value.
 
 ## Environment
 
@@ -118,17 +119,12 @@ BURNTATO_BUYBACK_CALLER_REWARD_BPS
 BURNTATO_BUYBACK_DELAY_BLOCKS
 BURNTATO_HOOK_FEE_BPS
 BURNTATO_OPERATOR_REWARD_SHARE_BPS
-BURNTATO_INITIAL_TICK
-BURNTATO_TICK_SPACING
-BURNTATO_TICK_LOWER
-BURNTATO_TICK_UPPER
-BURNTATO_POTATO_SEED
 ```
 
-Numeric values use base units. Narrow BPS and tick inputs are range-checked
-before conversion. Tick spacing must be inside the PoolManager domain; bounds
-must be aligned to spacing, and the initial tick must equal the upper bound so
-the locked genesis position starts entirely in POTATO. Deployment rejects a
+Numeric values use base units. Narrow BPS inputs are range-checked before
+conversion. Launch ticks, tick spacing, and the default 100 million POTATO seed
+are intentionally not environment inputs; they are pinned to the reviewed
+multicurve deployment profile. Deployment rejects a
 hook fee above 200 BPS or buyback caller reward above
 100 BPS. `BURNTATO_OPERATOR_REWARD_SHARE_BPS` remains independently configurable
 through 10,000 BPS because it divides the already-capped hook fee rather than

@@ -41,6 +41,8 @@ interface IPoolManagerAuthority {
 
 interface IPositionOwner {
     function ownerOf(uint256 tokenId) external view returns (address);
+    function nextTokenId() external view returns (uint256);
+    function getPositionLiquidity(uint256 tokenId) external view returns (uint128);
 }
 
 contract LocalReplicaOperators {
@@ -94,6 +96,7 @@ contract DeterministicDeploymentTest is Test {
     }
 
     function test_DeploymentConfiguresCompleteGenesisState() public view {
+        assertEq(config.protocol.roundEmissionBudget, 10_000 ether);
         assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), config.finalAdmin);
         assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), config.finalAdmin);
         assertEq(deployment.admin, config.finalAdmin);
@@ -125,11 +128,11 @@ contract DeterministicDeploymentTest is Test {
         assertEq(round.winnerPool, 0.0105 ether);
         assertEq(game.winnerReserveEth(), 0.01 ether);
         assertEq(round.config.emissionVestingDuration, 4 minutes);
-        assertEq(round.holderMaxReward, 10_000 ether);
+        assertEq(round.holderMaxReward, 1_000 ether);
 
         vm.warp(round.holderSince + 2 minutes);
         (uint256 halfEarned,) = game.currentEarnedEmission();
-        assertEq(halfEarned, 5_000 ether);
+        assertEq(halfEarned, 500 ether);
         vm.expectRevert(Errors.VestingIncomplete.selector);
         game.materializeMaturedEmission();
         assertEq(token.totalSupply(), supplyBefore);
@@ -140,14 +143,14 @@ contract DeterministicDeploymentTest is Test {
 
         vm.warp(round.holderSince + 4 minutes);
         (uint256 earned,) = game.materializeMaturedEmission();
-        assertEq(earned, 10_000 ether);
+        assertEq(earned, 1_000 ether);
         assertEq(token.balanceOf(buyer), earned);
         assertEq(token.totalSupply() - supplyBefore, earned);
 
         vm.warp(round.deadline);
         ISettlement(deployment.diamond).settleRound();
         assertEq(token.totalSupply() - supplyBefore, earned);
-        assertEq(game.getRound(1).remainingEmission, 90_000 ether);
+        assertEq(game.getRound(1).remainingEmission, 9_000 ether);
     }
 
     function test_DefaultReplacementAfterTwoMinutesPreservesUnearnedBudget() public {
@@ -165,13 +168,13 @@ contract DeterministicDeploymentTest is Test {
         game.buyPotato{value: round.nextPrice}();
 
         round = game.getRound(1);
-        assertEq(token.balanceOf(buyer), 5_000 ether);
-        assertEq(round.remainingEmission, 95_000 ether);
-        assertEq(round.holderMaxReward, 9_500 ether);
+        assertEq(token.balanceOf(buyer), 500 ether);
+        assertEq(round.remainingEmission, 9_500 ether);
+        assertEq(round.holderMaxReward, 950 ether);
         vm.warp(round.holderSince + 4 minutes);
         game.materializeMaturedEmission();
-        assertEq(token.balanceOf(successor), 9_500 ether);
-        assertEq(game.getRound(1).remainingEmission, 85_500 ether);
+        assertEq(token.balanceOf(successor), 950 ether);
+        assertEq(game.getRound(1).remainingEmission, 8_550 ether);
     }
 
     function test_DefaultVestingCompletesBeforeMinimumRoundDeadline() public {
@@ -188,7 +191,7 @@ contract DeterministicDeploymentTest is Test {
         assertEq(round.deadline - round.holderSince, 5 minutes);
         vm.warp(round.holderSince + 4 minutes);
         (uint256 earned,) = game.materializeMaturedEmission();
-        assertEq(earned, 10_000 ether);
+        assertEq(earned, 1_000 ether);
         assertEq(round.deadline - block.timestamp, 1 minutes);
     }
 
@@ -256,9 +259,10 @@ contract DeterministicDeploymentTest is Test {
 
         IMarket market = IMarket(deployment.diamond);
         assertTrue(market.marketReady());
-        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+        (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) = market.launchMarket();
         assertNotEq(poolId, bytes32(0));
-        assertGt(liquidity, 0);
+        assertEq(positionCount, 56);
+        assertGt(potatoUsed, 0);
         assertFalse(governance.purchasesInitialized());
     }
 
@@ -304,6 +308,7 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.treasuryRecipient, deployer);
         assertEq(testnet.rewardAllocator, deployer);
         assertEq(testnet.protocol.emissionVestingDuration, 4 minutes);
+        assertEq(testnet.protocol.roundEmissionBudget, 10_000 ether);
         assertEq(testnet.protocol.winnerBps, 2_500);
         assertEq(testnet.protocol.nextRoundWinnerBps, 200);
         assertEq(testnet.protocol.recoveryBps, 3_000);
@@ -341,11 +346,12 @@ contract DeterministicDeploymentTest is Test {
         BurntatoDeployment memory testnetDeployment = testnetScript.deployWithDependencies(
             testnetConfig, address(testnetScript), dependencies, operatorDependencies
         );
-        (bytes32 poolId, uint128 liquidity) = IMarket(testnetDeployment.diamond).launchMarket();
+        (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) = IMarket(testnetDeployment.diamond).launchMarket();
         (bytes32 actualPoolId,, bool launching, bool launched) = IMarket(testnetDeployment.diamond).marketState();
 
         assertEq(actualPoolId, poolId);
-        assertGt(liquidity, 0);
+        assertEq(positionCount, 56);
+        assertGt(potatoUsed, 0);
         assertFalse(launching);
         assertTrue(launched);
     }
@@ -513,9 +519,9 @@ contract DeterministicDeploymentTest is Test {
         deployScript.deploy(unsafeConfig, address(deployScript));
     }
 
-    function test_DeploymentRejectsSeedAbovePositionManagerAmountDomain() public {
+    function test_DeploymentRejectsSeedAbovePerPositionAmountDomain() public {
         GenesisConfig memory unsafeConfig = config;
-        unsafeConfig.potatoSeed = uint256(type(uint128).max) + 1;
+        unsafeConfig.potatoSeed = type(uint256).max;
 
         vm.expectRevert(DeployBurntato.InvalidGenesisConfiguration.selector);
         deployScript.deploy(unsafeConfig, address(deployScript));
@@ -635,8 +641,9 @@ contract DeterministicDeploymentTest is Test {
         assertEq(poolManager.protocolFeeController(), controller);
     }
 
-    function test_LocalDependenciesLaunchLockedSingleSidedMarket() public {
+    function test_LocalDependenciesLaunchLockedMulticurveMarket() public {
         GenesisConfig memory launchConfig = config;
+        launchConfig.protocol.roundEmissionBudget = 100_000 ether;
         launchConfig.potatoSeed = 1 ether;
         vm.deal(address(deployScript), launchConfig.initialWinnerReserve);
         BurntatoDeployment memory launchDeployment = deployScript.deploy(launchConfig, address(deployScript));
@@ -663,10 +670,15 @@ contract DeterministicDeploymentTest is Test {
         IMarket market = IMarket(launchDeployment.diamond);
         assertEq(IPotatoToken(launchDeployment.diamond).balanceOf(launchDeployment.diamond), 1_001 ether);
         assertTrue(market.marketReady());
-        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+        uint256 firstTokenId = IPositionOwner(launchDeployment.positionManager).nextTokenId();
+        (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) = market.launchMarket();
         assertNotEq(poolId, bytes32(0));
-        assertGt(liquidity, 0);
-        assertEq(IPositionOwner(launchDeployment.positionManager).ownerOf(1), market.lockedLpRecipient());
+        assertEq(positionCount, 56);
+        assertGt(potatoUsed, 0);
+        for (uint256 tokenId = firstTokenId; tokenId < firstTokenId + positionCount; ++tokenId) {
+            assertEq(IPositionOwner(launchDeployment.positionManager).ownerOf(tokenId), market.lockedLpRecipient());
+            assertGt(IPositionOwner(launchDeployment.positionManager).getPositionLiquidity(tokenId), 0);
+        }
     }
 
     function _initializePurchases(BurntatoDeployment memory target, address finalAdmin) private {

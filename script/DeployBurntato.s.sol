@@ -37,7 +37,7 @@ import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
 import {Constants} from "../src/shared/Constants.sol";
-import {LibMarketMath} from "../src/libraries/LibMarketMath.sol";
+import {BurntatoLaunchCurves} from "../src/libraries/BurntatoLaunchCurves.sol";
 import {
     BurntatoDeployment,
     CanonicalV4Dependencies,
@@ -353,15 +353,6 @@ contract DeployBurntato is Script {
         config.operatorRewardShareBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_OPERATOR_REWARD_SHARE_BPS", uint256(config.operatorRewardShareBps))
         );
-        config.initialTick =
-            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_INITIAL_TICK", int256(config.initialTick)));
-        config.tickSpacing =
-            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_SPACING", int256(config.tickSpacing)));
-        config.tickLower =
-            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_LOWER", int256(config.tickLower)));
-        config.tickUpper =
-            BurntatoDeploymentConfig.checkedInt24(vm.envOr("BURNTATO_TICK_UPPER", int256(config.tickUpper)));
-        config.potatoSeed = vm.envOr("BURNTATO_POTATO_SEED", config.potatoSeed);
     }
 
     function _initialCut(BurntatoDeployment memory deployment) private pure returns (FacetCut[] memory cuts) {
@@ -441,15 +432,13 @@ contract DeployBurntato is Script {
                 || uint256(protocol.winnerBps) + protocol.nextRoundWinnerBps + protocol.recoveryBps
                         + protocol.treasuryBps + protocol.buybackBps + protocol.operatorPurchaseBps != Constants.BPS
                 || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
-                || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
-                || config.tickLower < TickMath.MIN_TICK || config.tickUpper >= TickMath.MAX_TICK
-                || config.tickLower >= config.initialTick || config.initialTick != config.tickUpper
-                || config.tickLower % config.tickSpacing != 0 || config.tickUpper % config.tickSpacing != 0
-                || config.potatoSeed == 0
+                || config.initialTick != BurntatoLaunchCurves.initialTick()
+                || config.tickSpacing != BurntatoLaunchCurves.tickSpacing()
+                || config.tickLower != BurntatoLaunchCurves.tickLower()
+                || config.tickUpper != BurntatoLaunchCurves.tickUpper() || config.potatoSeed == 0
+                || config.potatoSeed > type(uint128).max
         ) revert InvalidGenesisConfiguration();
-        if (LibMarketMath.launchLiquidity(config.potatoSeed, config.tickLower, config.tickUpper) == 0) {
-            revert InvalidGenesisConfiguration();
-        }
+        BurntatoLaunchCurves.buildPositions(config.potatoSeed);
     }
 
     function _log(BurntatoDeployment memory deployment) internal pure {
