@@ -214,7 +214,7 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _gameSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](8);
+        selectors = new bytes4[](10);
         selectors[0] = IGame.buyPotato.selector;
         selectors[1] = IGame.materializeMaturedEmission.selector;
         selectors[2] = IGame.currentRoundId.selector;
@@ -223,6 +223,8 @@ abstract contract DiamondTestSetup is Test {
         selectors[5] = IGame.purchaseOperatorRewardsRouter.selector;
         selectors[6] = IGame.fundWinnerReserve.selector;
         selectors[7] = IGame.winnerReserveEth.selector;
+        selectors[8] = IGame.fundRoundReserves.selector;
+        selectors[9] = IGame.roundReserves.selector;
     }
 
     function _recoverySelectors() internal pure returns (bytes4[] memory selectors) {

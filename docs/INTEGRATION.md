@@ -39,22 +39,25 @@ The canonical hook is a separate administered contract. Read `owner()`,
 `operatorRewardsRouter()`, `operatorRewardShareBps()`, `deploymentBlock()`, and
 `externalBuysEnabled()` from the hook itself.
 
-`fundWinnerReserve(expectedRoundId)` and
-`fundRecoveryReserve(expectedRoundId)` permissionlessly add positive native
-value to their tracked reserves even while the protocol is paused. Before
-Round 1 the target is 1; once a round is active the target is
-`currentRoundId + 1`. A stale expected target reverts instead of funding a
-different round. The complete reserves move into `Round.winnerPool` and
-`Round.recoveryPool` when that target activates. Integrators should index
+`fundWinnerReserve(targetRoundId)` and
+`fundRecoveryReserve(targetRoundId)` permissionlessly add positive native value
+to any future round's tracked reserves even while the protocol is paused.
+`fundRoundReserves(targetRoundId, winnerAmount, recoveryAmount)` funds either or
+both in one transaction when their exact sum equals `msg.value`. Active and past
+targets revert. `roundReserves(roundId)` returns the named round's two pending
+amounts; `winnerReserveEth()` and `recoveryReserveEth()` return aggregate future
+liabilities. The named reserves move into `Round.winnerPool` and
+`Round.recoveryPool` only when that round activates. Integrators should index
 `WinnerReserveFunded`, `NextRoundWinnerFunded`, `WinnerReserveApplied`,
 `RecoveryReserveFunded`, and `RecoveryReserveApplied`; a plain native transfer
-is deliberately untracked.
+is deliberately untracked. Funding is irreversible and does not snapshot a
+distant round's configuration.
 
 The first Grab of every round contributes its complete price to the following
 round's Winner reserve. The configured Winner, next-Winner, Recovery, Treasury,
 buyback, and Operator BPS split applies only from the second Grab onward.
 
-The guarded funding signatures and Recovery reserve expand the ABI, selector
+The combined funding and per-round reserve views expand the ABI, selector
 manifest, and Diamond storage. Integrators must update their ABI before
 connecting to this fresh-deployment package; it is not an in-place upgrade.
 

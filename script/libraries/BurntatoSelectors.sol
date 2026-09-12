@@ -95,7 +95,7 @@ library BurntatoSelectors {
     }
 
     function game() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](8);
+        selectors = new bytes4[](10);
         selectors[0] = IGame.buyPotato.selector;
         selectors[1] = IGame.materializeMaturedEmission.selector;
         selectors[2] = IGame.currentRoundId.selector;
@@ -104,6 +104,8 @@ library BurntatoSelectors {
         selectors[5] = IGame.purchaseOperatorRewardsRouter.selector;
         selectors[6] = IGame.fundWinnerReserve.selector;
         selectors[7] = IGame.winnerReserveEth.selector;
+        selectors[8] = IGame.fundRoundReserves.selector;
+        selectors[9] = IGame.roundReserves.selector;
     }
 
     function recovery() internal pure returns (bytes4[] memory selectors) {

@@ -101,6 +101,9 @@ contract DeterministicDeploymentTest is Test {
         assertFalse(IGovernance(deployment.diamond).purchasesInitialized());
         assertTrue(IPotatoToken(deployment.diamond).isDistributor(config.treasuryRecipient));
         assertEq(IGame(deployment.diamond).winnerReserveEth(), config.initialWinnerReserve);
+        (uint256 genesisWinnerReserve, uint256 genesisRecoveryReserve) = IGame(deployment.diamond).roundReserves(1);
+        assertEq(genesisWinnerReserve, config.initialWinnerReserve);
+        assertEq(genesisRecoveryReserve, 0);
         assertEq(deployment.diamond.balance, config.initialWinnerReserve);
     }
 

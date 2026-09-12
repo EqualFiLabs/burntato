@@ -202,7 +202,7 @@ contract ProtocolHandler is Test {
         uint256 amount = bound(uint256(rawAmount), 1, 10 ether);
         uint256 reserveBefore = game.winnerReserveEth();
         uint256 balanceBefore = diamond.balance;
-        uint256 targetRoundId = game.currentRoundId() == 0 ? 1 : game.currentRoundId() + 1;
+        uint256 targetRoundId = game.currentRoundId() + 1 + actorSeed % 16;
         vm.deal(actor, actor.balance + amount);
         vm.prank(actor);
         try game.fundWinnerReserve{value: amount}(targetRoundId) {
@@ -220,7 +220,7 @@ contract ProtocolHandler is Test {
         uint256 amount = bound(uint256(rawAmount), 1, 10 ether);
         uint256 reserveBefore = recovery.recoveryReserveEth();
         uint256 balanceBefore = diamond.balance;
-        uint256 targetRoundId = game.currentRoundId() == 0 ? 1 : game.currentRoundId() + 1;
+        uint256 targetRoundId = game.currentRoundId() + 1 + actorSeed % 16;
         vm.deal(actor, actor.balance + amount);
         vm.prank(actor);
         try recovery.fundRecoveryReserve{value: amount}(targetRoundId) {
@@ -229,6 +229,35 @@ contract ProtocolHandler is Test {
                 recoveryFundingMismatch = true;
             }
         } catch {
+            recoveryFundingMismatch = true;
+        }
+    }
+
+    function fundRoundReserves(uint256 actorSeed, uint256 rawWinner, uint256 rawRecovery, uint256 rawOffset) external {
+        address actor = actors[actorSeed % actors.length];
+        uint256 winnerAmount = bound(rawWinner, 0, 5 ether);
+        uint256 recoveryAmount = bound(rawRecovery, 0, 5 ether);
+        if (winnerAmount == 0 && recoveryAmount == 0) winnerAmount = 1;
+        uint256 amount = winnerAmount + recoveryAmount;
+        uint256 winnerBefore = game.winnerReserveEth();
+        uint256 recoveryBefore = recovery.recoveryReserveEth();
+        uint256 balanceBefore = diamond.balance;
+        uint256 targetRoundId = game.currentRoundId() + 1 + rawOffset % 16;
+        vm.deal(actor, actor.balance + amount);
+        vm.prank(actor);
+        try game.fundRoundReserves{value: amount}(targetRoundId, winnerAmount, recoveryAmount) {
+            directWinnerFunding += winnerAmount;
+            directRecoveryFunding += recoveryAmount;
+            if (
+                game.winnerReserveEth() != winnerBefore + winnerAmount
+                    || recovery.recoveryReserveEth() != recoveryBefore + recoveryAmount
+                    || diamond.balance != balanceBefore + amount
+            ) {
+                winnerFundingMismatch = true;
+                recoveryFundingMismatch = true;
+            }
+        } catch {
+            winnerFundingMismatch = true;
             recoveryFundingMismatch = true;
         }
     }

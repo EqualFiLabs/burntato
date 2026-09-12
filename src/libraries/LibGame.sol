@@ -8,9 +8,15 @@ import {ITreasuryRewards} from "../interfaces/ITreasuryRewards.sol";
 import {LibConfig} from "./LibConfig.sol";
 import {LibMath} from "./LibMath.sol";
 import {LibProtocolStorage} from "./LibProtocolStorage.sol";
+import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
 library LibGame {
+    function enforceFutureRound(uint256 targetRoundId) internal view {
+        uint256 currentRoundId = LibProtocolStorage.game().currentRoundId;
+        if (targetRoundId <= currentRoundId) revert Errors.InvalidFutureRound(targetRoundId, currentRoundId);
+    }
+
     function snapshotFutureRound(uint256 roundId) internal returns (Round storage round) {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         round = gs.rounds[roundId];
@@ -35,15 +41,17 @@ library LibGame {
         round.recoveryCarryIn = recoveryCarryIn;
         round.recoveryPool = recoveryCarryIn;
         LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
-        uint256 recoveryReserve = rs.recoveryReserveEth;
+        uint256 recoveryReserve = rs.recoveryReserveByRound[roundId];
         if (recoveryReserve != 0) {
-            rs.recoveryReserveEth = 0;
+            delete rs.recoveryReserveByRound[roundId];
+            rs.recoveryReserveEth -= recoveryReserve;
             round.recoveryPool += recoveryReserve;
             emit IRecovery.RecoveryReserveApplied(roundId, recoveryReserve, round.recoveryPool);
         }
-        uint256 winnerReserve = gs.winnerReserveEth;
+        uint256 winnerReserve = gs.winnerReserveByRound[roundId];
         if (winnerReserve != 0) {
-            gs.winnerReserveEth = 0;
+            delete gs.winnerReserveByRound[roundId];
+            gs.winnerReserveEth -= winnerReserve;
             round.winnerPool += winnerReserve;
             emit IGame.WinnerReserveApplied(roundId, winnerReserve, round.winnerPool);
         }

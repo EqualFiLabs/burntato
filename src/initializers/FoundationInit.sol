@@ -50,6 +50,7 @@ contract FoundationInit is ERC20 {
         initialization.foundationInitialized = true;
         gs.config = config;
         gs.winnerReserveEth = initialWinnerReserve;
+        gs.winnerReserveByRound[1] = initialWinnerReserve;
         LibProtocolStorage.operatorRevenue().router = operatorRewardsRouter;
 
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();

@@ -1,5 +1,49 @@
 # Release qualification evidence
 
+## Future-round sponsorship candidate
+
+Date: September 12, 2026
+
+Source candidate: `7e094be` on `feat/future-round-sponsorship`, based on
+merged `main` commit `9dcc0a9`.
+
+Permissionless sponsors may fund the Winner reserve, Recovery reserve, or both
+for any future round. The combined entry point accepts one exact native payment,
+and per-round accounting ensures activation consumes only the named round's
+funds. Aggregate reserve getters continue to expose total outstanding native
+liabilities. The first Grab and configured next-round share still fund only the
+immediately following Winner reserve, while POTATO Recovery commitments remain
+limited to the immediately following round.
+
+Sponsorship is irreversible, remains available while paused, and does not
+snapshot distant-round configuration. If a sponsored Recovery pool reaches
+settlement without commitments, it follows the existing carry-forward rule.
+This is a fresh-deployment storage and selector change; no in-place migration is
+included.
+
+Local release validation used Foundry 1.8.2-nightly with Solidity 0.8.26 and
+the Cancun EVM:
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Format | `forge fmt --check` | Passed |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 91 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 77 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties passed at 1,000 runs each |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 15 properties passed at 256 runs and depth 50 |
+| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 42 passed, 5 configured-RPC skips |
+| Pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | 4 passed |
+| Formal sources | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` | Compiled; Forge correctly found no `test*` functions |
+
+The changed accounting was reviewed for exact native-asset backing, target
+ordering, additive funding, overflow behavior, pause independence, Recovery
+carry-forward, selector installation, append-only Diamond storage, raw native
+transfers, and direct-facet ETH traps. No confirmed issue remained after the
+review. Halmos, Slither, and Certora were not installed, so no solver or static
+tool result is claimed. The pinned fork is read-only evidence; no live
+transaction or deployment was performed. Remote CI and an independent
+third-party audit are not yet proven.
+
 ## First-Grab and sponsored round reserves candidate
 
 Date: September 11, 2026

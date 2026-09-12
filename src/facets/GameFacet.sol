@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {IGame} from "../interfaces/IGame.sol";
+import {IRecovery} from "../interfaces/IRecovery.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
@@ -26,8 +27,7 @@ contract GameFacet is IGame {
 
         uint256 operatorShare;
         if (round.purchaseIndex == 0) {
-            gs.winnerReserveEth += msg.value;
-            emit NextRoundWinnerFunded(round.roundId, round.roundId + 1, msg.value, gs.winnerReserveEth);
+            _fundWinnerReserve(gs, msg.sender, round.roundId + 1, msg.value, false);
         } else {
             uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
             uint256 nextRoundWinnerShare = LibMath.mulBpsDown(msg.value, round.config.nextRoundWinnerBps);
@@ -38,8 +38,7 @@ contract GameFacet is IGame {
                 msg.value - winnerShare - nextRoundWinnerShare - recoveryShare - buybackShare - operatorShare;
             round.winnerPool += winnerShare;
             round.recoveryPool += recoveryShare;
-            gs.winnerReserveEth += nextRoundWinnerShare;
-            emit NextRoundWinnerFunded(round.roundId, round.roundId + 1, nextRoundWinnerShare, gs.winnerReserveEth);
+            _fundWinnerReserve(gs, msg.sender, round.roundId + 1, nextRoundWinnerShare, false);
             LibProtocolStorage.treasury().purchaseEth += treasuryShare;
             LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
             bs.reserveEth += buybackShare;
@@ -78,22 +77,51 @@ contract GameFacet is IGame {
         rs.status = 1;
     }
 
-    function fundWinnerReserve(uint256 expectedRoundId) external payable {
+    function fundWinnerReserve(uint256 targetRoundId) external payable {
         if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
         if (msg.value == 0) revert Errors.ZeroAmount();
+        LibGame.enforceFutureRound(targetRoundId);
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
-        uint256 targetRoundId = gs.currentRoundId == 0 ? 1 : gs.currentRoundId + 1;
-        if (expectedRoundId != targetRoundId) revert Errors.UnexpectedTargetRound(expectedRoundId, targetRoundId);
         LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
         if (rs.status == 2) revert Errors.Reentrancy();
         rs.status = 2;
-        gs.winnerReserveEth += msg.value;
-        emit WinnerReserveFunded(msg.sender, targetRoundId, msg.value, gs.winnerReserveEth);
+        _fundWinnerReserve(gs, msg.sender, targetRoundId, msg.value, true);
         rs.status = 1;
+    }
+
+    function fundRoundReserves(uint256 targetRoundId, uint256 winnerAmount, uint256 recoveryAmount) external payable {
+        if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
+        if (msg.value == 0) revert Errors.ZeroAmount();
+        if (winnerAmount > msg.value || recoveryAmount != msg.value - winnerAmount) {
+            uint256 expected =
+                winnerAmount > type(uint256).max - recoveryAmount ? type(uint256).max : winnerAmount + recoveryAmount;
+            revert Errors.IncorrectPayment(expected, msg.value);
+        }
+        LibGame.enforceFutureRound(targetRoundId);
+        LibProtocolStorage.ReentrancyStorage storage guard = LibProtocolStorage.reentrancy();
+        if (guard.status == 2) revert Errors.Reentrancy();
+        guard.status = 2;
+
+        if (winnerAmount != 0) {
+            _fundWinnerReserve(LibProtocolStorage.game(), msg.sender, targetRoundId, winnerAmount, true);
+        }
+        if (recoveryAmount != 0) {
+            LibProtocolStorage.RecoveryStorage storage recovery = LibProtocolStorage.recovery();
+            recovery.recoveryReserveEth += recoveryAmount;
+            uint256 roundRecoveryReserve = recovery.recoveryReserveByRound[targetRoundId] + recoveryAmount;
+            recovery.recoveryReserveByRound[targetRoundId] = roundRecoveryReserve;
+            emit IRecovery.RecoveryReserveFunded(msg.sender, targetRoundId, recoveryAmount, roundRecoveryReserve);
+        }
+        guard.status = 1;
     }
 
     function winnerReserveEth() external view returns (uint256) {
         return LibProtocolStorage.game().winnerReserveEth;
+    }
+
+    function roundReserves(uint256 roundId) external view returns (uint256 winnerEth, uint256 recoveryEth) {
+        winnerEth = LibProtocolStorage.game().winnerReserveByRound[roundId];
+        recoveryEth = LibProtocolStorage.recovery().recoveryReserveByRound[roundId];
     }
 
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {
@@ -140,5 +168,20 @@ contract GameFacet is IGame {
         } else {
             round = gs.rounds[gs.currentRoundId];
         }
+    }
+
+    function _fundWinnerReserve(
+        LibProtocolStorage.GameStorage storage gs,
+        address funder,
+        uint256 targetRoundId,
+        uint256 amount,
+        bool direct
+    ) private {
+        if (amount == 0) return;
+        gs.winnerReserveEth += amount;
+        uint256 roundWinnerReserve = gs.winnerReserveByRound[targetRoundId] + amount;
+        gs.winnerReserveByRound[targetRoundId] = roundWinnerReserve;
+        if (direct) emit WinnerReserveFunded(funder, targetRoundId, amount, roundWinnerReserve);
+        else emit NextRoundWinnerFunded(targetRoundId - 1, targetRoundId, amount, roundWinnerReserve);
     }
 }

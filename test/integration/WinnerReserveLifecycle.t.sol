@@ -3,6 +3,7 @@ pragma solidity 0.8.26;
 
 import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
+import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 import {Round} from "../../src/shared/Types.sol";
@@ -24,7 +25,7 @@ contract WinnerReserveLifecycleTest is DiamondTestSetup {
         settlement = ISettlement(address(diamond));
         vm.deal(alice, 1 ether);
         vm.deal(bob, 1 ether);
-        vm.deal(funder, 1 ether);
+        vm.deal(funder, 3 ether);
     }
 
     function test_ReserveFundsFirstWinnerAndPriorPurchasesFundNextRound() public {
@@ -62,7 +63,7 @@ contract WinnerReserveLifecycleTest is DiamondTestSetup {
         assertEq(game.winnerReserveEth(), 0.01 ether);
     }
 
-    function test_SettlementMakesPendingExpectedTargetStale() public {
+    function test_SettlementMakesCurrentRoundIneligibleForFunding() public {
         vm.prank(alice);
         game.buyPotato{value: 0.01 ether}();
         Round memory roundOne = game.getRound(1);
@@ -70,9 +71,42 @@ contract WinnerReserveLifecycleTest is DiamondTestSetup {
         settlement.settleRound();
 
         vm.prank(funder);
-        vm.expectRevert(abi.encodeWithSelector(Errors.UnexpectedTargetRound.selector, 2, 3));
+        vm.expectRevert(abi.encodeWithSelector(Errors.InvalidFutureRound.selector, 2, 2));
         game.fundWinnerReserve{value: 0.001 ether}(2);
 
         assertEq(game.winnerReserveEth(), 0);
+    }
+
+    function test_DistantRoundReservesApplyOnlyAtTheirTargetActivation() public {
+        vm.startPrank(funder);
+        game.fundRoundReserves{value: 1.5 ether}(3, 1 ether, 0.5 ether);
+        game.fundRoundReserves{value: 0.5 ether}(5, 0.2 ether, 0.3 ether);
+        vm.stopPrank();
+
+        vm.prank(alice);
+        game.buyPotato{value: 0.01 ether}();
+        Round memory roundOne = game.getRound(1);
+        vm.warp(roundOne.deadline);
+        settlement.settleRound();
+
+        Round memory roundTwo = game.getRound(2);
+        assertEq(roundTwo.winnerPool, 0.01 ether);
+        assertEq(roundTwo.recoveryPool, 0);
+        assertEq(game.winnerReserveEth(), 1.2 ether);
+        assertEq(IRecovery(address(diamond)).recoveryReserveEth(), 0.8 ether);
+
+        vm.prank(bob);
+        game.buyPotato{value: 0.01 ether}();
+        vm.warp(game.getRound(2).deadline);
+        settlement.settleRound();
+
+        Round memory roundThree = game.getRound(3);
+        assertEq(roundThree.winnerPool, 1.01 ether);
+        assertEq(roundThree.recoveryPool, 0.5 ether);
+        assertEq(game.winnerReserveEth(), 0.2 ether);
+        assertEq(IRecovery(address(diamond)).recoveryReserveEth(), 0.3 ether);
+        (uint256 roundFiveWinner, uint256 roundFiveRecovery) = game.roundReserves(5);
+        assertEq(roundFiveWinner, 0.2 ether);
+        assertEq(roundFiveRecovery, 0.3 ether);
     }
 }
