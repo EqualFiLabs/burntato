@@ -138,8 +138,9 @@ contract CanonicalMarketHandler is Test {
     }
 
     function attemptWalletTransfer(uint256 actorSeed, uint256 rawAmount) external {
-        address from = actors[actorSeed % actors.length];
-        address to = actors[(actorSeed + 1) % actors.length];
+        uint256 actorIndex = actorSeed % actors.length;
+        address from = actors[actorIndex];
+        address to = actors[(actorIndex + 1) % actors.length];
         uint256 balance = potato.balanceOf(from);
         if (balance == 0) return;
         uint256 amount = bound(rawAmount, 1, balance);
