@@ -37,6 +37,12 @@ contract WinnerReserveFundingTest is DiamondTestSetup {
         assertEq(roundOneRecovery, 0);
         assertEq(roundTenWinner, 2 ether);
         assertEq(roundTenRecovery, 0);
+        (uint256 winnerReserve, uint256 recoveryReserve, uint256 winnerSponsored, uint256 recoverySponsored) =
+            game.roundFunding(10);
+        assertEq(winnerReserve, 2 ether);
+        assertEq(recoveryReserve, 0);
+        assertEq(winnerSponsored, 2 ether);
+        assertEq(recoverySponsored, 0);
         assertEq(address(diamond).balance, 3 ether);
         assertEq(game.currentRoundId(), 0);
     }
@@ -103,6 +109,12 @@ contract WinnerReserveFundingTest is DiamondTestSetup {
         assertEq(roundEightRecovery, 2 ether);
         assertEq(game.winnerReserveEth(), 2 ether);
         assertEq(IRecovery(address(diamond)).recoveryReserveEth(), 4 ether);
+        (uint256 winnerReserve, uint256 recoveryReserve, uint256 winnerSponsored, uint256 recoverySponsored) =
+            game.roundFunding(7);
+        assertEq(winnerReserve, 2 ether);
+        assertEq(recoveryReserve, 2 ether);
+        assertEq(winnerSponsored, 2 ether);
+        assertEq(recoverySponsored, 2 ether);
         assertEq(address(diamond).balance, 6 ether);
     }
 

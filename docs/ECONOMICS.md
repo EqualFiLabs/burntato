@@ -106,7 +106,11 @@ per-round amount exactly once, and leaves later reserves untouched.
 `fundWinnerReserve(targetRoundId)` rejects an active or past target.
 `fundRoundReserves(targetRoundId, winnerAmount, recoveryAmount)` can fund either
 or both reserves atomically and requires the two amounts to equal `msg.value`.
-Funding is irreversible, and raw ETH transfers do not enter reserve accounting.
+`roundFunding(roundId)` returns both aggregate reserves and the portions funded
+through these permissionless contribution paths. The difference is protocol/game
+funding: the genesis seed, the first Grab, and later configured next-round
+allocations. Funding is irreversible, and raw ETH transfers do not enter reserve
+accounting.
 
 Fresh deployments fund the initial reserve to `ceil(startingPrice * 105%)`, so
 Round 1 opens with a Winner pool above its first-Grab price before any purchase.
@@ -173,6 +177,8 @@ Anyone may sponsor any future round's Recovery ETH through
 `fundRecoveryReserve(targetRoundId)` or the combined `fundRoundReserves` entry
 point. Multiple contributions are additive, remain available while paused, and
 are consumed exactly once into the named round's Recovery pool at activation.
+Only these explicit permissionless contributions count as sponsorship in
+`roundFunding`; automatic protocol/game allocations never do.
 Sponsorship does not snapshot distant round configuration. Raw ETH transfers are
 not credited. Sponsored ETH follows the ordinary claim rules and rolls forward
 with the pool when the round has no commitments. POTATO commitments remain

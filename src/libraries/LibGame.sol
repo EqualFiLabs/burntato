@@ -44,6 +44,7 @@ library LibGame {
         uint256 recoveryReserve = rs.recoveryReserveByRound[roundId];
         if (recoveryReserve != 0) {
             delete rs.recoveryReserveByRound[roundId];
+            delete rs.recoverySponsoredByRound[roundId];
             rs.recoveryReserveEth -= recoveryReserve;
             round.recoveryPool += recoveryReserve;
             emit IRecovery.RecoveryReserveApplied(roundId, recoveryReserve, round.recoveryPool);
@@ -51,6 +52,7 @@ library LibGame {
         uint256 winnerReserve = gs.winnerReserveByRound[roundId];
         if (winnerReserve != 0) {
             delete gs.winnerReserveByRound[roundId];
+            delete gs.winnerSponsoredByRound[roundId];
             gs.winnerReserveEth -= winnerReserve;
             round.winnerPool += winnerReserve;
             emit IGame.WinnerReserveApplied(roundId, winnerReserve, round.winnerPool);

@@ -110,6 +110,7 @@ contract GameFacet is IGame {
             recovery.recoveryReserveEth += recoveryAmount;
             uint256 roundRecoveryReserve = recovery.recoveryReserveByRound[targetRoundId] + recoveryAmount;
             recovery.recoveryReserveByRound[targetRoundId] = roundRecoveryReserve;
+            recovery.recoverySponsoredByRound[targetRoundId] += recoveryAmount;
             emit IRecovery.RecoveryReserveFunded(msg.sender, targetRoundId, recoveryAmount, roundRecoveryReserve);
         }
         guard.status = 1;
@@ -122,6 +123,24 @@ contract GameFacet is IGame {
     function roundReserves(uint256 roundId) external view returns (uint256 winnerEth, uint256 recoveryEth) {
         winnerEth = LibProtocolStorage.game().winnerReserveByRound[roundId];
         recoveryEth = LibProtocolStorage.recovery().recoveryReserveByRound[roundId];
+    }
+
+    function roundFunding(uint256 roundId)
+        external
+        view
+        returns (
+            uint256 winnerReserve,
+            uint256 recoveryReserve,
+            uint256 winnerSponsoredEth,
+            uint256 recoverySponsoredEth
+        )
+    {
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
+        winnerReserve = gs.winnerReserveByRound[roundId];
+        recoveryReserve = rs.recoveryReserveByRound[roundId];
+        winnerSponsoredEth = gs.winnerSponsoredByRound[roundId];
+        recoverySponsoredEth = rs.recoverySponsoredByRound[roundId];
     }
 
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {
@@ -181,7 +200,11 @@ contract GameFacet is IGame {
         gs.winnerReserveEth += amount;
         uint256 roundWinnerReserve = gs.winnerReserveByRound[targetRoundId] + amount;
         gs.winnerReserveByRound[targetRoundId] = roundWinnerReserve;
-        if (direct) emit WinnerReserveFunded(funder, targetRoundId, amount, roundWinnerReserve);
-        else emit NextRoundWinnerFunded(targetRoundId - 1, targetRoundId, amount, roundWinnerReserve);
+        if (direct) {
+            gs.winnerSponsoredByRound[targetRoundId] += amount;
+            emit WinnerReserveFunded(funder, targetRoundId, amount, roundWinnerReserve);
+        } else {
+            emit NextRoundWinnerFunded(targetRoundId - 1, targetRoundId, amount, roundWinnerReserve);
+        }
     }
 }
