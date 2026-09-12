@@ -200,6 +200,29 @@ contract OperatorRewardsRouterTest is Test {
         assertEq(router.registrationOf(BOB_OPERATOR).owner, address(0));
     }
 
+    function test_RegisteredOperatorCountTracksBatchLifecycle() public {
+        operators.setOwner(BOB_OPERATOR, alice);
+        uint256[] memory operatorIds = _twoOperatorIds();
+
+        vm.prank(alice);
+        router.registerBatch(operatorIds);
+        assertEq(router.totalRegisteredOperators(), 2);
+
+        registry.setWeight(ALICE_OPERATOR, 12_500);
+        router.syncBatch(operatorIds);
+        assertEq(router.totalRegisteredOperators(), 2);
+
+        operators.setOwner(BOB_OPERATOR, carol);
+        router.syncBatch(operatorIds);
+        assertEq(router.totalRegisteredOperators(), 1);
+
+        operators.setOwner(ALICE_OPERATOR, carol);
+        vm.prank(carol);
+        router.registerBatch(operatorIds);
+        assertEq(router.totalRegisteredOperators(), 2);
+        assertEq(router.totalRegisteredWeight(), 22_500);
+    }
+
     function test_BatchRegisterRevertsAtomicallyWhenAnyOperatorIsNotOwned() public {
         _sendRevenue(3 ether);
         uint256[] memory operatorIds = _twoOperatorIds();
@@ -215,6 +238,7 @@ contract OperatorRewardsRouterTest is Test {
         assertEq(router.registrationOf(ALICE_OPERATOR).owner, address(0));
         assertEq(router.registrationOf(BOB_OPERATOR).owner, address(0));
         assertEq(router.totalRegisteredWeight(), 0);
+        assertEq(router.totalRegisteredOperators(), 0);
         assertEq(router.pendingRevenue(), 3 ether);
         assertEq(router.treasuryClaimable(), 0);
     }
