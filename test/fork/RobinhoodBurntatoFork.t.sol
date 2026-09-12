@@ -168,6 +168,37 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         _launchAndTradeCanonicalMarket();
     }
 
+    function test_FutureRoundSponsorshipAppliesAtExactTargetAndRecoveryRollsForward() public {
+        _deployCanonicalBurntato();
+
+        vm.startPrank(alice);
+        game.fundRoundReserves{value: 1.5 ether}(3, 1 ether, 0.5 ether);
+        game.fundRoundReserves{value: 0.5 ether}(5, 0.2 ether, 0.3 ether);
+        vm.stopPrank();
+
+        _buyGame(alice, config.protocol.startingPrice);
+        _settleCurrentRound();
+        assertEq(game.getRound(2).recoveryPool, 0);
+
+        _buyGame(bob, config.protocol.startingPrice);
+        _settleCurrentRound();
+        assertEq(game.getRound(3).winnerPool, 1 ether + config.protocol.startingPrice);
+        assertEq(game.getRound(3).recoveryPool, 0.5 ether);
+        assertEq(game.winnerReserveEth(), 0.2 ether);
+        assertEq(recovery.recoveryReserveEth(), 0.3 ether);
+
+        _buyGame(carol, config.protocol.startingPrice);
+        _settleCurrentRound();
+        assertEq(game.getRound(4).recoveryPool, 0.5 ether);
+
+        _buyGame(dave, config.protocol.startingPrice);
+        _settleCurrentRound();
+        assertEq(game.getRound(5).winnerPool, 0.2 ether + config.protocol.startingPrice);
+        assertEq(game.getRound(5).recoveryPool, 0.8 ether);
+        assertEq(game.winnerReserveEth(), 0);
+        assertEq(recovery.recoveryReserveEth(), 0);
+    }
+
     function _deployCanonicalBurntato() private {
         deployment = deployer.deployWithDependencies(config, address(deployer), dependencies);
         buybacks = IBuyback(deployment.diamond);

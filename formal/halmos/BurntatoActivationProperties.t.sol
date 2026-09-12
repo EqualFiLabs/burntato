@@ -115,6 +115,9 @@ contract BurntatoActivationProperties is Test {
         assertEq(address(diamond).balance, 1);
         assertEq(game.getRound(1).winnerPool, 0);
         assertEq(game.winnerReserveEth(), 1);
+        (uint256 roundTwoWinnerReserve, uint256 roundTwoRecoveryReserve) = game.roundReserves(2);
+        assertEq(roundTwoWinnerReserve, 1);
+        assertEq(roundTwoRecoveryReserve, 0);
     }
 
     function check_nonPurchaseViewsRemainAvailable() public view {
@@ -123,6 +126,9 @@ contract BurntatoActivationProperties is Test {
         assertFalse(governance.paused());
         assertEq(game.currentRoundId(), 0);
         assertEq(game.getRound(0).currentHolder, address(0));
+        (uint256 roundOneWinnerReserve, uint256 roundOneRecoveryReserve) = game.roundReserves(1);
+        assertEq(roundOneWinnerReserve, 1);
+        assertEq(roundOneRecoveryReserve, 0);
         (uint256 baseEarned, uint256 treasuryEarned) = game.currentEarnedEmission();
         assertEq(baseEarned, 0);
         assertEq(treasuryEarned, 0);
