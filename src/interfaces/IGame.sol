@@ -31,6 +31,15 @@ interface IGame {
     function fundRoundReserves(uint256 targetRoundId, uint256 winnerAmount, uint256 recoveryAmount) external payable;
     function winnerReserveEth() external view returns (uint256);
     function roundReserves(uint256 roundId) external view returns (uint256 winnerEth, uint256 recoveryEth);
+    function roundFunding(uint256 roundId)
+        external
+        view
+        returns (
+            uint256 winnerReserve,
+            uint256 recoveryReserve,
+            uint256 winnerSponsoredEth,
+            uint256 recoverySponsoredEth
+        );
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned);
     function currentRoundId() external view returns (uint256);
     function getRound(uint256 roundId) external view returns (Round memory);

@@ -176,6 +176,13 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         game.fundRoundReserves{value: 0.5 ether}(5, 0.2 ether, 0.3 ether);
         vm.stopPrank();
 
+        (uint256 winnerReserve, uint256 recoveryReserve, uint256 winnerSponsored, uint256 recoverySponsored) =
+            game.roundFunding(3);
+        assertEq(winnerReserve, 1 ether);
+        assertEq(recoveryReserve, 0.5 ether);
+        assertEq(winnerSponsored, 1 ether);
+        assertEq(recoverySponsored, 0.5 ether);
+
         _buyGame(alice, config.protocol.startingPrice);
         _settleCurrentRound();
         assertEq(game.getRound(2).recoveryPool, 0);
@@ -184,6 +191,11 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         _settleCurrentRound();
         assertEq(game.getRound(3).winnerPool, 1 ether + config.protocol.startingPrice);
         assertEq(game.getRound(3).recoveryPool, 0.5 ether);
+        (winnerReserve, recoveryReserve, winnerSponsored, recoverySponsored) = game.roundFunding(3);
+        assertEq(winnerReserve, 0);
+        assertEq(recoveryReserve, 0);
+        assertEq(winnerSponsored, 0);
+        assertEq(recoverySponsored, 0);
         assertEq(game.winnerReserveEth(), 0.2 ether);
         assertEq(recovery.recoveryReserveEth(), 0.3 ether);
 

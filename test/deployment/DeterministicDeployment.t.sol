@@ -104,6 +104,12 @@ contract DeterministicDeploymentTest is Test {
         (uint256 genesisWinnerReserve, uint256 genesisRecoveryReserve) = IGame(deployment.diamond).roundReserves(1);
         assertEq(genesisWinnerReserve, config.initialWinnerReserve);
         assertEq(genesisRecoveryReserve, 0);
+        (uint256 winnerReserve, uint256 recoveryReserve, uint256 winnerSponsored, uint256 recoverySponsored) =
+            IGame(deployment.diamond).roundFunding(1);
+        assertEq(winnerReserve, config.initialWinnerReserve);
+        assertEq(recoveryReserve, 0);
+        assertEq(winnerSponsored, 0);
+        assertEq(recoverySponsored, 0);
         assertEq(deployment.diamond.balance, config.initialWinnerReserve);
     }
 

@@ -390,6 +390,17 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         assertLe(reserve, handler.directRecoveryFunding());
     }
 
+    function invariant_SponsoredFundingNeverExceedsRoundReserves() public view {
+        IGame game = IGame(address(diamond));
+        uint256 current = game.currentRoundId();
+        for (uint256 roundId = current + 1; roundId <= current + 16; ++roundId) {
+            (uint256 winnerReserve, uint256 recoveryReserve, uint256 winnerSponsored, uint256 recoverySponsored) =
+                game.roundFunding(roundId);
+            assertLe(winnerSponsored, winnerReserve);
+            assertLe(recoverySponsored, recoveryReserve);
+        }
+    }
+
     function invariant_RecoveryNeverOverpaysAnyRound() public view {
         IGame game = IGame(address(diamond));
         uint256 current = game.currentRoundId();

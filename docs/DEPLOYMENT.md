@@ -223,6 +223,10 @@ Diamond, final admin, hook, Operator router/share, Statics dependencies, facets,
 initializer, launch configuration, and canonical dependency addresses. It never
 contains the RPC URL or private key.
 
+Both local-fork deployment entry points enable one-second interval mining after
+the deployment completes so block timestamps continue advancing for the UI.
+Set `BURNTATO_LOCAL_INTERVAL_SECONDS` to choose another Anvil interval.
+
 Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
 instead. Run archive-RPC qualification locally; it is intentionally excluded
 from CI so pull-request code never receives the RPC credential:

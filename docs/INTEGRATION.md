@@ -45,19 +45,23 @@ to any future round's tracked reserves even while the protocol is paused.
 `fundRoundReserves(targetRoundId, winnerAmount, recoveryAmount)` funds either or
 both in one transaction when their exact sum equals `msg.value`. Active and past
 targets revert. `roundReserves(roundId)` returns the named round's two pending
-amounts; `winnerReserveEth()` and `recoveryReserveEth()` return aggregate future
-liabilities. The named reserves move into `Round.winnerPool` and
+amounts. `roundFunding(roundId)` returns those same aggregate amounts followed
+by the Winner and Recovery portions contributed through the permissionless
+funding entry points. Subtract sponsored from aggregate to display the
+protocol/game-funded remainder. `winnerReserveEth()` and `recoveryReserveEth()`
+return aggregate future liabilities. The named reserves move into `Round.winnerPool` and
 `Round.recoveryPool` only when that round activates. Integrators should index
 `WinnerReserveFunded`, `NextRoundWinnerFunded`, `WinnerReserveApplied`,
 `RecoveryReserveFunded`, and `RecoveryReserveApplied`; a plain native transfer
-is deliberately untracked. Funding is irreversible and does not snapshot a
-distant round's configuration.
+is deliberately untracked. The genesis seed, first-Grab allocation, and
+configured later-Grab allocation are not sponsorship. Funding is irreversible
+and does not snapshot a distant round's configuration.
 
 The first Grab of every round contributes its complete price to the following
 round's Winner reserve. The configured Winner, next-Winner, Recovery, Treasury,
 buyback, and Operator BPS split applies only from the second Grab onward.
 
-The combined funding and per-round reserve views expand the ABI, selector
+The combined funding and per-round funding views expand the ABI, selector
 manifest, and Diamond storage. Integrators must update their ABI before
 connecting to this fresh-deployment package; it is not an in-place upgrade.
 

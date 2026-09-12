@@ -44,6 +44,7 @@ contract RecoveryFacet is IRecovery {
         rs.recoveryReserveEth += msg.value;
         uint256 roundRecoveryReserve = rs.recoveryReserveByRound[targetRoundId] + msg.value;
         rs.recoveryReserveByRound[targetRoundId] = roundRecoveryReserve;
+        rs.recoverySponsoredByRound[targetRoundId] += msg.value;
         emit RecoveryReserveFunded(msg.sender, targetRoundId, msg.value, roundRecoveryReserve);
         guard.status = 1;
     }

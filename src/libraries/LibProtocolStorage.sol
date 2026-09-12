@@ -28,6 +28,7 @@ library LibProtocolStorage {
         mapping(uint256 => bool) winnerClaimed;
         uint256 winnerReserveEth;
         mapping(uint256 => uint256) winnerReserveByRound;
+        mapping(uint256 => uint256) winnerSponsoredByRound;
     }
 
     struct TokenStorage {
@@ -45,6 +46,7 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) stalledWithdrawalAt;
         uint256 recoveryReserveEth;
         mapping(uint256 => uint256) recoveryReserveByRound;
+        mapping(uint256 => uint256) recoverySponsoredByRound;
     }
 
     struct TreasuryStorage {

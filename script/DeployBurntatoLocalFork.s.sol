@@ -40,6 +40,7 @@ contract DeployBurntatoLocalFork is DeployBurntato {
 
         _writeDeployment(deployment, config, dependencies, operatorDependencies);
         _log(deployment);
+        _enableIntervalMining();
     }
 
     function runLocalForkReplica() external returns (BurntatoDeployment memory deployment) {
@@ -67,6 +68,7 @@ contract DeployBurntatoLocalFork is DeployBurntato {
 
         _writeDeployment(deployment, config, dependencies, operatorDependencies);
         _log(deployment);
+        _enableIntervalMining();
     }
 
     function preflightLocalFork() external returns (CanonicalV4Dependencies memory dependencies) {
@@ -167,5 +169,10 @@ contract DeployBurntatoLocalFork is DeployBurntato {
 
     function _operatorRewardShareBps(BurntatoDeployment memory deployment) private view returns (uint256) {
         return BurntatoSwapFeeHook(payable(deployment.hook)).operatorRewardShareBps();
+    }
+
+    function _enableIntervalMining() private {
+        uint256 intervalSeconds = vm.envOr("BURNTATO_LOCAL_INTERVAL_SECONDS", uint256(1));
+        vm.rpc("anvil_setIntervalMining", string.concat("[", vm.toString(intervalSeconds), "]"));
     }
 }
