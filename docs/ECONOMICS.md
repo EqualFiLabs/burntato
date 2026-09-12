@@ -98,13 +98,15 @@ purchases at one timestamp. Failed transactions do not count, and a new round
 starts again with the initial timeout.
 
 The Treasury receives deterministic split dust on configured splits so the six
-allocations always equal the purchase exactly. First-purchase funding,
-`nextRoundWinnerShare`, and permissionless direct funding accumulate in the
-Winner reserve. Round activation moves the complete reserve into that round's
-Winner pool and clears it exactly once. `fundWinnerReserve(expectedRoundId)`
-targets Round 1 before launch and Round N+1 during Round N; it reverts if the
-expected target became stale before execution. Raw ETH transfers do not enter
-reserve accounting.
+allocations always equal the purchase exactly. First-purchase funding and
+`nextRoundWinnerShare` accumulate in the immediately following round's Winner
+reserve. Permissionless direct funding may target any future round. Round
+activation moves only that round's reserve into its Winner pool, clears the
+per-round amount exactly once, and leaves later reserves untouched.
+`fundWinnerReserve(targetRoundId)` rejects an active or past target.
+`fundRoundReserves(targetRoundId, winnerAmount, recoveryAmount)` can fund either
+or both reserves atomically and requires the two amounts to equal `msg.value`.
+Funding is irreversible, and raw ETH transfers do not enter reserve accounting.
 
 Fresh deployments fund the initial reserve to `ceil(startingPrice * 105%)`, so
 Round 1 opens with a Winner pool above its first-Grab price before any purchase.
@@ -167,13 +169,14 @@ POTATO commitments are forward-only to `currentRoundId + 1`. The target terms
 have already been snapshotted before commitment opens. POTATO moves into Diamond
 escrow through an exact transaction-scoped protocol transfer.
 
-Anyone may sponsor the next round's Recovery ETH through
-`fundRecoveryReserve(expectedRoundId)`. The expected-round guard prevents a
-transaction from silently retargeting after settlement. Multiple contributions
-are additive, remain available while paused, and are consumed exactly once into
-the target round's Recovery pool at activation. Raw ETH transfers are not
-credited. Sponsored ETH follows the ordinary claim rules and rolls forward with
-the pool when the round has no commitments.
+Anyone may sponsor any future round's Recovery ETH through
+`fundRecoveryReserve(targetRoundId)` or the combined `fundRoundReserves` entry
+point. Multiple contributions are additive, remain available while paused, and
+are consumed exactly once into the named round's Recovery pool at activation.
+Sponsorship does not snapshot distant round configuration. Raw ETH transfers are
+not credited. Sponsored ETH follows the ordinary claim rules and rolls forward
+with the pool when the round has no commitments. POTATO commitments remain
+limited to the immediately next round.
 
 Commitments normally remain irrevocable once the predecessor receives its first
 holder. There is one liveness escape for an activated predecessor that has never
