@@ -8,12 +8,12 @@ liquidity and direct Treasury trading revenue.
 
 Fresh-deployment defaults give the first holder one hour and shorten each later
 purchase reset by five minutes until reaching a five-minute floor, alongside a
-10% price step, a fresh 100,000 POTATO emission budget, 10% holder
-opportunities vesting over four minutes, a 25% Winner / 40% Recovery / 25%
-Treasury / 10% buyback purchase split, a 90% burn / 10% Treasury Recovery split,
-and a 1% bilateral market fee. These are governed defaults, not immutable
-constants. Each active or already-snapshotted target round keeps its terms while
-changes apply to future unsnapshotted rounds.
+10% price step, a fresh 10,000 POTATO emission budget, 10% holder
+opportunities vesting over four minutes, a 25% Winner / 2% next-Winner / 40%
+Recovery / 23% Treasury / 10% buyback purchase split, a 90% burn / 10% Treasury
+Recovery split, and a 1% bilateral market fee. These game values are governed
+defaults, not immutable constants. Each active or already-snapshotted target
+round keeps its terms while changes apply to future unsnapshotted rounds.
 Every successful purchase resets from its own timestamp; purchase count drives
 the urgency schedule but still does not consume POTATO emission.
 
@@ -32,11 +32,11 @@ PoolManager movements are allowed; ordinary wallet transfers revert. The
 initial Treasury recipient is a distributor, and later Treasury-recipient and
 distributor changes are administered independently. Users can self-burn. The
 genesis deployment mints and reserves 100 million POTATO for a token-only v4
-launch. The initial position starts at the range's upper boundary, contains no
-ETH, and is permanently sent to the dead address. Its native LP fee is fixed at
-zero. The bilateral hook fee is governed within a fixed 2% ceiling, and all
-realized fee ETH is split between its governed Treasury recipient and optional
-Operator rewards router.
+launch. A fixed aggressive six-band profile creates 56 nested positions, all
+POTATO-sided at initialization, and permanently sends every position NFT to the
+dead address. Its native LP fee is fixed at zero. The bilateral hook fee is
+governed within a fixed 2% ceiling, and all realized fee ETH is split between
+its governed Treasury recipient and optional Operator rewards router.
 
 The buyback share accumulates as dedicated Diamond ETH, and anyone may add a
 positive amount directly through the tracked reserve funding entry point. After
@@ -80,6 +80,8 @@ zero-address transfer rules.
   canonical v4 hook.
 - [`script/`](script/) — deterministic local deployment and verification.
 - [`test/`](test/) — unit, integration, fuzz, invariant, and deployment flows.
+- [`analysis/potato-market-model/`](analysis/potato-market-model/) — reproducible
+  launch-curve and game-economics model.
 - [`docs/ECONOMICS.md`](docs/ECONOMICS.md) — configurable game and Recovery
   accounting.
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — token and canonical market

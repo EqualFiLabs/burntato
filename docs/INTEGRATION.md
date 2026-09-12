@@ -17,8 +17,8 @@ Important state reads include:
 - `IClaims.winnerClaimed()`, `recoveryClaimed()`, and
   `claimableRecovery()` for account claim state;
 - Treasury claimable ETH and POTATO views; and
-- `IMarket.marketConfig()`, `canonicalPoolKey()`, `marketState()`, and
-  `marketReady()`;
+- `IMarket.marketConfig()`, `marketCurves()`, `marketCurveHash()`,
+  `canonicalPoolKey()`, `marketState()`, and `marketReady()`;
 - `IPotatoToken.isDistributor(account)`, `canonicalHook()`, and
   `tokenPoolManager()` for the governed transfer and market bindings; and
 - `IBuyback.buybackConfig()`, `buybackReserveEth()`, and `lastBuybackBlock()`;
@@ -113,17 +113,21 @@ immutably to that POTATO address, PoolManager, and tick spacing. It rejects
 foreign initialization, foreign PoolKeys, exact-output and zero-amount swaps,
 and unauthorized liquidity addition.
 
-Market infrastructure and reserves can be corrected through `configureMarket`
-before launch. After launch, structural reconfiguration and a second launch
-revert. The initial position NFT is held by
-`0x000000000000000000000000000000000000dEaD`.
+Market infrastructure and the reserved seed can be corrected through
+`configureMarket` before launch. The six canonical bands, spacing, initial
+tick, and outer bounds are fixed by the reviewed launch profile. After launch,
+reconfiguration and a second launch revert. All 56 initial position NFTs are
+held by `0x000000000000000000000000000000000000dEaD`.
 
 Genesis reserves the configured POTATO allocation in Diamond custody. The
 initial square-root price must equal `TickMath.getSqrtPriceAtTick(tickUpper)`,
-making the locked launch position entirely POTATO-sided; `launchMarket()` is
+making every locked launch position entirely POTATO-sided; `launchMarket()` is
 nonpayable and does not consume Treasury ETH. The local default allocation is
 100 million POTATO. Configuration rejects allocations that exceed the
-PositionManager amount domain or produce zero/overflowed launch liquidity.
+aggregate amount domain or produce a zero/overflowed per-position amount or
+liquidity value. `marketCurves()` and `marketCurveHash()` expose the immutable
+profile, while `launchMarket()` returns the pool ID, position count, and actual
+POTATO consumed after v4 rounding.
 Because external buys start closed, the first protocol
 buybacks add ETH-side pool inventory before ordinary users may buy, while POTATO
 holders may sell whenever the pool has ETH available.
