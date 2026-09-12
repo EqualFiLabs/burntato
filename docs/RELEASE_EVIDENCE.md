@@ -612,3 +612,23 @@ an explicitly accepted FWA-compatible product boundary already documented
 above. Mutable GitHub Action major tags remain the repository-standard workflow
 choice; read-only repository permissions limit their access, but this is not
 equivalent to full-SHA action pinning.
+
+## Sponsorship provenance
+
+Date: September 12, 2026
+
+Candidate: `9885980`. The change appends per-round sponsored counters, updates
+them only through permissionless direct funding, clears them with their target
+reserves at activation, and exposes the aggregate and sponsored values through
+one new view selector.
+
+| Scope | Command | Result |
+| --- | --- | --- |
+| Complete local suite | `forge test` | 227 passed, 7 environment skips |
+| Provenance invariant | `forge test --match-path test/invariant/ProtocolInvariant.t.sol -q` | Passed, including sponsored amounts bounded by aggregate reserves |
+| Strict pinned fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the private archive RPC | 4 passed |
+
+The review covered append-only namespaced storage, selector uniqueness,
+direct-versus-automatic accounting, activation deletion, ETH backing, and
+unchanged settlement custody. This is local and pinned-fork evidence, not a
+public-network deployment or independent audit.
