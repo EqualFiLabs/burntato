@@ -146,10 +146,14 @@ contract OperatorRewardsInvariantTest is Test {
 
     function invariant_RegisteredWeightMatchesRegistrations() public view {
         uint256 expectedWeight;
+        uint256 expectedOperators;
         for (uint256 operatorId = 1; operatorId <= 3; ++operatorId) {
-            expectedWeight += router.registrationOf(operatorId).weight;
+            IOperatorRewards.Registration memory registration = router.registrationOf(operatorId);
+            expectedWeight += registration.weight;
+            if (registration.owner != address(0)) ++expectedOperators;
         }
         assertEq(router.totalRegisteredWeight(), expectedWeight);
+        assertEq(router.totalRegisteredOperators(), expectedOperators);
     }
 
     function invariant_ClaimsNeverExceedRevenue() public view {

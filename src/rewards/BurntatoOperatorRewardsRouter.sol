@@ -17,6 +17,7 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
     IGenesisActivationRegistryView public immutable activationRegistry;
 
     uint256 public totalRegisteredWeight;
+    uint256 public totalRegisteredOperators;
     uint256 public rewardIndex;
     uint256 public globalRewardRemainder;
     uint256 public pendingRevenue;
@@ -121,6 +122,7 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
         if (weight == 0) revert InvalidOperatorWeight(operatorId);
         _flushGlobalRemainder();
         totalRegisteredWeight += weight;
+        ++totalRegisteredOperators;
         _registrations[operatorId] = Registration({
             owner: currentOwner, weight: weight, rewardIndex: rewardIndex, claimable: 0, rewardRemainder: 0
         });
@@ -303,6 +305,7 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
 
         _flushGlobalRemainder();
         totalRegisteredWeight -= storedWeight;
+        --totalRegisteredOperators;
         delete _registrations[operatorId];
 
         if (totalRegisteredWeight == 0) {

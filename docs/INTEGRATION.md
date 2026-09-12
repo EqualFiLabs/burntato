@@ -175,6 +175,10 @@ Winner, Recovery, Treasury, and buyback obligations have been recorded.
   receiver.
 - `claimBatch(operatorIds, receiver)` claims a nonempty, strictly increasing
   list of currently owned registrations through one native transfer.
+- `totalRegisteredOperators()` returns the number of registrations currently
+  contributing to the Burntato Operator reward pool.
+- `totalRegisteredWeight()` returns their combined activation-weighted reward
+  denominator.
 - `accrue()` recognizes queued and force-sent native revenue.
 - `claimTreasury()` pays zero-registration and sole-forfeiture revenue to the
   Diamond's current Treasury recipient.
