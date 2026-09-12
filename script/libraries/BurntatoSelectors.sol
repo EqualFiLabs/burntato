@@ -46,7 +46,7 @@ library BurntatoSelectors {
     }
 
     function market() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](8);
+        selectors = new bytes4[](10);
         selectors[0] = IMarket.configureMarket.selector;
         selectors[1] = IMarket.launchMarket.selector;
         selectors[2] = IMarket.marketConfig.selector;
@@ -55,6 +55,8 @@ library BurntatoSelectors {
         selectors[5] = IMarket.marketLaunching.selector;
         selectors[6] = IMarket.marketReady.selector;
         selectors[7] = IMarket.lockedLpRecipient.selector;
+        selectors[8] = IMarket.marketCurves.selector;
+        selectors[9] = IMarket.marketCurveHash.selector;
     }
 
     function buyback() internal pure returns (bytes4[] memory selectors) {

@@ -191,7 +191,7 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _marketSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](8);
+        selectors = new bytes4[](10);
         selectors[0] = IMarket.configureMarket.selector;
         selectors[1] = IMarket.launchMarket.selector;
         selectors[2] = IMarket.marketConfig.selector;
@@ -200,6 +200,8 @@ abstract contract DiamondTestSetup is Test {
         selectors[5] = IMarket.marketLaunching.selector;
         selectors[6] = IMarket.marketReady.selector;
         selectors[7] = IMarket.lockedLpRecipient.selector;
+        selectors[8] = IMarket.marketCurves.selector;
+        selectors[9] = IMarket.marketCurveHash.selector;
     }
 
     function _buybackSelectors() internal pure returns (bytes4[] memory selectors) {

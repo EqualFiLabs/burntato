@@ -341,10 +341,16 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         uint256 tokenId = IPositionManagerBindings(dependencies.positionManager).nextTokenId();
 
         vm.prank(keeper);
-        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+        (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) = market.launchMarket();
         assertEq(poolId, PoolId.unwrap(key.toId()));
-        assertEq(IPositionManagerBindings(dependencies.positionManager).getPositionLiquidity(tokenId), liquidity);
-        assertEq(IPositionManagerBindings(dependencies.positionManager).ownerOf(tokenId), market.lockedLpRecipient());
+        assertEq(positionCount, 56);
+        assertGt(potatoUsed, 0);
+        for (uint256 currentId = tokenId; currentId < tokenId + positionCount; ++currentId) {
+            assertGt(IPositionManagerBindings(dependencies.positionManager).getPositionLiquidity(currentId), 0);
+            assertEq(
+                IPositionManagerBindings(dependencies.positionManager).ownerOf(currentId), market.lockedLpRecipient()
+            );
+        }
         assertEq(deployment.diamond.balance, diamondEthBefore);
         assertEq(claims.treasuryEthAvailable(), treasuryClaimBefore);
         (uint160 sqrtPriceX96,,,) = poolManager.getSlot0(key.toId());
