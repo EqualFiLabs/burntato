@@ -57,6 +57,14 @@ contract FalseApproveFacet {
     }
 }
 
+contract RevertingPositionManager {
+    error PositionMintFailed();
+
+    function multicall(bytes[] calldata) external pure returns (bytes[] memory) {
+        revert PositionMintFailed();
+    }
+}
+
 contract NativeFeeReceiver {
     receive() external payable {}
 }
@@ -93,7 +101,7 @@ contract IntegrationActivationRegistry {
 contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     int24 internal constant TICK_SPACING = 60;
-    int24 internal constant INITIAL_TICK = 69_060;
+    int24 internal constant INITIAL_TICK = 170_280;
     uint256 internal constant POTATO_SEED = 1 ether;
 
     address internal alice = makeAddr("alice");
@@ -158,25 +166,72 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.deal(address(manager), 100 ether);
     }
 
-    function test_GenesisSupplyPermissionlesslyLaunchesLockedSingleSidedLiquidity() public {
+    function test_GenesisSupplyPermissionlesslyLaunchesLockedMulticurveLiquidity() public {
         assertTrue(market.marketReady());
         uint256 treasuryEthBefore = claims.treasuryEthAvailable();
         uint256 diamondEthBefore = address(diamond).balance;
+        uint256 firstTokenId = positionManager.nextTokenId();
 
         vm.prank(keeper);
-        (bytes32 poolId, uint128 liquidity) = market.launchMarket();
+        (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) = market.launchMarket();
 
         (bytes32 storedPoolId,, bool launching, bool launched) = market.marketState();
         assertEq(storedPoolId, poolId);
-        assertGt(liquidity, 0);
+        assertEq(positionCount, 56);
+        assertGt(potatoUsed, 0);
+        assertLe(potatoUsed, POTATO_SEED);
         assertFalse(launching);
         assertTrue(launched);
-        assertEq(IERC721Owner(address(positionManager)).ownerOf(1), market.lockedLpRecipient());
+        assertEq(positionManager.nextTokenId(), firstTokenId + positionCount);
+        for (uint256 tokenId = firstTokenId; tokenId < firstTokenId + positionCount; ++tokenId) {
+            assertEq(IERC721Owner(address(positionManager)).ownerOf(tokenId), market.lockedLpRecipient());
+            assertGt(positionManager.getPositionLiquidity(tokenId), 0);
+        }
         assertEq(market.lockedLpRecipient(), 0x000000000000000000000000000000000000dEaD);
         assertEq(address(positionManager).balance, 0);
         assertEq(claims.treasuryEthAvailable(), treasuryEthBefore);
         assertEq(address(diamond).balance, diamondEthBefore);
-        assertLe(potato.balanceOf(address(diamond)), 10);
+        assertEq(potato.balanceOf(address(diamond)), POTATO_SEED - potatoUsed);
+        assertLt(potato.balanceOf(address(diamond)), positionCount * 1_000);
+    }
+
+    function test_MarketExposesPinnedAggressiveCurve() public view {
+        IMarket.MarketCurve[] memory curves = market.marketCurves();
+        assertEq(curves.length, 6);
+        assertEq(curves[0].canonicalTickLower, -170_280);
+        assertEq(curves[0].canonicalTickUpper, -153_000);
+        assertEq(curves[0].positions, 11);
+        assertEq(curves[0].shareBps, 250);
+        assertEq(curves[1].canonicalTickLower, -160_980);
+        assertEq(curves[1].canonicalTickUpper, -137_040);
+        assertEq(curves[1].positions, 11);
+        assertEq(curves[1].shareBps, 750);
+        assertEq(curves[2].canonicalTickLower, -145_080);
+        assertEq(curves[2].canonicalTickUpper, -118_500);
+        assertEq(curves[2].positions, 11);
+        assertEq(curves[2].shareBps, 1_250);
+        assertEq(curves[3].canonicalTickLower, -126_600);
+        assertEq(curves[3].canonicalTickUpper, -92_100);
+        assertEq(curves[3].positions, 11);
+        assertEq(curves[3].shareBps, 2_000);
+        assertEq(curves[4].canonicalTickLower, -100_020);
+        assertEq(curves[4].canonicalTickUpper, -65_580);
+        assertEq(curves[4].positions, 11);
+        assertEq(curves[4].shareBps, 4_250);
+        assertEq(curves[5].canonicalTickLower, -65_580);
+        assertEq(curves[5].canonicalTickUpper, 887_220);
+        assertEq(curves[5].positions, 1);
+        assertEq(curves[5].shareBps, 1_500);
+
+        uint256 shares;
+        uint256 positions;
+        for (uint256 index; index < curves.length; ++index) {
+            shares += curves[index].shareBps;
+            positions += curves[index].positions;
+        }
+        assertEq(shares, 10_000);
+        assertEq(positions, 56);
+        assertEq(market.marketCurveHash(), keccak256(abi.encode(curves)));
     }
 
     function test_ForcedPositionManagerEthDoesNotCorruptLaunchAccounting() public {
@@ -272,7 +327,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(address(diamond).balance, diamondBefore);
         assertEq(address(hook).balance, 0);
         assertEq(potato.transientPoolManagerAllowance(), 0);
-        assertEq(positionManager.nextTokenId(), 2);
+        assertEq(positionManager.nextTokenId(), 57);
     }
 
     function test_RealBuyAndSellSplitExistingFeeWithOperatorRouter() public {
@@ -379,7 +434,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertTrue(market.marketReady());
         market.launchMarket();
         assertEq(claims.treasuryEthAvailable(), 0);
-        assertLe(claims.treasuryPotatoAvailable(), 10);
+        assertLt(claims.treasuryPotatoAvailable(), 100_000);
     }
 
     function test_MarketConfigurationCanChangeBeforeLaunchButNotAfter() public {
@@ -395,6 +450,34 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(authority);
         vm.expectRevert(Errors.AlreadyLaunched.selector);
         market.configureMarket(config);
+    }
+
+    function test_ConfigurationRejectsAlternateAlignedCurveBounds() public {
+        IMarket.MarketConfig memory config = market.marketConfig();
+        config.tickLower += TICK_SPACING;
+
+        vm.prank(authority);
+        vm.expectRevert(Errors.InvalidMarketConfiguration.selector);
+        market.configureMarket(config);
+    }
+
+    function test_PositionMintFailureRollsBackCompleteLaunch() public {
+        _createTreasuryInventory();
+        IMarket.MarketConfig memory config = market.marketConfig();
+        config.positionManager = address(new RevertingPositionManager());
+        vm.prank(authority);
+        market.configureMarket(config);
+
+        uint256 potatoBefore = potato.balanceOf(address(diamond));
+        vm.expectRevert(RevertingPositionManager.PositionMintFailed.selector);
+        market.launchMarket();
+
+        (bytes32 poolId,, bool launching, bool launched) = market.marketState();
+        assertEq(poolId, bytes32(0));
+        assertFalse(launching);
+        assertFalse(launched);
+        assertEq(potato.balanceOf(address(diamond)), potatoBefore);
+        assertTrue(market.marketReady());
     }
 
     function test_FeeAdministrationRemainsAvailableAfterDiamondFinalization() public {
@@ -881,12 +964,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertEq(keeper.balance, 0);
     }
 
-    function test_PartialBuybackRestoresUnspentInputToReserve() public {
-        IMarket.MarketConfig memory config = market.marketConfig();
-        config.tickLower = INITIAL_TICK - TICK_SPACING;
-        config.tickUpper = INITIAL_TICK;
-        vm.prank(authority);
-        market.configureMarket(config);
+    function test_BuybackConservesReserveForFullMulticurveFill() public {
         _createTreasuryInventory();
         market.launchMarket();
 
@@ -898,7 +976,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
 
         assertEq(amountOut, bought);
         assertGt(amountOut, 0);
-        assertLt(spent, gross * 10_000 / 10_050);
+        assertLe(spent, gross * 10_000 / 10_050);
         assertEq(reward, spent * 50 / 10_000);
         assertEq(reserve, gross - spent - reward);
         assertEq(buybacks.buybackReserveEth(), reserve);
@@ -915,11 +993,6 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
     }
 
     function test_TerminalBuyConvertsCompletePotatoFeeWithoutHookResidue() public {
-        IMarket.MarketConfig memory config = market.marketConfig();
-        config.tickLower = INITIAL_TICK - TICK_SPACING;
-        config.tickUpper = INITIAL_TICK;
-        vm.prank(authority);
-        market.configureMarket(config);
         _createTreasuryInventory();
         market.launchMarket();
         _setExternalBuys(true);

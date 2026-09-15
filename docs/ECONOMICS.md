@@ -45,7 +45,7 @@ The local genesis defaults are:
 | Round timeout | 1 hour |
 | Timeout decay per purchase | 5 minutes |
 | Minimum round timeout | 5 minutes |
-| Round emission budget | 100,000 POTATO |
+| Round emission budget | 10,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 4 minutes |
 | Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 2% / 40% / 23% / 10% / 0% |
@@ -144,8 +144,8 @@ deducted. An unearned portion remains unissued inside the same round budget and
 informs the next holder's opportunity. Same-timestamp cycling earns zero and
 does not advance the curve.
 
-At the default four-minute vesting duration, a first holder earns 5,000 POTATO
-after two minutes and reaches the same 10,000 POTATO maximum after four minutes.
+At the default four-minute vesting duration, a first holder earns 500 POTATO
+after two minutes and reaches the same 1,000 POTATO maximum after four minutes.
 An uninterrupted holder can fully vest one minute before the five-minute
 minimum round deadline. The duration is governed and snapshotted per round;
 changing deployment defaults does not alter an existing deployment.
@@ -160,12 +160,12 @@ materialize holder emission or reach the central protocol-mint path.
 At the default 10% step, fully vested opportunities reproduce:
 
 ```text
-100,000 -> 90,000 -> 81,000 -> 72,900 remaining
+10,000 -> 9,000 -> 8,100 -> 7,290 remaining
 ```
 
 Unused budget is never force-minted, rolled forward, transferred to Recovery or
 Treasury, or awarded to the winner. Every round starts from its own configured
-budget. At the default, actual round emission is at most 100,000 POTATO.
+budget. At the default, actual round emission is at most 10,000 POTATO.
 
 ## Recovery
 
@@ -218,23 +218,28 @@ into the next round; unused POTATO emission never does.
 Genesis mints a separately reserved market allocation into Diamond custody; the
 local default is 100 million POTATO. It is not holder-time emission and cannot
 be claimed before launch. Governance may resize the allocation before launch,
-subject to the Diamond's available POTATO inventory.
+subject to the Diamond's available POTATO inventory and every derived position
+remaining valid.
 
-The default initial and upper tick is 170,280. With the default 100 million
+The fixed aggressive profile opens at tick 170,280 and divides the allocation
+across 56 nested positions in six overlapping bands. The bands receive 2.5%,
+7.5%, 12.5%, 20%, 42.5%, and 15% of inventory. With the default 100 million
 POTATO allocation, an otherwise untouched pool, and the full 2 ETH gross
-bootstrap, the first buyback acquires approximately 33.06 million POTATO. At
-the resulting pool state, selling a fully vested first-holder emission of
-10,000 POTATO returns approximately 0.00089 ETH after the default bilateral
-hook fee. That is below the 0.001 ETH the corresponding 0.01 ETH game purchase
-contributes to the buyback reserve. These figures describe the deterministic
-default bootstrap path, not a minimum-output or market-price guarantee; prior
-pool activity, configuration changes, and transaction ordering change the
-realized result.
+bootstrap, the first buyback acquires approximately 6.7 million POTATO. At the
+resulting pool state, selling a fully vested first-holder emission of 1,000
+POTATO returns approximately 0.000642 ETH after the default bilateral hook fee.
+That is below the 0.001 ETH the corresponding 0.01 ETH game purchase contributes
+to the buyback reserve. These figures describe the deterministic default
+bootstrap path, not a minimum-output or market-price guarantee; prior pool
+activity, configuration changes, and transaction ordering change the realized
+result.
 
 Anyone may launch the exact canonical native ETH/POTATO v4 pool once the token
-reservation is available. The initial price equals the position's upper tick,
-so launch supplies POTATO only and consumes no Treasury ETH. The position NFT
-is sent permanently to the dead address and the native LP fee is fixed at zero.
+reservation is available. The initial price equals the highest position upper
+tick, so launch supplies POTATO only and consumes no Treasury ETH. All 56
+position NFTs are sent permanently to the dead address and the native LP fee is
+fixed at zero. `marketCurves()` exposes the canonical ETH/POTATO bands and
+`marketCurveHash()` provides a compact deployment identity.
 Buybacks subsequently supply ETH-side demand while external buys remain closed;
 POTATO holders can sell into that liquidity immediately after ETH has entered
 the pool.

@@ -632,3 +632,44 @@ The review covered append-only namespaced storage, selector uniqueness,
 direct-versus-automatic accounting, activation deletion, ETH backing, and
 unchanged settlement custody. This is local and pinned-fork evidence, not a
 public-network deployment or independent audit.
+
+## Fixed aggressive multicurve launch
+
+Date: September 12, 2026
+
+Candidate before this evidence entry: `49f459a`. The launch profile is fixed at
+six overlapping bands and 56 nested Uniswap v4 positions. The bands allocate
+2.5%, 7.5%, 12.5%, 20%, 42.5%, and 15% of the 100 million POTATO launch seed.
+Every position NFT is minted directly to the existing locked recipient. Fresh
+deployment defaults reduce the round emission budget from 100,000 to 10,000
+POTATO, while external buys remain closed until hook governance enables them.
+
+| Scope | Command or method | Result |
+| --- | --- | --- |
+| Economics model | `node model.test.mjs` and two deterministic `node generate-report.mjs` runs | Model invariants passed; report, JSON, and CSV hashes reproduced exactly |
+| Format and diff | `forge fmt --check` and `git diff --check` | Passed |
+| Contract size | `forge build --sizes` | `MarketFacet` runtime 9,560 bytes; 15,016-byte EIP-170 margin |
+| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 95 passed |
+| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 81 passed |
+| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties passed across 11,000 runs |
+| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 16 properties passed across 51,200 calls |
+| Strict market invariant | `FOUNDRY_PROFILE=security forge test --match-path test/invariant/CanonicalMarketInvariant.t.sol -j 1` | 2 properties passed across 32,768 calls with zero handler reverts |
+| Deployment | strict configured fork plus `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 47 passed; no skips |
+| Robinhood fork | strict configured fork plus `forge test --match-path 'test/fork/*.t.sol' -j 1` | 5 passed; no skips |
+
+The pinned Robinhood fork executed the complete game, Recovery, Treasury reward,
+market, buyback, Permit2 sell, external-buy gate, bilateral hook-fee, and
+round-sponsorship lifecycles against the committed canonical v4 dependencies.
+The permissionless market launch consumed 7,978,409 gas at the Diamond entry
+point, created 56 nonzero-liquidity positions, and left every LP NFT owned by
+the locked recipient. The local v4 execution reproduced the model's selected
+buyback milestones around 2, 5, 10, 25, and 50 ETH.
+
+Focused review covered fixed-profile identity, tick inversion and alignment,
+per-band allocation and rounding, nonzero and `uint128` liquidity domains,
+Treasury reservation conservation, complete rollback on PositionManager
+failure, transient PoolManager authorization, selector installation, deployment
+artifact identity, locked NFT ownership, and the continued Treasury-only buy
+gate. No verified release-scope security finding remained. This is model,
+local Foundry, and pinned-fork evidence; it is not a public-network deployment
+or independent third-party audit.

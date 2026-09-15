@@ -9,6 +9,8 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
+import {IMarket} from "../src/interfaces/IMarket.sol";
+import {BurntatoLaunchCurves} from "../src/libraries/BurntatoLaunchCurves.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
@@ -60,7 +62,7 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
     ) private {
         vm.createDir("artifacts/robinhood-testnet", true);
         string memory object = "robinhoodTestnet";
-        vm.serializeUint(object, "schemaVersion", 1);
+        vm.serializeUint(object, "schemaVersion", 2);
         vm.serializeUint(object, "chainId", dependencies.chainId);
         vm.serializeUint(object, "deploymentBlock", block.number);
         vm.serializeAddress(object, "deployer", config.deployer);
@@ -83,6 +85,10 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeUint(object, "initialWinnerReserve", config.initialWinnerReserve);
         vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
         vm.serializeUint(object, "operatorRewardShareBps", config.operatorRewardShareBps);
+        vm.serializeUint(object, "roundEmissionBudget", config.protocol.roundEmissionBudget);
+        vm.serializeUint(object, "potatoSeed", config.potatoSeed);
+        vm.serializeUint(object, "marketPositionCount", BurntatoLaunchCurves.positionCount());
+        vm.serializeBytes32(object, "marketCurveHash", IMarket(deployment.diamond).marketCurveHash());
         vm.serializeAddress(object, "diamondCutFacet", deployment.diamondCutFacet);
         vm.serializeAddress(object, "diamondLoupeFacet", deployment.diamondLoupeFacet);
         vm.serializeAddress(object, "governanceFacet", deployment.governanceFacet);

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-
 import {GenesisConfig} from "../DeploymentTypes.sol";
+import {BurntatoLaunchCurves} from "../../src/libraries/BurntatoLaunchCurves.sol";
 import {LibMath} from "../../src/libraries/LibMath.sol";
 import {BuybackConfig, ProtocolConfig} from "../../src/shared/Types.sol";
 
@@ -14,8 +13,6 @@ library BurntatoDeploymentConfig {
     address internal constant ANVIL_GUARDIAN = 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC;
     address internal constant ANVIL_TREASURY = 0x90F79bf6EB2c4f870365E785982E1f101E93b906;
 
-    int24 internal constant DEFAULT_TICK_SPACING = 60;
-    int24 internal constant DEFAULT_INITIAL_TICK = 170_280;
     uint256 internal constant INITIAL_WINNER_TARGET_BPS = 10_500;
 
     function localDefaults() internal pure returns (GenesisConfig memory config) {
@@ -29,7 +26,7 @@ library BurntatoDeploymentConfig {
                 startingPrice: 0.01 ether,
                 priceIncreaseBps: 1_000,
                 roundTimeout: 1 hours,
-                roundEmissionBudget: 100_000 ether,
+                roundEmissionBudget: 10_000 ether,
                 emissionStepBps: 1_000,
                 emissionVestingDuration: 4 minutes,
                 winnerBps: 2_500,
@@ -47,10 +44,10 @@ library BurntatoDeploymentConfig {
             buyback: BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1}),
             hookFeeBps: 100,
             operatorRewardShareBps: 0,
-            initialTick: DEFAULT_INITIAL_TICK,
-            tickSpacing: DEFAULT_TICK_SPACING,
-            tickLower: TickMath.minUsableTick(DEFAULT_TICK_SPACING),
-            tickUpper: DEFAULT_INITIAL_TICK,
+            initialTick: BurntatoLaunchCurves.initialTick(),
+            tickSpacing: BurntatoLaunchCurves.tickSpacing(),
+            tickLower: BurntatoLaunchCurves.tickLower(),
+            tickUpper: BurntatoLaunchCurves.tickUpper(),
             potatoSeed: 100_000_000 ether
         });
         config.initialWinnerReserve = defaultInitialWinnerReserve(config.protocol);

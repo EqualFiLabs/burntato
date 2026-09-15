@@ -29,10 +29,11 @@ contract FinalizeBurntatoRobinhoodTestnet is Script {
         _requireChain();
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(privateKey);
-        (bytes32 poolId, uint128 liquidity) = IMarket(_diamond()).launchMarket();
+        (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) = IMarket(_diamond()).launchMarket();
         vm.stopBroadcast();
         console2.logBytes32(poolId);
-        console2.log("Locked market liquidity", liquidity);
+        console2.log("Locked market positions", positionCount);
+        console2.log("POTATO used", potatoUsed);
     }
 
     function enableExternalBuys() external {

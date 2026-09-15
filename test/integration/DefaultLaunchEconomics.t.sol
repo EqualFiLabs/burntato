@@ -14,7 +14,7 @@ import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
-import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
+import {BuybackConfig, ProtocolConfig, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
 
@@ -80,7 +80,7 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
         vm.deal(address(manager), 100 ether);
     }
 
-    function test_DefaultBootstrapCoversFirstFullEmissionSell() public {
+    function test_DefaultBootstrapCoversFirstFullyVestedEmissionSell() public {
         market.launchMarket();
         assertFalse(hook.externalBuysEnabled());
 
@@ -92,8 +92,8 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
         vm.prank(keeper);
         uint256 bootstrapBought = buybacks.buyback();
 
-        assertGe(bootstrapBought, 33_050_000 ether);
-        assertLe(bootstrapBought, 33_070_000 ether);
+        assertGe(bootstrapBought, 6_700_000 ether);
+        assertLe(bootstrapBought, 6_750_000 ether);
         assertEq(potato.balanceOf(treasury) - treasuryPotatoBefore, bootstrapBought);
         assertGt(keeper.balance - keeperNativeBefore, 0);
 
@@ -109,28 +109,63 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
         assertEq(round.config.emissionVestingDuration, 4 minutes);
         vm.warp(round.holderSince + 4 minutes);
         game.materializeMaturedEmission();
-        assertEq(potato.balanceOf(buyer), 10_000 ether);
+        assertEq(round.config.roundEmissionBudget, 10_000 ether);
+        assertEq(potato.balanceOf(buyer), 1_000 ether);
 
         vm.prank(buyer);
-        potato.approve(address(swapRouter), 10_000 ether);
+        potato.approve(address(swapRouter), 1_000 ether);
         uint256 buyerNativeBefore = buyer.balance;
         vm.prank(buyer);
         swapRouter.swap(
             key,
-            SwapParams({zeroForOne: false, amountSpecified: -int256(10_000 ether), sqrtPriceLimitX96: MAX_PRICE_LIMIT}),
+            SwapParams({zeroForOne: false, amountSpecified: -int256(1_000 ether), sqrtPriceLimitX96: MAX_PRICE_LIMIT}),
             PoolSwapTest.TestSettings({takeClaims: false, settleUsingBurn: false}),
             ZERO_BYTES
         );
         uint256 sellProceeds = buyer.balance - buyerNativeBefore;
 
-        assertGt(sellProceeds, 0.00088 ether);
-        assertLt(sellProceeds, 0.0009 ether);
+        assertGt(sellProceeds, 0.00064 ether);
+        assertLt(sellProceeds, 0.000645 ether);
         assertLt(sellProceeds, purchaseBuybackContribution);
         assertFalse(hook.externalBuysEnabled());
     }
 
+    function test_TreasuryBuybacksCrossAggressiveCurveBands() public {
+        vm.prank(authority);
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 0}));
+        market.launchMarket();
+        uint256[5] memory grossTargets = [uint256(2 ether), 5 ether, 10 ether, 25 ether, 50 ether];
+        uint256[5] memory minimumPotato =
+            [uint256(6_700_000 ether), 10_200_000 ether, 13_500_000 ether, 17_900_000 ether, 22_400_000 ether];
+        uint256[5] memory maximumPotato =
+            [uint256(6_800_000 ether), 10_400_000 ether, 13_800_000 ether, 18_300_000 ether, 22_900_000 ether];
+
+        for (uint256 index; index < grossTargets.length; ++index) {
+            uint256 snapshot = vm.snapshotState();
+            uint256 bought = _executeBuybackTarget(grossTargets[index]);
+            assertGe(bought, minimumPotato[index]);
+            assertLe(bought, maximumPotato[index]);
+            assertFalse(hook.externalBuysEnabled());
+            assertTrue(vm.revertToStateAndDelete(snapshot));
+        }
+    }
+
+    function _executeBuybackTarget(uint256 grossTarget) private returns (uint256 bought) {
+        vm.deal(funder, grossTarget);
+        vm.prank(funder);
+        buybacks.fundBuybackReserve{value: grossTarget}();
+
+        uint256 calls = (grossTarget + 2 ether - 1) / 2 ether;
+        for (uint256 index; index < calls; ++index) {
+            vm.prank(keeper);
+            bought += buybacks.buyback();
+        }
+        assertLe(buybacks.buybackReserveEth(), calls);
+    }
+
     function _initialConfig() internal pure override returns (ProtocolConfig memory config) {
         config = _defaultConfig();
+        config.roundEmissionBudget = 10_000 ether;
         config.emissionVestingDuration = 4 minutes;
     }
 

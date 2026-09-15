@@ -3,6 +3,8 @@ pragma solidity 0.8.26;
 
 import {DeployBurntato} from "./DeployBurntato.s.sol";
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
+import {IMarket} from "../src/interfaces/IMarket.sol";
+import {BurntatoLaunchCurves} from "../src/libraries/BurntatoLaunchCurves.sol";
 import {
     BurntatoDeployment,
     CanonicalV4Dependencies,
@@ -126,7 +128,7 @@ contract DeployBurntatoLocalFork is DeployBurntato {
     ) internal {
         vm.createDir("artifacts/robinhood-local", true);
         string memory object = "robinhoodLocal";
-        vm.serializeUint(object, "schemaVersion", 2);
+        vm.serializeUint(object, "schemaVersion", 3);
         vm.serializeUint(object, "chainId", dependencies.chainId);
         vm.serializeUint(object, "forkBlock", operatorDependencies.finalizedBlock);
         vm.serializeAddress(object, "diamond", deployment.diamond);
@@ -138,6 +140,10 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         vm.serializeAddress(object, "hookDeployer", deployment.hookDeployer);
         vm.serializeAddress(object, "operatorRewardsRouter", deployment.operatorRewardsRouter);
         vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
+        vm.serializeUint(object, "roundEmissionBudget", config.protocol.roundEmissionBudget);
+        vm.serializeUint(object, "potatoSeed", config.potatoSeed);
+        vm.serializeUint(object, "marketPositionCount", BurntatoLaunchCurves.positionCount());
+        vm.serializeBytes32(object, "marketCurveHash", IMarket(deployment.diamond).marketCurveHash());
         vm.serializeUint(object, "nextRoundWinnerBps", config.protocol.nextRoundWinnerBps);
         vm.serializeUint(object, "initialWinnerReserve", config.initialWinnerReserve);
         vm.serializeUint(object, "operatorRewardShareBps", _operatorRewardShareBps(deployment));

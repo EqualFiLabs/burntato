@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "status": "decision-support",
+  "notice": "Behavioral scenarios are explicit assumptions, not forecasts. ETH values are native units and no USD price is used.",
+  "market": {
+    "initialInventoryPotato": 100000000,
+    "initialPoolTick": 170280,
+    "currentSingleRange": {"tickLower": -887220, "tickUpper": 170280},
+    "tickSpacing": 60,
+    "positionsPerBand": 11,
+    "hookFeeBps": 100,
+    "hookTreasuryShareBps": 6000,
+    "buybackMaxSpendEth": 2,
+    "buybackCallerRewardBps": 50,
+    "buybackDelayBlocks": 1
+  },
+  "game": {
+    "startingGrabPriceEth": 0.003,
+    "priceIncreaseBps": 5000,
+    "roundEmissionBudgetPotato": 10000,
+    "emissionStepBps": 1000,
+    "winnerBps": 2500,
+    "nextRoundWinnerBps": 200,
+    "recoveryBps": 3000,
+    "treasuryBps": 1800,
+    "buybackBps": 1000,
+    "operatorPurchaseBps": 1500,
+    "recoveryBurnBps": 9000,
+    "recoveryTreasuryBps": 1000,
+    "initialWinnerReserveEth": 0.00315
+  },
+  "curves": [
+    {
+      "name": "scaled-statics",
+      "description": "STATICS six-band geometry translated to Burntato's current opening tick and 60 tick spacing.",
+      "bands": [
+        {"name": "access", "tickLower": -170280, "tickUpper": -155280, "positions": 11, "shareBps": 250},
+        {"name": "discovery", "tickLower": -162180, "tickUpper": -141360, "positions": 11, "shareBps": 750},
+        {"name": "early", "tickLower": -148380, "tickUpper": -125280, "positions": 11, "shareBps": 1250},
+        {"name": "core", "tickLower": -132300, "tickUpper": -102300, "positions": 11, "shareBps": 2000},
+        {"name": "growth", "tickLower": -109200, "tickUpper": -79260, "positions": 11, "shareBps": 4250},
+        {"name": "permanent-tail", "tickLower": -79260, "tickUpper": 887220, "positions": 1, "shareBps": 1500}
+      ]
+    },
+    {
+      "name": "aggressive",
+      "description": "Preserves the opening price and inventory shares while stretching later price regions by 15 percent in log-price space.",
+      "bands": [
+        {"name": "access", "tickLower": -170280, "tickUpper": -153000, "positions": 11, "shareBps": 250},
+        {"name": "discovery", "tickLower": -160980, "tickUpper": -137040, "positions": 11, "shareBps": 750},
+        {"name": "early", "tickLower": -145080, "tickUpper": -118500, "positions": 11, "shareBps": 1250},
+        {"name": "core", "tickLower": -126600, "tickUpper": -92100, "positions": 11, "shareBps": 2000},
+        {"name": "growth", "tickLower": -100020, "tickUpper": -65580, "positions": 11, "shareBps": 4250},
+        {"name": "permanent-tail", "tickLower": -65580, "tickUpper": 887220, "positions": 1, "shareBps": 1500}
+      ]
+    },
+    {
+      "name": "scarcity",
+      "description": "Preserves the opening price and inventory shares while stretching later price regions by 30 percent in log-price space.",
+      "bands": [
+        {"name": "access", "tickLower": -170280, "tickUpper": -150780, "positions": 11, "shareBps": 250},
+        {"name": "discovery", "tickLower": -159720, "tickUpper": -132660, "positions": 11, "shareBps": 750},
+        {"name": "early", "tickLower": -141780, "tickUpper": -111780, "positions": 11, "shareBps": 1250},
+        {"name": "core", "tickLower": -120900, "tickUpper": -81900, "positions": 11, "shareBps": 2000},
+        {"name": "growth", "tickLower": -90900, "tickUpper": -51960, "positions": 11, "shareBps": 4250},
+        {"name": "permanent-tail", "tickLower": -51960, "tickUpper": 887220, "positions": 1, "shareBps": 1500}
+      ]
+    }
+  ],
+  "milestonesPotato": [1000000, 2500000, 5000000, 10000000, 25000000, 50000000, 75000000, 85000000, 90000000, 95000000, 99000000, 99900000],
+  "bootstrapEthMilestones": [2, 5, 10, 25, 50, 100],
+  "flowRoundGrabCounts": [5, 10, 15, 20],
+  "flowEmissionSellShares": [0.25, 0.5, 1],
+  "dynamicScenarios": [
+    {
+      "name": "closed-low-activity",
+      "rounds": 30,
+      "baseGrabs": 5,
+      "maximumGrabs": 12,
+      "winnerResponse": 0,
+      "recoveryResponse": 0,
+      "futureResponse": 0,
+      "vestingFraction": 0.5,
+      "emissionSellShare": 0.75,
+      "recoveryCompetitionRatio": 0.5,
+      "publicEnablePoolEth": 25,
+      "basePublicBuyEth": 0,
+      "futurePotBuyRatio": 0,
+      "lookaheadRounds": 10,
+      "marketOrder": "sell-first",
+      "sponsorships": []
+    },
+    {
+      "name": "closed-active",
+      "rounds": 30,
+      "baseGrabs": 10,
+      "maximumGrabs": 16,
+      "winnerResponse": 0,
+      "recoveryResponse": 0,
+      "futureResponse": 0,
+      "vestingFraction": 0.75,
+      "emissionSellShare": 0.5,
+      "recoveryCompetitionRatio": 0.75,
+      "publicEnablePoolEth": 50,
+      "basePublicBuyEth": 0.05,
+      "futurePotBuyRatio": 0,
+      "lookaheadRounds": 10,
+      "marketOrder": "sell-first",
+      "sponsorships": []
+    },
+    {
+      "name": "single-5-plus-5-promotion",
+      "rounds": 30,
+      "baseGrabs": 7,
+      "maximumGrabs": 20,
+      "winnerResponse": 0.8,
+      "recoveryResponse": 0.5,
+      "futureResponse": 0.7,
+      "vestingFraction": 0.75,
+      "emissionSellShare": 0.4,
+      "recoveryCompetitionRatio": 1,
+      "publicEnablePoolEth": 25,
+      "basePublicBuyEth": 0.05,
+      "futurePotBuyRatio": 0.15,
+      "lookaheadRounds": 10,
+      "marketOrder": "sell-first",
+      "sponsorships": [
+        {"round": 10, "winnerEth": 5, "recoveryEth": 5}
+      ]
+    },
+    {
+      "name": "recurring-5-plus-5-promotions",
+      "rounds": 50,
+      "baseGrabs": 7,
+      "maximumGrabs": 20,
+      "winnerResponse": 0.8,
+      "recoveryResponse": 0.5,
+      "futureResponse": 0.7,
+      "vestingFraction": 0.75,
+      "emissionSellShare": 0.4,
+      "recoveryCompetitionRatio": 1,
+      "publicEnablePoolEth": 25,
+      "basePublicBuyEth": 0.05,
+      "futurePotBuyRatio": 0.15,
+      "lookaheadRounds": 10,
+      "marketOrder": "sell-first",
+      "sponsorships": [
+        {"round": 10, "winnerEth": 5, "recoveryEth": 5},
+        {"round": 20, "winnerEth": 5, "recoveryEth": 5},
+        {"round": 30, "winnerEth": 5, "recoveryEth": 5},
+        {"round": 40, "winnerEth": 5, "recoveryEth": 5}
+      ]
+    },
+    {
+      "name": "maximum-emission-sell-stress",
+      "rounds": 30,
+      "baseGrabs": 10,
+      "maximumGrabs": 10,
+      "winnerResponse": 0,
+      "recoveryResponse": 0,
+      "futureResponse": 0,
+      "vestingFraction": 1,
+      "emissionSellShare": 1,
+      "recoveryCompetitionRatio": 0,
+      "publicEnablePoolEth": 25,
+      "basePublicBuyEth": 0,
+      "futurePotBuyRatio": 0,
+      "lookaheadRounds": 0,
+      "marketOrder": "sell-first",
+      "sponsorships": []
+    },
+    {
+      "name": "recovery-frenzy",
+      "rounds": 30,
+      "baseGrabs": 8,
+      "maximumGrabs": 20,
+      "winnerResponse": 1,
+      "recoveryResponse": 0.8,
+      "futureResponse": 1,
+      "vestingFraction": 0.9,
+      "emissionSellShare": 0.25,
+      "recoveryCompetitionRatio": 1.25,
+      "publicEnablePoolEth": 25,
+      "basePublicBuyEth": 0.1,
+      "futurePotBuyRatio": 0.3,
+      "lookaheadRounds": 10,
+      "marketOrder": "buy-first",
+      "sponsorships": [
+        {"round": 10, "winnerEth": 5, "recoveryEth": 10},
+        {"round": 20, "winnerEth": 5, "recoveryEth": 10}
+      ]
+    }
+  ]
+}

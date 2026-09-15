@@ -15,9 +15,21 @@ interface IMarket {
         int24 tickSpacing,
         uint256 potatoSeed
     );
+    event MarketCurvePinned(bytes32 indexed curveHash, uint256 positionCount);
     event MarketLaunched(
-        bytes32 indexed poolId, uint128 liquidity, uint256 potatoUsed, address indexed lockedRecipient
+        bytes32 indexed poolId,
+        bytes32 indexed curveHash,
+        uint256 positionCount,
+        uint256 potatoUsed,
+        address indexed lockedRecipient
     );
+
+    struct MarketCurve {
+        int24 canonicalTickLower;
+        int24 canonicalTickUpper;
+        uint16 positions;
+        uint16 shareBps;
+    }
 
     struct MarketConfig {
         address hook;
@@ -32,8 +44,10 @@ interface IMarket {
     }
 
     function configureMarket(MarketConfig calldata config) external;
-    function launchMarket() external returns (bytes32 poolId, uint128 liquidity);
+    function launchMarket() external returns (bytes32 poolId, uint256 positionCount, uint256 potatoUsed);
     function marketConfig() external view returns (MarketConfig memory config);
+    function marketCurves() external pure returns (MarketCurve[] memory curves);
+    function marketCurveHash() external pure returns (bytes32 curveHash);
     function canonicalPoolKey() external view returns (PoolKey memory key);
     function marketState() external view returns (bytes32 poolId, bool configured, bool launching, bool launched);
     function marketLaunching() external view returns (bool);

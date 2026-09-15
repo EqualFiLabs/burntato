@@ -138,8 +138,9 @@ contract CanonicalMarketHandler is Test {
     }
 
     function attemptWalletTransfer(uint256 actorSeed, uint256 rawAmount) external {
-        address from = actors[actorSeed % actors.length];
-        address to = actors[(actorSeed + 1) % actors.length];
+        uint256 actorIndex = actorSeed % actors.length;
+        address from = actors[actorIndex];
+        address to = actors[(actorIndex + 1) % actors.length];
         uint256 balance = potato.balanceOf(from);
         if (balance == 0) return;
         uint256 amount = bound(rawAmount, 1, balance);
@@ -286,9 +287,9 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
                 poolManager: address(manager),
                 positionManager: address(positionManager),
                 permit2: PERMIT2_ADDRESS,
-                sqrtPriceX96: TickMath.getSqrtPriceAtTick(69_060),
+                sqrtPriceX96: TickMath.getSqrtPriceAtTick(170_280),
                 tickLower: TickMath.minUsableTick(60),
-                tickUpper: 69_060,
+                tickUpper: 170_280,
                 tickSpacing: 60,
                 potatoSeed: 1 ether
             })
@@ -313,8 +314,11 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         (,, bool launching, bool launched) = market.marketState();
         assertFalse(launching);
         assertTrue(launched);
-        assertEq(IERC721OwnerView(address(positionManager)).ownerOf(1), market.lockedLpRecipient());
-        assertEq(positionManager.nextTokenId(), 2);
+        for (uint256 tokenId = 1; tokenId <= 56; ++tokenId) {
+            assertEq(IERC721OwnerView(address(positionManager)).ownerOf(tokenId), market.lockedLpRecipient());
+            assertGt(positionManager.getPositionLiquidity(tokenId), 0);
+        }
+        assertEq(positionManager.nextTokenId(), 57);
         assertEq(address(hook).balance, 0);
         assertEq(potato.balanceOf(address(hook)), 0);
         assertEq(potato.transientPoolManagerAllowance(), 0);

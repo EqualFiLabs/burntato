@@ -14,8 +14,8 @@ import {Actions} from "@uniswap/v4-periphery/src/libraries/Actions.sol";
 
 import {IMarket} from "../interfaces/IMarket.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
+import {BurntatoLaunchCurves} from "../libraries/BurntatoLaunchCurves.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
-import {LibMarketMath} from "../libraries/LibMarketMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
@@ -80,18 +80,18 @@ contract MarketFacet is IMarket {
             config.tickSpacing,
             config.potatoSeed
         );
+        emit MarketCurvePinned(BurntatoLaunchCurves.profileHash(), BurntatoLaunchCurves.positionCount());
     }
 
-    function launchMarket() external returns (bytes32 poolId, uint128 liquidity) {
+    function launchMarket() external returns (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) {
         LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
         if (!ms.configured) revert Errors.MarketNotConfigured();
         if (ms.launched) revert Errors.AlreadyLaunched();
         if (!_marketReady(ms)) revert Errors.MarketNotReady();
 
         PoolKey memory key = _poolKey(ms);
-        uint256 prospectiveLiquidity = LibMarketMath.launchLiquidity(ms.potatoSeed, ms.tickLower, ms.tickUpper);
-        if (prospectiveLiquidity == 0) revert Errors.InvalidMarketConfiguration();
-        liquidity = uint128(prospectiveLiquidity);
+        BurntatoLaunchCurves.LaunchPosition[] memory positions = BurntatoLaunchCurves.buildPositions(ms.potatoSeed);
+        positionCount = positions.length;
 
         uint256 potatoBefore = IPotatoToken(address(this)).balanceOf(address(this));
 
@@ -102,19 +102,24 @@ contract MarketFacet is IMarket {
         }
         IAllowanceTransfer(ms.permit2).approve(address(this), ms.positionManager, type(uint160).max, type(uint48).max);
 
-        bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
-        bytes[] memory mintParams = new bytes[](2);
-        mintParams[0] = abi.encode(
-            key,
-            ms.tickLower,
-            ms.tickUpper,
-            liquidity,
-            uint256(0),
-            uint128(ms.potatoSeed),
-            Constants.LOCKED_LP_RECIPIENT,
-            bytes("")
-        );
-        mintParams[1] = abi.encode(key.currency0, key.currency1);
+        bytes memory actions = new bytes(positionCount + 1);
+        bytes[] memory mintParams = new bytes[](positionCount + 1);
+        for (uint256 index; index < positionCount; ++index) {
+            BurntatoLaunchCurves.LaunchPosition memory position = positions[index];
+            actions[index] = bytes1(uint8(Actions.MINT_POSITION));
+            mintParams[index] = abi.encode(
+                key,
+                position.tickLower,
+                position.tickUpper,
+                position.liquidity,
+                uint256(0),
+                position.potatoAmountMax,
+                Constants.LOCKED_LP_RECIPIENT,
+                bytes("")
+            );
+        }
+        actions[positionCount] = bytes1(uint8(Actions.SETTLE_PAIR));
+        mintParams[positionCount] = abi.encode(key.currency0, key.currency1);
 
         bytes[] memory calls = new bytes[](2);
         calls[0] = abi.encodeWithSelector(IPoolInitializer_v4.initializePool.selector, key, ms.sqrtPriceX96);
@@ -124,8 +129,8 @@ contract MarketFacet is IMarket {
         IPositionManager(ms.positionManager).multicall(calls);
         _setLaunching(false);
 
-        uint256 potatoUsed = potatoBefore - IPotatoToken(address(this)).balanceOf(address(this));
-        if (potatoUsed == 0) revert Errors.InvalidMarketConfiguration();
+        potatoUsed = potatoBefore - IPotatoToken(address(this)).balanceOf(address(this));
+        if (potatoUsed == 0 || potatoUsed > ms.potatoSeed) revert Errors.InvalidMarketConfiguration();
 
         LibProtocolStorage.TreasuryStorage storage treasuryStorage = LibProtocolStorage.treasury();
         treasuryStorage.potatoInventory -= potatoUsed;
@@ -133,7 +138,9 @@ contract MarketFacet is IMarket {
 
         poolId = PoolId.unwrap(key.toId());
         ms.poolId = poolId;
-        emit MarketLaunched(poolId, liquidity, potatoUsed, Constants.LOCKED_LP_RECIPIENT);
+        emit MarketLaunched(
+            poolId, BurntatoLaunchCurves.profileHash(), positionCount, potatoUsed, Constants.LOCKED_LP_RECIPIENT
+        );
     }
 
     function marketConfig() external view returns (MarketConfig memory config) {
@@ -149,6 +156,14 @@ contract MarketFacet is IMarket {
             tickSpacing: ms.tickSpacing,
             potatoSeed: ms.potatoSeed
         });
+    }
+
+    function marketCurves() external pure returns (MarketCurve[] memory curves) {
+        return BurntatoLaunchCurves.profile();
+    }
+
+    function marketCurveHash() external pure returns (bytes32 curveHash) {
+        return BurntatoLaunchCurves.profileHash();
     }
 
     function canonicalPoolKey() external view returns (PoolKey memory key) {
@@ -178,18 +193,18 @@ contract MarketFacet is IMarket {
     function _validateConfiguration(MarketConfig calldata config) private view {
         if (
             config.hook == address(0) || config.poolManager == address(0) || config.positionManager == address(0)
-                || config.permit2 == address(0) || config.potatoSeed == 0
+                || config.permit2 == address(0) || config.potatoSeed == 0 || config.potatoSeed > type(uint128).max
                 || config.tickSpacing < TickMath.MIN_TICK_SPACING || config.tickSpacing > TickMath.MAX_TICK_SPACING
                 || config.tickLower >= config.tickUpper || config.tickLower % config.tickSpacing != 0
                 || config.tickUpper % config.tickSpacing != 0 || config.tickLower < TickMath.MIN_TICK
-                || config.tickUpper >= TickMath.MAX_TICK
+                || config.tickUpper >= TickMath.MAX_TICK || config.tickSpacing != BurntatoLaunchCurves.tickSpacing()
+                || config.tickLower != BurntatoLaunchCurves.tickLower()
+                || config.tickUpper != BurntatoLaunchCurves.tickUpper()
         ) revert Errors.InvalidMarketConfiguration();
         if (config.sqrtPriceX96 != TickMath.getSqrtPriceAtTick(config.tickUpper)) {
             revert Errors.InvalidMarketConfiguration();
         }
-        if (LibMarketMath.launchLiquidity(config.potatoSeed, config.tickLower, config.tickUpper) == 0) {
-            revert Errors.InvalidMarketConfiguration();
-        }
+        BurntatoLaunchCurves.buildPositions(config.potatoSeed);
         LibDiamond.enforceHasCode(config.hook);
         LibDiamond.enforceHasCode(config.poolManager);
         LibDiamond.enforceHasCode(config.positionManager);
