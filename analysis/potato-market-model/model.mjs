@@ -11,6 +11,26 @@ export function alignTickUp(tick, spacing) {
 export function assertConfig(config) {
   if (config.market.tickSpacing <= 0) throw new Error("tickSpacing must be positive");
   if (config.market.initialInventoryPotato <= 0) throw new Error("initialInventoryPotato must be positive");
+  if (config.releaseCandidate.bootstrapNetEth <= 0) throw new Error("bootstrapNetEth must be positive");
+  if (config.releaseCandidate.sponsorshipBudgetEth <= 0) throw new Error("sponsorshipBudgetEth must be positive");
+  if (
+    config.releaseCandidate.winnerSponsorshipEthPerRound < 0
+      || config.releaseCandidate.recoverySponsorshipEthPerRound < 0
+  ) throw new Error("per-round sponsorship must not be negative");
+  const perRoundSponsorship = config.releaseCandidate.winnerSponsorshipEthPerRound
+    + config.releaseCandidate.recoverySponsorshipEthPerRound;
+  if (perRoundSponsorship <= 0 || perRoundSponsorship > config.releaseCandidate.sponsorshipBudgetEth) {
+    throw new Error("per-round sponsorship must fit the sponsorship budget");
+  }
+  if (!config.releaseCandidate.inventorySensitivityPotato.includes(config.market.initialInventoryPotato)) {
+    throw new Error("inventory sensitivity must include the selected launch inventory");
+  }
+  if (config.releaseCandidate.inventorySensitivityPotato.some((inventory) => inventory <= 0)) {
+    throw new Error("inventory sensitivity values must be positive");
+  }
+  if (!config.curves.some((curve) => curve.name === config.releaseCandidate.curve)) {
+    throw new Error("release candidate curve is not defined");
+  }
 
   for (const curve of config.curves) {
     const shares = curve.bands.reduce((sum, band) => sum + band.shareBps, 0);
@@ -33,6 +53,18 @@ export function assertConfig(config) {
     config.game.operatorPurchaseBps,
   ].reduce((sum, value) => sum + value, 0);
   if (allocationBps !== BPS) throw new Error(`ticket allocation totals ${allocationBps}, expected ${BPS}`);
+
+  for (const scenario of config.dynamicScenarios) {
+    const scenarioFunding = scenario.sponsorships.reduce((sum, item) => {
+      if (item.round <= 0 || item.round > scenario.rounds || item.winnerEth < 0 || item.recoveryEth < 0) {
+        throw new Error(`${scenario.name}: invalid sponsorship`);
+      }
+      return sum + item.winnerEth + item.recoveryEth;
+    }, 0);
+    if (scenarioFunding > config.releaseCandidate.sponsorshipBudgetEth) {
+      throw new Error(`${scenario.name}: sponsorship exceeds release budget`);
+    }
+  }
 }
 
 export function buildCurve(config, curveConfig) {
@@ -90,8 +122,8 @@ export function buildSingleRange(config) {
   const sqrtUpper = 1.0001 ** (tickUpper / 2);
   const amountPotato = config.market.initialInventoryPotato;
   const curve = {
-    name: "current-single-range",
-    description: "Current Burntato deployment geometry used as the baseline.",
+    name: "single-range-baseline",
+    description: "Superseded Burntato launch geometry retained as the baseline.",
     inventory: amountPotato,
     positions: [{
       band: "single-range",
@@ -224,10 +256,8 @@ export function executeBuybackReserve(curve, state, reserveEth, marketConfig) {
   let calls = 0;
 
   while (remaining > 1e-12 && currentState.poolEth < curve.maximumEth - 1e-12) {
-    const requestedSpend = Math.min(
-      marketConfig.buybackMaxSpendEth,
-      remaining * BPS / (BPS + marketConfig.buybackCallerRewardBps),
-    );
+    const grossSlice = Math.min(marketConfig.buybackMaxSpendEth, remaining);
+    const requestedSpend = grossSlice * BPS / (BPS + marketConfig.buybackCallerRewardBps);
     const buy = protocolBuyExactEth(curve, currentState, requestedSpend);
     if (buy.ethSpent <= 1e-12) break;
     const reward = buy.ethSpent * marketConfig.buybackCallerRewardBps / BPS;
@@ -322,9 +352,9 @@ function visibleSponsorshipEth(sponsorships, round, lookahead) {
 }
 
 export function simulateScenario(config, curve, scenario) {
-  let marketState = stateAtPotatoOut(curve, 0);
+  let marketState = stateAtPoolEth(curve, config.releaseCandidate.bootstrapNetEth);
   let buybackReserveEth = 0;
-  let treasuryPotato = 0;
+  let treasuryPotato = marketState.potatoOut;
   let userPotato = 0;
   let modeledSupplyPotato = config.market.initialInventoryPotato;
   let burnedPotato = 0;

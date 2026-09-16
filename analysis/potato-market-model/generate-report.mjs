@@ -23,6 +23,8 @@ const config = JSON.parse(await readFile(join(here, "config.json"), "utf8"));
 assertConfig(config);
 const curves = config.curves.map((curve) => buildCurve(config, curve));
 const baselineCurve = buildSingleRange(config);
+const releaseCurveConfig = config.curves.find((curve) => curve.name === config.releaseCandidate.curve);
+const releaseCurve = curves.find((curve) => curve.name === config.releaseCandidate.curve);
 
 const fixed = (value, digits = 6) => Number(value).toFixed(digits);
 const sig = (value, digits = 6) => Number(value).toPrecision(digits);
@@ -59,6 +61,61 @@ function bootstrapMilestones(curve) {
       inventorySoldPercent: state.potatoOut / curve.inventory,
       spotEthPerPotato: state.spotEthPerPotato,
       mark100kEth: state.spotEthPerPotato * 100_000,
+    };
+  });
+}
+
+function inventorySensitivity() {
+  const fiveTickets = ticketRound(5, config.game);
+  const fiveEmission = emissionForRound(5, 1, config.game);
+
+  return config.releaseCandidate.inventorySensitivityPotato.map((inventoryPotato) => {
+    const sensitivityConfig = {
+      ...config,
+      market: {...config.market, initialInventoryPotato: inventoryPotato},
+    };
+    const curve = buildCurve(sensitivityConfig, releaseCurveConfig);
+    const bootstrap = stateAtPoolEth(curve, config.releaseCandidate.bootstrapNetEth);
+    const emissionSale = publicSellExactPotato(
+      curve,
+      bootstrap,
+      fiveEmission.emittedPotato,
+      config.market.hookFeeBps,
+    );
+
+    return {
+      inventoryPotato,
+      bootstrapPotato: bootstrap.potatoOut,
+      bootstrapInventoryPercent: bootstrap.potatoOut / inventoryPotato,
+      bootstrapSpotEthPerPotato: bootstrap.spotEthPerPotato,
+      bootstrapMark10kEth: bootstrap.spotEthPerPotato * 10_000,
+      poolEthAt25Percent: stateAtPotatoOut(curve, inventoryPotato * 0.25).poolEth,
+      poolEthAt50Percent: stateAtPotatoOut(curve, inventoryPotato * 0.5).poolEth,
+      fiveGrabEmissionPotato: fiveEmission.emittedPotato,
+      fiveGrabEmissionSaleGrossEth: emissionSale.grossEth,
+      fiveGrabBuybackEth: fiveTickets.buybackEth,
+    };
+  });
+}
+
+function releaseRoundBalances() {
+  const bootstrap = stateAtPoolEth(releaseCurve, config.releaseCandidate.bootstrapNetEth);
+  return config.flowRoundGrabCounts.map((grabs) => {
+    const tickets = ticketRound(grabs, config.game);
+    const emission = emissionForRound(grabs, 1, config.game);
+    const sale = publicSellExactPotato(
+      releaseCurve,
+      bootstrap,
+      emission.emittedPotato,
+      config.market.hookFeeBps,
+    );
+    return {
+      grabs,
+      emittedPotato: emission.emittedPotato,
+      emissionSaleGrossEth: sale.grossEth,
+      emissionSellerNetEth: sale.userEth,
+      buybackReserveEth: tickets.buybackEth,
+      buybackLessGrossSaleEth: tickets.buybackEth - sale.grossEth,
     };
   });
 }
@@ -158,7 +215,21 @@ const flowRows = roundFlows();
 const stressRows = curves.flatMap((curve) => [sellStress(curve, false), sellStress(curve, true)]).flat();
 const whaleRows = curves.flatMap(whaleResistance);
 const dynamicRuns = curves.flatMap((curve) => config.dynamicScenarios.map((scenario) => simulateScenario(config, curve, scenario)));
-const breakEven = sponsorshipBreakEven(config, 10);
+const inventoryRows = inventorySensitivity();
+const releaseBalanceRows = releaseRoundBalances();
+const promotionEthPerRound = config.releaseCandidate.winnerSponsorshipEthPerRound
+  + config.releaseCandidate.recoverySponsorshipEthPerRound;
+const promotionRounds = Math.floor(config.releaseCandidate.sponsorshipBudgetEth / promotionEthPerRound + 1e-12);
+const promotionBreakEven = sponsorshipBreakEven(config, promotionEthPerRound);
+const budgetBreakEven = sponsorshipBreakEven(config, config.releaseCandidate.sponsorshipBudgetEth);
+const bootstrapGrossReserveEth = config.releaseCandidate.bootstrapNetEth
+  * (10_000 + config.market.buybackCallerRewardBps) / 10_000;
+const releaseBootstrap = executeBuybackReserve(
+  releaseCurve,
+  stateAtPotatoOut(releaseCurve, 0),
+  bootstrapGrossReserveEth,
+  config.market,
+);
 const baselineMilestones = curveMilestones(baselineCurve);
 const baselineBootstrap = bootstrapMilestones(baselineCurve);
 
@@ -186,7 +257,19 @@ const results = {
   roundFlows: flowRows,
   sellStress: stressRows,
   recoveryWhaleResistance: whaleRows,
-  sponsorshipBreakEven: breakEven,
+  releaseCandidate: {
+    curve: releaseCurve.name,
+    bootstrapNetEth: config.releaseCandidate.bootstrapNetEth,
+    bootstrapGrossReserveEth,
+    bootstrapCalls: releaseBootstrap.calls,
+    bootstrapPotato: releaseBootstrap.potatoReceived,
+    bootstrapSpotEthPerPotato: releaseBootstrap.state.spotEthPerPotato,
+    inventorySensitivity: inventoryRows,
+    roundBalances: releaseBalanceRows,
+    promotionRounds,
+    promotionBreakEven,
+    budgetBreakEven,
+  },
   dynamicRuns,
 };
 
@@ -218,34 +301,35 @@ const report = `# POTATO market-depth and game-economics model
 
 Generated from \`config.json\` by \`generate-report.mjs\`. This is decision support, not a forecast or an implementation specification.
 
-## Executive conclusion
+## Frozen release conclusion
 
-The current single-range launch curve is too cheap for the intended recovery game: half of its 100 million launch inventory costs only **${fixed(baselineAt50m.poolEth, 2)} ETH**. A six-band layout materially improves scarcity, and **the aggressive curve is the selected launch profile**. It preserves the opening quote, reaches about **${fixed(curveAt50m.find((row) => row.curve === "aggressive").poolEth, 2)} ETH absorbed at 50 million POTATO**, and marks 100,000 POTATO at about **${fixed(curveAt50m.find((row) => row.curve === "aggressive").mark100kEth, 2)} ETH** there. The scarcity curve remains an upper sensitivity bound, but its ${fixed(curveAt50m.find((row) => row.curve === "scarcity").poolEth, 2)} ETH half-inventory cost is too aggressive for the initial launch.
+The release candidate fixes the **${releaseCurve.name}** six-band profile, **${integer(config.market.initialInventoryPotato)} POTATO** genesis market inventory, and a **${fixed(config.releaseCandidate.bootstrapNetEth, 0)} ETH net** Treasury bootstrap. The prior single-range geometry is too cheap for the intended Recovery game: half of its launch inventory costs only **${fixed(baselineAt50m.poolEth, 2)} ETH**. The selected profile instead reaches about **${fixed(curveAt50m.find((row) => row.curve === releaseCurve.name).poolEth, 2)} ETH absorbed at 50 million POTATO** and marks 100,000 POTATO at about **${fixed(curveAt50m.find((row) => row.curve === releaseCurve.name).mark100kEth, 2)} ETH** there.
 
-This recommendation is conditional. The model says curve shape alone does not create durable price support: ticket activity, vesting, emission selling, recovery burns, and timely execution of the buyback reserve dominate the path. Public buys remain disabled during bootstrap; only Treasury buybacks create initial ETH depth. The public-buy threshold in scenarios is an analysis trigger, while the deployed protocol still requires an intentional administrative enablement decision.
+The 100 million inventory is intentional depth, not circulating user supply. At the release bootstrap it gives the fixed 10,000 POTATO round budget more sell resilience than smaller seeds while the higher bands remain inaccessible until buyers add ETH. Curve shape alone does not create durable support: ticket activity, vesting, emission selling, Recovery burns, and timely buyback execution still dominate the path. Public buys remain disabled during bootstrap; scenario thresholds are analysis triggers, while deployment requires an intentional governance action.
 
 ## Modeled system inputs
 
 - Launch inventory: ${integer(config.market.initialInventoryPotato)} POTATO; modeled as 56 permanent Uniswap v4 positions across six bands.
 - Opening pool tick: ${config.market.initialPoolTick}; opening spot quote is ${sig(curves[0] && stateAtPotatoOut(curves[0], 0).spotEthPerPotato)} ETH per POTATO.
-- Ticket scenario: ${fixed(config.game.startingGrabPriceEth, 6)} ETH, increasing ${percent(config.game.priceIncreaseBps / 10_000, 0)} after each grab.
+- Launch bootstrap: ${fixed(config.releaseCandidate.bootstrapNetEth, 3)} ETH net into the pool, requiring about ${fixed(bootstrapGrossReserveEth, 3)} ETH of reserve across ${releaseBootstrap.calls} calls at the configured caller reward and gross-slice cap.
+- Grab price: ${fixed(config.game.startingGrabPriceEth, 6)} ETH, increasing ${percent(config.game.priceIncreaseBps / 10_000, 0)} after each Grab.
 - The first ticket of every round goes entirely to the next round Winner reserve. Later tickets split ${percent(config.game.winnerBps / 10_000, 0)} current Winner, ${percent(config.game.nextRoundWinnerBps / 10_000, 0)} next Winner, ${percent(config.game.recoveryBps / 10_000, 0)} Recovery, ${percent(config.game.treasuryBps / 10_000, 0)} Treasury, ${percent(config.game.buybackBps / 10_000, 0)} buyback, and ${percent(config.game.operatorPurchaseBps / 10_000, 0)} Operators.
 - Round emission budget: ${integer(config.game.roundEmissionBudgetPotato)} POTATO. Each holder opportunity earns ${percent(config.game.emissionStepBps / 10_000, 0)} of remaining emissions multiplied by its vesting fraction.
 - Emission sensitivity: ten fully vested holder opportunities emit ${integer(launchEmissionAtTenGrabs)} POTATO at the selected 10,000 budget versus ${integer(legacyEmissionAtTenGrabs)} POTATO at the prior 100,000 budget. The larger budget is retained only as stress context.
 - Recovery settlement destroys ${percent(config.game.recoveryBurnBps / 10_000, 0)} of committed POTATO and transfers ${percent(config.game.recoveryTreasuryBps / 10_000, 0)} to Treasury.
 - Public swap hook fee: ${percent(config.market.hookFeeBps / 10_000, 0)}, split ${percent(config.market.hookTreasuryShareBps / 10_000, 0)} Treasury / ${percent((10_000 - config.market.hookTreasuryShareBps) / 10_000, 0)} Operators. Protocol buybacks bypass that fee, send POTATO to Treasury, and leave their ETH in the pool.
 
-## Candidate curve comparison
+## Curve selection evidence
 
-### Current baseline
+### Superseded baseline
 
 | Geometry | ETH absorbed at 50M out | 50M spot (ETH/POTATO) | POTATO out after 50 ETH | 50 ETH mark for 100k |
 |---|---:|---:|---:|---:|
-| current single range | ${fixed(baselineAt50m.poolEth, 3)} | ${sig(baselineAt50m.spotEthPerPotato)} | ${integer(baselineAt50Eth.potatoOut)} | ${fixed(baselineAt50Eth.mark100kEth, 4)} ETH |
+| single-range baseline | ${fixed(baselineAt50m.poolEth, 3)} | ${sig(baselineAt50m.spotEthPerPotato)} | ${integer(baselineAt50Eth.potatoOut)} | ${fixed(baselineAt50Eth.mark100kEth, 4)} ETH |
 
-The baseline uses the current one-position range [${config.market.currentSingleRange.tickLower}, ${config.market.currentSingleRange.tickUpper}] with POTATO as token1. It establishes the relative claim above; it is not mixed into the six-band scenario sweep.
+The baseline uses the superseded one-position range [${config.market.currentSingleRange.tickLower}, ${config.market.currentSingleRange.tickUpper}] with POTATO as token1. It establishes the relative claim above; it is not mixed into the six-band scenario sweep.
 
-### Six-band candidates
+### Six-band sensitivities
 
 | Curve | ETH absorbed at 10M out | ETH absorbed at 50M out | 50M spot (ETH/POTATO) | 50M mark for 100k | Maximum theoretical ETH |
 |---|---:|---:|---:|---:|---:|
@@ -265,9 +349,19 @@ ${milestoneRows.map((row) => `| ${row.curve} | ${integer(row.potatoOut)} | ${per
 
 ### Treasury bootstrap depth
 
-| Curve | Treasury ETH bought | POTATO acquired | Inventory out | Spot ETH/POTATO | 100k mark |
+| Curve | Net Treasury ETH swapped | POTATO acquired | Inventory out | Spot ETH/POTATO | 100k mark |
 |---|---:|---:|---:|---:|---:|
 ${bootstrapRows.map((row) => `| ${row.curve} | ${fixed(row.poolEth, 0)} | ${integer(row.potatoOut)} | ${percent(row.inventorySoldPercent, 2)} | ${sig(row.spotEthPerPotato)} | ${fixed(row.mark100kEth, 4)} ETH |`).join("\n")}
+
+### Genesis inventory decision
+
+Every row keeps the selected ticks and band shares. Reducing inventory scales down every band's ETH capacity and makes the fixed round emission larger relative to market depth. The sale column liquidates all five fully vested holder opportunities immediately after the ${fixed(config.releaseCandidate.bootstrapNetEth, 0)} ETH net bootstrap; it is a stress comparison, not a forecast.
+
+| Genesis inventory | Inventory acquired | 10k marginal mark | ETH at 25% out | ETH at 50% out | Five-Grab emission sale | Five-Grab buyback |
+|---:|---:|---:|---:|---:|---:|---:|
+${inventoryRows.map((row) => `| ${integer(row.inventoryPotato)} | ${percent(row.bootstrapInventoryPercent, 2)} | ${fixed(row.bootstrapMark10kEth, 4)} ETH | ${fixed(row.poolEthAt25Percent, 2)} | ${fixed(row.poolEthAt50Percent, 2)} | ${fixed(row.fiveGrabEmissionSaleGrossEth, 5)} ETH | ${fixed(row.fiveGrabBuybackEth, 5)} ETH |`).join("\n")}
+
+The selected 100 million seed preserves the widest low-activity margin: its five-Grab buyback allocation exceeds the modeled gross proceeds from selling every fully vested emission. The 75 million sensitivity retains a narrower margin, while 50 million reverses it. This is why the release candidate keeps 100 million rather than treating a smaller headline supply as free scarcity.
 
 ## Ticket revenue versus emission sell pressure
 
@@ -277,7 +371,13 @@ The flow-balance mark is the buyback allocation divided by newly emitted POTATO 
 |---:|---:|---:|---:|---:|---:|---:|
 ${flowRows.map((row) => `| ${row.grabs} | ${fixed(row.ticketRevenueEth, 6)} ETH | ${fixed(row.lastGrabPriceEth, 6)} ETH | ${fixed(row.buybackReserveEth, 6)} ETH | ${integer(row.emittedPotato)} | ${percent(row.emissionSoldShare, 0)} | ${fixed(row.flowBalance100kMarkEth, 4)} ETH |`).join("\n")}
 
-Five-grab rounds cannot materially support price through buybacks alone. At ten grabs, the buyback is still only ${fixed(ticketRound(10, config.game).buybackEth, 6)} ETH against ${integer(emissionForRound(10, 1, config.game).emittedPotato)} maximum emitted POTATO. The intended flywheel becomes meaningfully stronger only when a round reaches the steeper portion of the ticket curve or when recovery permanently removes a large part of emissions.
+At the selected ${fixed(config.releaseCandidate.bootstrapNetEth, 0)} ETH net bootstrap, immediate full-vesting emission sales compare with same-round buyback allocations as follows:
+
+| Grabs | Emitted POTATO | Gross emission sale | Buyback allocation | Buyback less gross sale |
+|---:|---:|---:|---:|---:|
+${releaseBalanceRows.map((row) => `| ${row.grabs} | ${integer(row.emittedPotato)} | ${fixed(row.emissionSaleGrossEth, 6)} ETH | ${fixed(row.buybackReserveEth, 6)} ETH | ${fixed(row.buybackLessGrossSaleEth, 6)} ETH |`).join("\n")}
+
+The selected launch inputs therefore cover this simplified sell-first stress at each modeled Grab count. That relationship is directional rather than guaranteed: real ordering, prior trades, partial vesting, Recovery commitments, delayed keepers, and v4 rounding change execution.
 
 ## Emission-sale stress after a 50 ETH Treasury bootstrap
 
@@ -297,7 +397,7 @@ ${whaleRows.map((row) => `| ${row.curve} | ${integer(row.incumbentPotato)} | ${p
 
 ## Behavioral scenario sweep
 
-These scenarios use explicit response coefficients from \`config.json\`; they are **not predictions**. Grab counts respond logarithmically to current and visible future pots, public buying starts only after its configured ETH-depth threshold, and Recovery competition targets a fraction of the next expected Recovery pot. Scenario traces are in \`round-traces.csv\`.
+These scenarios start after the release candidate's ${fixed(config.releaseCandidate.bootstrapNetEth, 0)} ETH net Treasury bootstrap and use explicit response coefficients from \`config.json\`; they are **not predictions**. Grab counts respond logarithmically to current and visible future pots, public buying starts only after its configured ETH-depth threshold, and Recovery competition targets a fraction of the next expected Recovery pot. Scenario traces are in \`round-traces.csv\`.
 
 | Scenario | Base/max grabs | Vesting | Emissions sold | Public threshold | Promotion funding |
 |---|---:|---:|---:|---:|---|
@@ -316,17 +416,17 @@ ${dynamicSummary.map((row) => `| ${row.curve} | ${row.scenario} | ${row.rounds} 
 
 ### Promotion economics
 
-A 5 ETH Winner plus 5 ETH Recovery sponsorship costs 10 ETH. Looking only at the direct ${percent(config.game.treasuryBps / 10_000, 0)} Treasury share of eligible ticket purchases, it requires approximately ${fixed(breakEven.ticketRevenueIgnoringFirstPurchaseEth, 2)} ETH of eligible revenue to repay. Under a single ${fixed(config.game.startingGrabPriceEth, 3)} ETH / ${percent(config.game.priceIncreaseBps / 10_000, 0)} price ladder, direct Treasury receipts first exceed 10 ETH at grab ${breakEven.grabsForDirectTreasuryShare}; cumulative ticket revenue is ${fixed(breakEven.ticketRevenueAtBreakEvenEth, 2)} ETH and that grab alone costs ${fixed(breakEven.lastTicketPriceEth, 2)} ETH. That arithmetic is not a recommendation to expect a ${breakEven.grabsForDirectTreasuryShare}-grab round: it demonstrates that direct ticket revenue alone is a demanding sponsorship-recovery mechanism.
+A baseline sponsored round receives ${fixed(config.releaseCandidate.winnerSponsorshipEthPerRound, 2)} ETH for the Winner and ${fixed(config.releaseCandidate.recoverySponsorshipEthPerRound, 2)} ETH for Recovery, costing ${fixed(promotionEthPerRound, 2)} ETH. The ${fixed(config.releaseCandidate.sponsorshipBudgetEth, 0)} ETH launch envelope can fund ${promotionRounds} such rounds before game-generated reserves. Looking only at the direct ${percent(config.game.treasuryBps / 10_000, 0)} Treasury share, one baseline sponsorship requires approximately ${fixed(promotionBreakEven.ticketRevenueIgnoringFirstPurchaseEth, 2)} ETH of eligible Grab revenue to repay and first reaches that amount at Grab ${promotionBreakEven.grabsForDirectTreasuryShare}. Repaying the entire envelope from that direct share alone requires approximately ${fixed(budgetBreakEven.ticketRevenueIgnoringFirstPurchaseEth, 2)} ETH of eligible revenue and first reaches it at Grab ${budgetBreakEven.grabsForDirectTreasuryShare} in one uninterrupted ladder.
 
-The business case for sponsorship therefore depends on the combined system: higher ticket volume, Treasury POTATO acquired by buybacks, hook revenue after public opening, Recovery burns, and the residual ETH depth owned by the permanently locked LP. None of those should be counted as realized Treasury profit without defining who can monetize them and under what governance policy.
+Those break-even values are arithmetic, not expected round lengths. Sponsorship is acquisition spend whose value depends on higher Grab activity, Treasury POTATO acquired by buybacks, hook revenue after public opening, Recovery burns, and ETH retained in permanent liquidity. None should be counted as realized Treasury profit without defining how governance can monetize it.
 
-## Recommendation
+## Frozen release decision
 
-1. Launch with the fixed **aggressive** profile; retain **scaled-statics** as the downside comparison and **scarcity** as the upside/stress bound.
-2. Use a staged public-buy gate based on observed sell capacity and fork quotes, not merely a round number. Test at least 25, 50, and 100 ETH of protocol-created depth.
-3. Treat keeper execution as part of launch readiness. A funded buyback reserve does nothing until \`buyback()\` is called; the model's “with buyback” paths assume prompt execution.
-4. Establish operational limits for promotional funding. A 10 ETH headline round can generate attention, but its direct Treasury break-even requires extreme ticket activity. Model sponsorship as acquisition spend, not guaranteed recoupment.
-5. Before deployment, reproduce the selected quotes on a Robinhood mainnet fork and measure gas for minting 56 positions. Compare continuous-model quotes with v4 execution around band crossings.
+1. Fix the **${releaseCurve.name}** profile, ${integer(config.market.initialInventoryPotato)} POTATO genesis inventory, ${integer(config.game.roundEmissionBudgetPotato)} POTATO round budget, and current Grab allocation as the release candidate.
+2. Bootstrap with ${fixed(config.releaseCandidate.bootstrapNetEth, 0)} ETH net into the pool while external buys remain disabled. At the configured caller reward this requires approximately ${fixed(bootstrapGrossReserveEth, 3)} ETH of funded reserve and ${releaseBootstrap.calls} permissionless calls.
+3. Cap the planned sponsorship program at ${fixed(config.releaseCandidate.sponsorshipBudgetEth, 0)} ETH and use ${fixed(config.releaseCandidate.winnerSponsorshipEthPerRound, 2)} ETH Winner plus ${fixed(config.releaseCandidate.recoverySponsorshipEthPerRound, 2)} ETH Recovery as the baseline announced round.
+4. Keep public-buy enablement as a deliberate governance decision based on observed sell capacity and fork quotes rather than a modeled round number.
+5. Treat keeper execution and exact fork reproduction as release gates. A funded reserve does nothing until \`buyback()\` is called, and continuous-model quotes do not replace v4 execution evidence.
 
 ## What the model does not establish
 
@@ -341,7 +441,7 @@ The business case for sponsorship therefore depends on the combined system: high
 
 ## Validation performed
 
-- Configuration validation requires aligned and ordered ticks, positive position counts, exactly 100% inventory allocation, and exactly 100% later-ticket revenue allocation.
+- Configuration validation requires aligned and ordered ticks, positive position counts, exactly 100% inventory allocation, exactly 100% later-Grab revenue allocation, a defined release curve, and sponsorship scenarios within the 3 ETH envelope.
 - Invariant tests cover 56-position construction, inventory conservation, monotonic price/depth, POTATO/ETH inverse round trips, hook-fee direction, buyback reserve conservation and chunking, ticket splits, and emission arithmetic.
 - The nested-position implementation was cross-checked against the committed Statics launch model at its original tick geometry; the small remaining difference at a displayed USD milestone is explained by that report evaluating the exact USD price while this check evaluated the nearest aligned tick.
 - Generated outputs are deterministic: rerunning the generator from unchanged inputs produces identical report, JSON, and CSV hashes.
