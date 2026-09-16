@@ -14,6 +14,7 @@ The generated decision report is `report.md`. Full results are written to
 `round-traces.csv`. Those two large generated files are intentionally ignored;
 rerun the generator whenever machine-readable output is needed.
 
-The committed report selects the fixed aggressive launch curve and 10,000
-POTATO default round emissions. The 100,000 POTATO setting remains in the
-report only as an explicitly labelled sensitivity comparison.
+The committed report freezes the aggressive curve, 100 million POTATO genesis
+market inventory, 10,000 POTATO round budget, 5 ETH net Treasury bootstrap,
+and 3 ETH sponsorship envelope as the release candidate. The 100,000 POTATO
+round setting remains only as an explicitly labelled emission sensitivity.

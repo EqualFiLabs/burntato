@@ -673,3 +673,45 @@ artifact identity, locked NFT ownership, and the continued Treasury-only buy
 gate. No verified release-scope security finding remained. This is model,
 local Foundry, and pinned-fork evidence; it is not a public-network deployment
 or independent third-party audit.
+
+## Frozen launch economic release candidate
+
+Date: September 16, 2026
+
+Candidate before this evidence entry: `d5dc950`. This candidate fixes the
+aggressive curve, 100,000,000 POTATO genesis market inventory, 10,000 POTATO
+round budget, 0.01 ETH starting Grab with 10% growth, and the 25/2/40/5/13/15
+later-Grab allocation. The curve profile hash is
+`0xd037842490444e3a41d16ed5fcadf9845948edcae92322472888d0e5d3d27e99`.
+
+The operating envelope modeled for qualification is 5 ETH net into the pool
+while public buys remain closed. At the 50 BPS caller reward this requires
+approximately 5.025 ETH in the buyback reserve and three calls under the 2 ETH
+gross-slice cap. Promotional funding is capped at 3 ETH, with 0.05 ETH Winner
+plus 0.05 ETH Recovery as the baseline sponsored round. These funding amounts
+are operational inputs, not new custody paths or immutable protocol constants.
+
+The checked-in model configuration SHA-256 is
+`de96dc668a8f7b787bf1f30e29c72621bf5621a753e17f66846284ff0a67aa24`;
+the generated report SHA-256 is
+`9f065ccdba37efa4c6572a7a4e43cf3e7a6690db01489fa387b736ba49a51769`.
+
+| Scope | Command or method | Result |
+| --- | --- | --- |
+| Model invariants | `node analysis/potato-market-model/model.test.mjs` | Passed with release inputs, gross-slice buyback accounting, 5 ETH net bootstrap, and 50M/75M/100M inventory coverage pinned |
+| Deterministic report | Two consecutive `node analysis/potato-market-model/generate-report.mjs` runs with report, results, and trace hashes compared | Passed; all three outputs reproduced exactly |
+| Format and diff | `forge fmt --check` and `git diff --check` | Passed |
+| Curve identity | `forge test --match-path test/unit/BurntatoLaunchCurves.t.sol -j 1` | 3 passed; canonical profile hash pinned |
+| Deployment defaults | `forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1` | 31 passed; 5 configured-RPC tests skipped in this local run |
+| Operator allocation | `forge test --match-path test/integration/OperatorPurchaseRevenue.t.sol -j 1` | 10 passed, including 1,000 fuzz cases |
+| Default launch economics | `forge test --match-path test/integration/DefaultLaunchEconomics.t.sol -j 1` | 2 passed against the real local v4 lifecycle |
+| Pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the configured private archive RPC | 4 passed; no skips |
+
+Review reconciled the model with `BurntatoDeploymentConfig.launchDefaults()`,
+corrected the buyback simulator to apply `maxSpend` to the gross reserve slice,
+started behavioral scenarios from the selected bootstrap state, and replaced
+the obsolete 5+5 ETH promotions with the 3 ETH envelope. The 100 million seed
+was retained because its modeled five-Grab buyback exceeds an immediate sale
+of all five fully vested emissions with a wider margin than the smaller seeds.
+This freezes the candidate for fork and private-testnet qualification; it is
+not a Robinhood mainnet deployment or an independent third-party audit.

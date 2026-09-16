@@ -37,20 +37,13 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
     }
 
     function testnetConfig(address deployer) public pure returns (GenesisConfig memory config) {
-        config = BurntatoDeploymentConfig.localDefaults();
+        config = BurntatoDeploymentConfig.launchDefaults();
         config.deployer = deployer;
         config.finalAdmin = deployer;
         config.guardian = deployer;
         config.treasuryRecipient = deployer;
         config.rewardAllocator = deployer;
-        config.protocol.winnerBps = 2_500;
-        config.protocol.nextRoundWinnerBps = 200;
-        config.protocol.recoveryBps = 3_000;
-        config.protocol.treasuryBps = 1_800;
-        config.protocol.buybackBps = 1_000;
-        config.protocol.operatorPurchaseBps = 1_500;
         config.hookFeeBps = 100;
-        config.operatorRewardShareBps = 4_000;
         config.initialWinnerReserve = BurntatoDeploymentConfig.defaultInitialWinnerReserve(config.protocol);
     }
 
