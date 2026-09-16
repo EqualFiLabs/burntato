@@ -9,6 +9,8 @@ import {Errors} from "../../src/shared/Errors.sol";
 
 contract BurntatoLaunchCurvesTest is Test {
     uint256 internal constant POTATO_SEED = 100_000_000 ether;
+    bytes32 internal constant EXPECTED_PROFILE_HASH =
+        0xd037842490444e3a41d16ed5fcadf9845948edcae92322472888d0e5d3d27e99;
 
     function test_ProfilePinsAggressiveBandsAndAllocation() public pure {
         IMarket.MarketCurve[] memory curves = BurntatoLaunchCurves.profile();
@@ -33,6 +35,7 @@ contract BurntatoLaunchCurvesTest is Test {
         assertEq(totalPositions, 56);
         assertEq(totalShares, 10_000);
         assertEq(BurntatoLaunchCurves.profileHash(), keccak256(abi.encode(curves)));
+        assertEq(BurntatoLaunchCurves.profileHash(), EXPECTED_PROFILE_HASH);
     }
 
     function test_PositionsAreNestedAlignedAndConserveSeed() public pure {
