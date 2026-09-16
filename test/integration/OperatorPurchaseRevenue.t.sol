@@ -81,8 +81,8 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
 
     function _initialConfig() internal pure override returns (ProtocolConfig memory config) {
         config = _defaultConfig();
-        config.recoveryBps = 3_000;
-        config.treasuryBps = 1_800;
+        config.treasuryBps = 500;
+        config.buybackBps = 1_300;
         config.operatorPurchaseBps = 1_500;
     }
 
@@ -111,9 +111,9 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
 
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 0.0025 ether);
-        assertEq(round.recoveryPool, 0.003 ether);
-        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0018 ether);
-        assertEq(IBuyback(address(diamond)).buybackReserveEth(), 0.001 ether);
+        assertEq(round.recoveryPool, 0.004 ether);
+        assertEq(IClaims(address(diamond)).treasuryEthAvailable(), 0.0005 ether);
+        assertEq(IBuyback(address(diamond)).buybackReserveEth(), 0.0013 ether);
         assertEq(game.winnerReserveEth(), 0.0102 ether);
         assertEq(router.pendingRevenue(), 0.0015 ether);
         assertEq(router.totalReceived(), 0.0015 ether);
@@ -293,8 +293,8 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         uint256 nextRoundWinnerShare = game.winnerReserveEth() - amount;
         uint256 operatorShare = address(router).balance;
         assertEq(round.winnerPool, amount * 2_500 / 10_000);
-        assertEq(round.recoveryPool, amount * 3_000 / 10_000);
-        assertEq(buybackShare, amount * 1_000 / 10_000);
+        assertEq(round.recoveryPool, amount * 4_000 / 10_000);
+        assertEq(buybackShare, amount * 1_300 / 10_000);
         assertEq(nextRoundWinnerShare, amount * 200 / 10_000);
         assertEq(operatorShare, amount * 1_500 / 10_000);
         assertEq(

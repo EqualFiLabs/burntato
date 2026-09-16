@@ -297,6 +297,10 @@ contract DeployBurntato is Script {
 
     function _environmentConfig() internal view returns (GenesisConfig memory config) {
         config = BurntatoDeploymentConfig.localDefaults();
+        return _environmentConfig(config);
+    }
+
+    function _environmentConfig(GenesisConfig memory config) internal view returns (GenesisConfig memory) {
         config.deployer = vm.envOr("BURNTATO_DEPLOYER", config.deployer);
         config.finalAdmin = vm.envOr("BURNTATO_FINAL_ADMIN", config.finalAdmin);
         config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
@@ -353,6 +357,7 @@ contract DeployBurntato is Script {
         config.operatorRewardShareBps = BurntatoDeploymentConfig.checkedUint16(
             vm.envOr("BURNTATO_OPERATOR_REWARD_SHARE_BPS", uint256(config.operatorRewardShareBps))
         );
+        return config;
     }
 
     function _initialCut(BurntatoDeployment memory deployment) private pure returns (FacetCut[] memory cuts) {
