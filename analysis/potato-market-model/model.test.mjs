@@ -71,12 +71,12 @@ for (const curveConfig of config.curves) {
 
 const five = ticketRound(5, config.game);
 near(five.totalRevenueEth, 0.0395625, 1e-12, "five-grab ticket revenue");
-near(five.buybackEth, 0.00365625, 1e-12, "five-grab buyback");
+near(five.buybackEth, 0.004753125, 1e-12, "five-grab buyback");
 near(five.nextWinnerEth, 0.00373125, 1e-12, "first ticket plus next-round BPS");
 
 const ten = ticketRound(10, config.game);
 near(ten.totalRevenueEth, 0.339990234375, 1e-12, "ten-grab ticket revenue");
-near(ten.buybackEth, 0.0336990234375, 1e-12, "ten-grab buyback");
+near(ten.buybackEth, 0.04380873046875, 1e-12, "ten-grab buyback");
 
 near(emissionForRound(10, 1, config.game).emittedPotato, 6_513.215599, 1e-6, "ten-grab full-vest emission");
 near(emissionForRound(5, 0.5, config.game).emittedPotato, 2_262.190625, 1e-6, "five-grab half-vest emission");

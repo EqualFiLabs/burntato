@@ -224,11 +224,11 @@ The current single-range launch curve is too cheap for the intended recovery gam
 
 This recommendation is conditional. The model says curve shape alone does not create durable price support: ticket activity, vesting, emission selling, recovery burns, and timely execution of the buyback reserve dominate the path. Public buys remain disabled during bootstrap; only Treasury buybacks create initial ETH depth. The public-buy threshold in scenarios is an analysis trigger, while the deployed protocol still requires an intentional administrative enablement decision.
 
-## Modelled protocol facts
+## Modeled system inputs
 
 - Launch inventory: ${integer(config.market.initialInventoryPotato)} POTATO; modeled as 56 permanent Uniswap v4 positions across six bands.
 - Opening pool tick: ${config.market.initialPoolTick}; opening spot quote is ${sig(curves[0] && stateAtPotatoOut(curves[0], 0).spotEthPerPotato)} ETH per POTATO.
-- Ticket price: ${fixed(config.game.startingGrabPriceEth, 6)} ETH, increasing ${percent(config.game.priceIncreaseBps / 10_000, 0)} after each grab.
+- Ticket scenario: ${fixed(config.game.startingGrabPriceEth, 6)} ETH, increasing ${percent(config.game.priceIncreaseBps / 10_000, 0)} after each grab.
 - The first ticket of every round goes entirely to the next round Winner reserve. Later tickets split ${percent(config.game.winnerBps / 10_000, 0)} current Winner, ${percent(config.game.nextRoundWinnerBps / 10_000, 0)} next Winner, ${percent(config.game.recoveryBps / 10_000, 0)} Recovery, ${percent(config.game.treasuryBps / 10_000, 0)} Treasury, ${percent(config.game.buybackBps / 10_000, 0)} buyback, and ${percent(config.game.operatorPurchaseBps / 10_000, 0)} Operators.
 - Round emission budget: ${integer(config.game.roundEmissionBudgetPotato)} POTATO. Each holder opportunity earns ${percent(config.game.emissionStepBps / 10_000, 0)} of remaining emissions multiplied by its vesting fraction.
 - Emission sensitivity: ten fully vested holder opportunities emit ${integer(launchEmissionAtTenGrabs)} POTATO at the selected 10,000 budget versus ${integer(legacyEmissionAtTenGrabs)} POTATO at the prior 100,000 budget. The larger budget is retained only as stress context.

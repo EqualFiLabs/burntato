@@ -8,12 +8,12 @@ The current single-range launch curve is too cheap for the intended recovery gam
 
 This recommendation is conditional. The model says curve shape alone does not create durable price support: ticket activity, vesting, emission selling, recovery burns, and timely execution of the buyback reserve dominate the path. Public buys remain disabled during bootstrap; only Treasury buybacks create initial ETH depth. The public-buy threshold in scenarios is an analysis trigger, while the deployed protocol still requires an intentional administrative enablement decision.
 
-## Modelled protocol facts
+## Modeled system inputs
 
 - Launch inventory: 100,000,000 POTATO; modeled as 56 permanent Uniswap v4 positions across six bands.
 - Opening pool tick: 170280; opening spot quote is 4.02906e-8 ETH per POTATO.
-- Ticket price: 0.003000 ETH, increasing 50% after each grab.
-- The first ticket of every round goes entirely to the next round Winner reserve. Later tickets split 25% current Winner, 2% next Winner, 30% Recovery, 18% Treasury, 10% buyback, and 15% Operators.
+- Ticket scenario: 0.003000 ETH, increasing 50% after each grab.
+- The first ticket of every round goes entirely to the next round Winner reserve. Later tickets split 25% current Winner, 2% next Winner, 40% Recovery, 5% Treasury, 13% buyback, and 15% Operators.
 - Round emission budget: 10,000 POTATO. Each holder opportunity earns 10% of remaining emissions multiplied by its vesting fraction.
 - Emission sensitivity: ten fully vested holder opportunities emit 6,513 POTATO at the selected 10,000 budget versus 65,132 POTATO at the prior 100,000 budget. The larger budget is retained only as stress context.
 - Recovery settlement destroys 90% of committed POTATO and transfers 10% to Treasury.
@@ -109,20 +109,20 @@ The flow-balance mark is the buyback allocation divided by newly emitted POTATO 
 
 | Grabs | Ticket revenue | Last grab | Buyback reserve | Full-vest emission | Emission sold | Flow-balance 100k mark |
 |---:|---:|---:|---:|---:|---:|---:|
-| 5 | 0.039563 ETH | 0.015188 ETH | 0.003656 ETH | 4,095 | 25% | 0.3571 ETH |
-| 5 | 0.039563 ETH | 0.015188 ETH | 0.003656 ETH | 4,095 | 50% | 0.1786 ETH |
-| 5 | 0.039563 ETH | 0.015188 ETH | 0.003656 ETH | 4,095 | 100% | 0.0893 ETH |
-| 10 | 0.339990 ETH | 0.115330 ETH | 0.033699 ETH | 6,513 | 25% | 2.0696 ETH |
-| 10 | 0.339990 ETH | 0.115330 ETH | 0.033699 ETH | 6,513 | 50% | 1.0348 ETH |
-| 10 | 0.339990 ETH | 0.115330 ETH | 0.033699 ETH | 6,513 | 100% | 0.5174 ETH |
-| 15 | 2.621363 ETH | 0.875788 ETH | 0.261836 ETH | 7,941 | 25% | 13.1889 ETH |
-| 15 | 2.621363 ETH | 0.875788 ETH | 0.261836 ETH | 7,941 | 50% | 6.5945 ETH |
-| 15 | 2.621363 ETH | 0.875788 ETH | 0.261836 ETH | 7,941 | 100% | 3.2972 ETH |
-| 20 | 19.945540 ETH | 6.650513 ETH | 1.994254 ETH | 8,784 | 25% | 90.8106 ETH |
-| 20 | 19.945540 ETH | 6.650513 ETH | 1.994254 ETH | 8,784 | 50% | 45.4053 ETH |
-| 20 | 19.945540 ETH | 6.650513 ETH | 1.994254 ETH | 8,784 | 100% | 22.7027 ETH |
+| 5 | 0.039563 ETH | 0.015188 ETH | 0.004753 ETH | 4,095 | 25% | 0.4643 ETH |
+| 5 | 0.039563 ETH | 0.015188 ETH | 0.004753 ETH | 4,095 | 50% | 0.2321 ETH |
+| 5 | 0.039563 ETH | 0.015188 ETH | 0.004753 ETH | 4,095 | 100% | 0.1161 ETH |
+| 10 | 0.339990 ETH | 0.115330 ETH | 0.043809 ETH | 6,513 | 25% | 2.6905 ETH |
+| 10 | 0.339990 ETH | 0.115330 ETH | 0.043809 ETH | 6,513 | 50% | 1.3452 ETH |
+| 10 | 0.339990 ETH | 0.115330 ETH | 0.043809 ETH | 6,513 | 100% | 0.6726 ETH |
+| 15 | 2.621363 ETH | 0.875788 ETH | 0.340387 ETH | 7,941 | 25% | 17.1456 ETH |
+| 15 | 2.621363 ETH | 0.875788 ETH | 0.340387 ETH | 7,941 | 50% | 8.5728 ETH |
+| 15 | 2.621363 ETH | 0.875788 ETH | 0.340387 ETH | 7,941 | 100% | 4.2864 ETH |
+| 20 | 19.945540 ETH | 6.650513 ETH | 2.592530 ETH | 8,784 | 25% | 118.0538 ETH |
+| 20 | 19.945540 ETH | 6.650513 ETH | 2.592530 ETH | 8,784 | 50% | 59.0269 ETH |
+| 20 | 19.945540 ETH | 6.650513 ETH | 2.592530 ETH | 8,784 | 100% | 29.5134 ETH |
 
-Five-grab rounds cannot materially support price through buybacks alone. At ten grabs, the buyback is still only 0.033699 ETH against 6,513 maximum emitted POTATO. The intended flywheel becomes meaningfully stronger only when a round reaches the steeper portion of the ticket curve or when recovery permanently removes a large part of emissions.
+Five-grab rounds cannot materially support price through buybacks alone. At ten grabs, the buyback is still only 0.043809 ETH against 6,513 maximum emitted POTATO. The intended flywheel becomes meaningfully stronger only when a round reaches the steeper portion of the ticket curve or when recovery permanently removes a large part of emissions.
 
 ## Emission-sale stress after a 50 ETH Treasury bootstrap
 
@@ -136,36 +136,36 @@ Each stress path starts with 50 ETH in the pool, runs 100 identical ten-grab/ful
 | scaled-statics | no | 25 | 48.797 | 26,814,344 | 0.7289 ETH | 1.191 |
 | scaled-statics | no | 50 | 47.626 | 26,651,514 | 0.7095 ETH | 2.350 |
 | scaled-statics | no | 100 | 45.389 | 26,325,853 | 0.6629 ETH | 4.565 |
-| scaled-statics | yes | 1 | 49.985 | 26,975,141 | 0.7488 ETH | 0.048 |
-| scaled-statics | yes | 5 | 49.924 | 26,967,021 | 0.7478 ETH | 0.241 |
-| scaled-statics | yes | 10 | 49.848 | 26,956,906 | 0.7465 ETH | 0.482 |
-| scaled-statics | yes | 25 | 49.624 | 26,926,791 | 0.7428 ETH | 1.202 |
-| scaled-statics | yes | 50 | 49.259 | 26,877,357 | 0.7366 ETH | 2.394 |
-| scaled-statics | yes | 100 | 48.556 | 26,781,281 | 0.7249 ETH | 4.749 |
+| scaled-statics | yes | 1 | 49.995 | 26,976,484 | 0.7490 ETH | 0.048 |
+| scaled-statics | yes | 5 | 49.974 | 26,973,728 | 0.7487 ETH | 0.241 |
+| scaled-statics | yes | 10 | 49.949 | 26,970,299 | 0.7482 ETH | 0.483 |
+| scaled-statics | yes | 25 | 49.872 | 26,960,112 | 0.7469 ETH | 1.205 |
+| scaled-statics | yes | 50 | 49.748 | 26,943,466 | 0.7448 ETH | 2.407 |
+| scaled-statics | yes | 100 | 49.510 | 26,911,382 | 0.7408 ETH | 4.801 |
 | aggressive | no | 1 | 49.958 | 22,613,727 | 0.6507 ETH | 0.042 |
 | aggressive | no | 5 | 49.788 | 22,587,675 | 0.6495 ETH | 0.210 |
 | aggressive | no | 10 | 49.577 | 22,555,108 | 0.6481 ETH | 0.419 |
 | aggressive | no | 25 | 48.946 | 22,457,410 | 0.6438 ETH | 1.044 |
 | aggressive | no | 50 | 47.903 | 22,294,580 | 0.6368 ETH | 2.076 |
 | aggressive | no | 100 | 45.852 | 21,968,919 | 0.6231 ETH | 4.107 |
-| aggressive | yes | 1 | 49.991 | 22,618,880 | 0.6509 ETH | 0.042 |
-| aggressive | yes | 5 | 49.956 | 22,613,441 | 0.6507 ETH | 0.210 |
-| aggressive | yes | 10 | 49.912 | 22,606,653 | 0.6504 ETH | 0.419 |
-| aggressive | yes | 25 | 49.780 | 22,586,361 | 0.6495 ETH | 1.048 |
-| aggressive | yes | 50 | 49.562 | 22,552,777 | 0.6480 ETH | 2.094 |
-| aggressive | yes | 100 | 49.133 | 22,486,485 | 0.6451 ETH | 4.178 |
+| aggressive | yes | 1 | 50.001 | 22,620,425 | 0.6510 ETH | 0.042 |
+| aggressive | yes | 5 | 50.006 | 22,621,162 | 0.6510 ETH | 0.210 |
+| aggressive | yes | 10 | 50.012 | 22,622,082 | 0.6511 ETH | 0.420 |
+| aggressive | yes | 25 | 50.030 | 22,624,827 | 0.6512 ETH | 1.049 |
+| aggressive | yes | 50 | 50.059 | 22,629,362 | 0.6514 ETH | 2.099 |
+| aggressive | yes | 100 | 50.117 | 22,638,279 | 0.6518 ETH | 4.199 |
 | scarcity | no | 1 | 49.941 | 19,106,854 | 0.9116 ETH | 0.059 |
 | scarcity | no | 5 | 49.703 | 19,080,801 | 0.9090 ETH | 0.294 |
 | scarcity | no | 10 | 49.408 | 19,048,235 | 0.9058 ETH | 0.586 |
 | scarcity | no | 25 | 48.528 | 18,950,537 | 0.8964 ETH | 1.458 |
 | scarcity | no | 50 | 47.081 | 18,787,706 | 0.8809 ETH | 2.890 |
 | scarcity | no | 100 | 44.261 | 18,462,045 | 0.8512 ETH | 5.682 |
-| scarcity | yes | 1 | 49.974 | 19,110,531 | 0.9119 ETH | 0.059 |
-| scarcity | yes | 5 | 49.871 | 19,099,200 | 0.9108 ETH | 0.294 |
-| scarcity | yes | 10 | 49.742 | 19,085,062 | 0.9094 ETH | 0.587 |
-| scarcity | yes | 25 | 49.359 | 19,042,815 | 0.9053 ETH | 1.465 |
-| scarcity | yes | 50 | 48.729 | 18,972,962 | 0.8985 ETH | 2.918 |
-| scarcity | yes | 100 | 47.501 | 18,835,341 | 0.8854 ETH | 5.793 |
+| scarcity | yes | 1 | 49.984 | 19,111,634 | 0.9121 ETH | 0.059 |
+| scarcity | yes | 5 | 49.921 | 19,104,713 | 0.9114 ETH | 0.294 |
+| scarcity | yes | 10 | 49.842 | 19,096,081 | 0.9105 ETH | 0.588 |
+| scarcity | yes | 25 | 49.608 | 19,070,320 | 0.9080 ETH | 1.467 |
+| scarcity | yes | 50 | 49.223 | 19,027,826 | 0.9039 ETH | 2.927 |
+| scarcity | yes | 100 | 48.473 | 18,944,477 | 0.8958 ETH | 5.827 |
 
 ## Recovery whale-resistance illustration
 
@@ -200,28 +200,28 @@ In every dynamic path, the simulator sells the configured emission share, makes 
 
 | Curve | Scenario | Rounds | Grabs | Ticket revenue | Final pool ETH | Final 100k mark | Emitted | Burned | Public enabled |
 |---|---|---:|---:|---:|---:|---:|---:|---:|---|
-| scaled-statics | closed-low-activity | 30 | 150 | 1.19 | 0.10 | 0.012 ETH | 67,866 | 16,288 | no |
-| scaled-statics | closed-active | 30 | 300 | 10.20 | 0.99 | 0.036 ETH | 162,425 | 73,091 | no |
-| scaled-statics | single-5-plus-5-promotion | 30 | 361 | 187.10 | 18.46 | 0.271 ETH | 172,846 | 93,397 | no |
-| scaled-statics | recurring-5-plus-5-promotions | 50 | 881 | 783.99 | 93.07 | 1.384 ETH | 363,353 | 2,108,625 | round 14 |
-| scaled-statics | maximum-emission-sell-stress | 30 | 300 | 10.20 | 0.96 | 0.036 ETH | 195,396 | 0 | no |
-| scaled-statics | recovery-frenzy | 30 | 507 | 405.02 | 59.89 | 0.924 ETH | 232,863 | 2,893,313 | round 13 |
-| aggressive | closed-low-activity | 30 | 150 | 1.19 | 0.10 | 0.013 ETH | 67,866 | 16,288 | no |
-| aggressive | closed-active | 30 | 300 | 10.20 | 0.99 | 0.042 ETH | 162,425 | 73,091 | no |
-| aggressive | single-5-plus-5-promotion | 30 | 361 | 187.10 | 18.42 | 0.367 ETH | 172,846 | 93,397 | no |
-| aggressive | recurring-5-plus-5-promotions | 50 | 881 | 783.99 | 92.50 | 1.572 ETH | 363,353 | 1,926,184 | round 14 |
-| aggressive | maximum-emission-sell-stress | 30 | 300 | 10.20 | 0.96 | 0.041 ETH | 195,396 | 0 | no |
-| aggressive | recovery-frenzy | 30 | 507 | 405.02 | 55.19 | 0.687 ETH | 232,863 | 2,308,676 | round 13 |
-| scarcity | closed-low-activity | 30 | 150 | 1.19 | 0.10 | 0.015 ETH | 67,866 | 16,288 | no |
-| scarcity | closed-active | 30 | 300 | 10.20 | 0.98 | 0.046 ETH | 162,425 | 73,091 | no |
-| scarcity | single-5-plus-5-promotion | 30 | 361 | 187.10 | 18.38 | 0.448 ETH | 172,846 | 93,397 | no |
-| scarcity | recurring-5-plus-5-promotions | 50 | 881 | 783.99 | 92.22 | 1.283 ETH | 363,353 | 1,592,686 | round 14 |
-| scarcity | maximum-emission-sell-stress | 30 | 300 | 10.20 | 0.96 | 0.045 ETH | 195,396 | 0 | no |
-| scarcity | recovery-frenzy | 30 | 507 | 405.02 | 55.37 | 0.971 ETH | 232,863 | 1,732,433 | round 13 |
+| scaled-statics | closed-low-activity | 30 | 150 | 1.19 | 0.14 | 0.013 ETH | 67,866 | 16,288 | no |
+| scaled-statics | closed-active | 30 | 300 | 10.20 | 1.29 | 0.042 ETH | 162,425 | 73,091 | no |
+| scaled-statics | single-5-plus-5-promotion | 30 | 361 | 187.10 | 24.02 | 0.311 ETH | 172,846 | 93,397 | no |
+| scaled-statics | recurring-5-plus-5-promotions | 50 | 881 | 783.99 | 114.72 | 1.650 ETH | 363,353 | 1,544,467 | round 11 |
+| scaled-statics | maximum-emission-sell-stress | 30 | 300 | 10.20 | 1.26 | 0.041 ETH | 195,396 | 0 | no |
+| scaled-statics | recovery-frenzy | 30 | 507 | 405.02 | 65.48 | 1.004 ETH | 232,863 | 1,869,199 | round 10 |
+| aggressive | closed-low-activity | 30 | 150 | 1.19 | 0.14 | 0.014 ETH | 67,866 | 16,288 | no |
+| aggressive | closed-active | 30 | 300 | 10.20 | 1.28 | 0.050 ETH | 162,425 | 73,091 | no |
+| aggressive | single-5-plus-5-promotion | 30 | 361 | 187.10 | 23.96 | 0.439 ETH | 172,846 | 93,397 | no |
+| aggressive | recurring-5-plus-5-promotions | 50 | 881 | 783.99 | 114.52 | 2.009 ETH | 363,353 | 1,526,313 | round 11 |
+| aggressive | maximum-emission-sell-stress | 30 | 300 | 10.20 | 1.25 | 0.050 ETH | 195,396 | 0 | no |
+| aggressive | recovery-frenzy | 30 | 507 | 405.02 | 66.47 | 0.941 ETH | 232,863 | 2,025,056 | round 10 |
+| scarcity | closed-low-activity | 30 | 150 | 1.19 | 0.14 | 0.016 ETH | 67,866 | 16,288 | no |
+| scarcity | closed-active | 30 | 300 | 10.20 | 1.28 | 0.058 ETH | 162,425 | 73,091 | no |
+| scarcity | single-5-plus-5-promotion | 30 | 361 | 187.10 | 23.90 | 0.562 ETH | 172,846 | 93,397 | no |
+| scarcity | recurring-5-plus-5-promotions | 50 | 881 | 783.99 | 115.20 | 1.706 ETH | 363,353 | 1,398,876 | round 11 |
+| scarcity | maximum-emission-sell-stress | 30 | 300 | 10.20 | 1.25 | 0.056 ETH | 195,396 | 0 | no |
+| scarcity | recovery-frenzy | 30 | 507 | 405.02 | 65.97 | 1.082 ETH | 232,863 | 1,477,489 | round 10 |
 
 ### Promotion economics
 
-A 5 ETH Winner plus 5 ETH Recovery sponsorship costs 10 ETH. Looking only at the direct 18% Treasury share of eligible ticket purchases, it requires approximately 55.56 ETH of eligible revenue to repay. Under a single 0.003 ETH / 50% price ladder, direct Treasury receipts first exceed 10 ETH at grab 23; cumulative ticket revenue is 67.33 ETH and that grab alone costs 22.45 ETH. That arithmetic is not a recommendation to expect a 23-grab round: it demonstrates that direct ticket revenue alone is a demanding sponsorship-recovery mechanism.
+A 5 ETH Winner plus 5 ETH Recovery sponsorship costs 10 ETH. Looking only at the direct 5% Treasury share of eligible ticket purchases, it requires approximately 200.00 ETH of eligible revenue to repay. Under a single 0.003 ETH / 50% price ladder, direct Treasury receipts first exceed 10 ETH at grab 26; cumulative ticket revenue is 227.25 ETH and that grab alone costs 75.75 ETH. That arithmetic is not a recommendation to expect a 26-grab round: it demonstrates that direct ticket revenue alone is a demanding sponsorship-recovery mechanism.
 
 The business case for sponsorship therefore depends on the combined system: higher ticket volume, Treasury POTATO acquired by buybacks, hook revenue after public opening, Recovery burns, and the residual ETH depth owned by the permanently locked LP. None of those should be counted as realized Treasury profit without defining who can monetize them and under what governance policy.
 
