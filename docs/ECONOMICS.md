@@ -36,7 +36,7 @@ activates. Later governance changes cannot rewrite the active round or the
 already-open target Recovery market. `Round.activated` is the lifecycle marker;
 the emission budget is not used as a sentinel.
 
-The local genesis defaults are:
+The canonical launch profile is:
 
 | Setting | Default |
 | --- | ---: |
@@ -48,11 +48,11 @@ The local genesis defaults are:
 | Round emission budget | 10,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 4 minutes |
-| Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 2% / 40% / 23% / 10% / 0% |
+| Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 2% / 40% / 5% / 13% / 15% |
 | Initial Winner reserve | 0.0105 ETH; opens Round 1 at 105% of its first-Grab price |
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
-| Operator share of hook fee | Disabled; required for Robinhood deployment |
+| Operator share of hook fee | 40% of the existing fee |
 | Maximum buyback slice | 2 ETH |
 | Buyback caller reward | 0.5% |
 | Buyback delay | 1 block |
@@ -264,10 +264,11 @@ not auto-compounded. The Treasury remainder, including split dust, goes to
 default fee is 1%, while 0% through 2% are valid. The Operator share remains
 valid from 0% through 100% of that already-capped fee.
 
-The Robinhood launch profile uses a 25/30/20/10/15 purchase split for Winner,
-Recovery, nominal Treasury, buyback, and Operators. It also routes 40% of the
-existing 1% hook fee to Operators, equal to 0.4% of swap volume; Treasury
-receives the other 0.6% of volume. Both sources enter the same router.
+The Robinhood launch profile uses a 25/2/40/5/13/15 purchase split for Winner,
+next-round Winner, Recovery, nominal Treasury, buyback, and Operators. It also
+routes 40% of the existing 1% hook fee to Operators, equal to 0.4% of swap
+volume; Treasury receives the other 0.6% of volume. Both Operator revenue
+sources enter the same router.
 
 Registered Statics Operators share router revenue by their stored activation
 multiplier. Registration and higher-tier synchronization are prospective.

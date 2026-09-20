@@ -21,7 +21,6 @@ contract DeployBurntatoLocalFork is DeployBurntato {
     error InvalidLocalForkRpc();
     error InvalidLocalForkBlock(uint256 expected, uint256 actual);
     error InvalidLocalForkBlockHash(bytes32 expected, bytes32 actual);
-    error InvalidOperatorRewardShare();
 
     string internal constant OUTPUT_PATH = "artifacts/robinhood-local/deployment.json";
 
@@ -29,11 +28,8 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         CanonicalV4Dependencies memory dependencies = _localForkPreflight(true);
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
-        GenesisConfig memory config = _environmentConfig();
+        GenesisConfig memory config = _environmentConfig(BurntatoDeploymentConfig.launchDefaults());
         config.deployer = deployer;
-        config.operatorRewardShareBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envUint("BURNTATO_OPERATOR_REWARD_SHARE_BPS"));
-        if (config.operatorRewardShareBps == 0) revert InvalidOperatorRewardShare();
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
 
         vm.startBroadcast(privateKey);
@@ -49,11 +45,8 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         CanonicalV4Dependencies memory dependencies = _localReplicaPreflight();
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
-        GenesisConfig memory config = _environmentConfig();
+        GenesisConfig memory config = _environmentConfig(BurntatoDeploymentConfig.launchDefaults());
         config.deployer = deployer;
-        config.operatorRewardShareBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envUint("BURNTATO_OPERATOR_REWARD_SHARE_BPS"));
-        if (config.operatorRewardShareBps == 0) revert InvalidOperatorRewardShare();
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDependencies({
             chainId: block.chainid,
             finalizedBlock: block.number,

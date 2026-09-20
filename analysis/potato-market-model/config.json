@@ -1,7 +1,15 @@
 {
   "schemaVersion": 1,
-  "status": "decision-support",
+  "status": "release-candidate",
   "notice": "Behavioral scenarios are explicit assumptions, not forecasts. ETH values are native units and no USD price is used.",
+  "releaseCandidate": {
+    "curve": "aggressive",
+    "bootstrapNetEth": 5,
+    "sponsorshipBudgetEth": 3,
+    "winnerSponsorshipEthPerRound": 0.05,
+    "recoverySponsorshipEthPerRound": 0.05,
+    "inventorySensitivityPotato": [50000000, 75000000, 100000000]
+  },
   "market": {
     "initialInventoryPotato": 100000000,
     "initialPoolTick": 170280,
@@ -15,19 +23,19 @@
     "buybackDelayBlocks": 1
   },
   "game": {
-    "startingGrabPriceEth": 0.003,
-    "priceIncreaseBps": 5000,
+    "startingGrabPriceEth": 0.01,
+    "priceIncreaseBps": 1000,
     "roundEmissionBudgetPotato": 10000,
     "emissionStepBps": 1000,
     "winnerBps": 2500,
     "nextRoundWinnerBps": 200,
-    "recoveryBps": 3000,
-    "treasuryBps": 1800,
-    "buybackBps": 1000,
+    "recoveryBps": 4000,
+    "treasuryBps": 500,
+    "buybackBps": 1300,
     "operatorPurchaseBps": 1500,
     "recoveryBurnBps": 9000,
     "recoveryTreasuryBps": 1000,
-    "initialWinnerReserveEth": 0.00315
+    "initialWinnerReserveEth": 0.0105
   },
   "curves": [
     {
@@ -109,7 +117,7 @@
       "sponsorships": []
     },
     {
-      "name": "single-5-plus-5-promotion",
+      "name": "single-0.05-plus-0.05-promotion",
       "rounds": 30,
       "baseGrabs": 7,
       "maximumGrabs": 20,
@@ -125,11 +133,11 @@
       "lookaheadRounds": 10,
       "marketOrder": "sell-first",
       "sponsorships": [
-        {"round": 10, "winnerEth": 5, "recoveryEth": 5}
+        {"round": 10, "winnerEth": 0.05, "recoveryEth": 0.05}
       ]
     },
     {
-      "name": "recurring-5-plus-5-promotions",
+      "name": "recurring-0.05-plus-0.05-promotions",
       "rounds": 50,
       "baseGrabs": 7,
       "maximumGrabs": 20,
@@ -145,10 +153,10 @@
       "lookaheadRounds": 10,
       "marketOrder": "sell-first",
       "sponsorships": [
-        {"round": 10, "winnerEth": 5, "recoveryEth": 5},
-        {"round": 20, "winnerEth": 5, "recoveryEth": 5},
-        {"round": 30, "winnerEth": 5, "recoveryEth": 5},
-        {"round": 40, "winnerEth": 5, "recoveryEth": 5}
+        {"round": 10, "winnerEth": 0.05, "recoveryEth": 0.05},
+        {"round": 20, "winnerEth": 0.05, "recoveryEth": 0.05},
+        {"round": 30, "winnerEth": 0.05, "recoveryEth": 0.05},
+        {"round": 40, "winnerEth": 0.05, "recoveryEth": 0.05}
       ]
     },
     {
@@ -186,8 +194,8 @@
       "lookaheadRounds": 10,
       "marketOrder": "buy-first",
       "sponsorships": [
-        {"round": 10, "winnerEth": 5, "recoveryEth": 10},
-        {"round": 20, "winnerEth": 5, "recoveryEth": 10}
+        {"round": 10, "winnerEth": 0.05, "recoveryEth": 0.1},
+        {"round": 20, "winnerEth": 0.05, "recoveryEth": 0.1}
       ]
     }
   ]

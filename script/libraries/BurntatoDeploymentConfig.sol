@@ -53,6 +53,17 @@ library BurntatoDeploymentConfig {
         config.initialWinnerReserve = defaultInitialWinnerReserve(config.protocol);
     }
 
+    function launchDefaults() internal pure returns (GenesisConfig memory config) {
+        config = localDefaults();
+        config.protocol.winnerBps = 2_500;
+        config.protocol.nextRoundWinnerBps = 200;
+        config.protocol.recoveryBps = 4_000;
+        config.protocol.treasuryBps = 500;
+        config.protocol.buybackBps = 1_300;
+        config.protocol.operatorPurchaseBps = 1_500;
+        config.operatorRewardShareBps = 4_000;
+    }
+
     function defaultInitialWinnerReserve(ProtocolConfig memory protocol) internal pure returns (uint256) {
         return LibMath.mulBpsUp(protocol.startingPrice, INITIAL_WINNER_TARGET_BPS);
     }

@@ -250,10 +250,11 @@ validating the deployed testnet WETH. Burntato's market is native/POTATO and
 does not route through either wrapped-native address.
 
 The testnet profile is fixed in code: the deployer is final admin, guardian,
-Treasury recipient, and reward allocator; purchase
-revenue is split 25% Winner, 30% Recovery, 20% Treasury, 10% buyback, and 15%
-Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent to the
-same Operator rewards router (0.4% of swap volume) and 60% sent to Treasury.
+Treasury recipient, and reward allocator; purchase revenue from Grab two onward
+is split 25% Winner, 2% next Winner, 40% Recovery, 5% Treasury, 13% buyback,
+and 15% Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent
+to the same Operator rewards router (0.4% of swap volume) and 60% sent to
+Treasury.
 
 Use the phased wrapper so deployment inspection occurs before purchase
 initialization. The final admin calls each post-deployment action directly:

@@ -311,10 +311,15 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.protocol.roundEmissionBudget, 10_000 ether);
         assertEq(testnet.protocol.winnerBps, 2_500);
         assertEq(testnet.protocol.nextRoundWinnerBps, 200);
-        assertEq(testnet.protocol.recoveryBps, 3_000);
-        assertEq(testnet.protocol.treasuryBps, 1_800);
-        assertEq(testnet.protocol.buybackBps, 1_000);
+        assertEq(testnet.protocol.recoveryBps, 4_000);
+        assertEq(testnet.protocol.treasuryBps, 500);
+        assertEq(testnet.protocol.buybackBps, 1_300);
         assertEq(testnet.protocol.operatorPurchaseBps, 1_500);
+        assertEq(
+            uint256(testnet.protocol.winnerBps) + testnet.protocol.nextRoundWinnerBps + testnet.protocol.recoveryBps
+                + testnet.protocol.treasuryBps + testnet.protocol.buybackBps + testnet.protocol.operatorPurchaseBps,
+            10_000
+        );
         assertEq(testnet.hookFeeBps, 100);
         assertEq(testnet.operatorRewardShareBps, 4_000);
         assertEq(testnet.initialWinnerReserve, 0.0105 ether);

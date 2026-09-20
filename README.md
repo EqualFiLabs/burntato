@@ -6,16 +6,17 @@ actual holder time. Forward Recovery commitments, restricted token movement,
 and a canonical Uniswap v4 market turn settled activity into permanently locked
 liquidity and direct Treasury trading revenue.
 
-Fresh-deployment defaults give the first holder one hour and shorten each later
+The launch profile gives the first holder one hour and shortens each later
 purchase reset by five minutes until reaching a five-minute floor, alongside a
 10% price step, a fresh 10,000 POTATO emission budget, 10% holder
 opportunities vesting over four minutes, a 25% Winner / 2% next-Winner / 40%
-Recovery / 23% Treasury / 10% buyback purchase split, a 90% burn / 10% Treasury
-Recovery split, and a 1% bilateral market fee. These game values are governed
-defaults, not immutable constants. Each active or already-snapshotted target
-round keeps its terms while changes apply to future unsnapshotted rounds.
-Every successful purchase resets from its own timestamp; purchase count drives
-the urgency schedule but still does not consume POTATO emission.
+Recovery / 5% Treasury / 13% buyback / 15% Operators purchase split, a 90%
+burn / 10% Treasury Recovery split, and a 1% bilateral market fee. These game
+values are governed defaults, not immutable constants. Each active or
+already-snapshotted target round keeps its terms while changes apply to future
+unsnapshotted rounds. Every successful purchase resets from its own timestamp;
+purchase count drives the urgency schedule but still does not consume POTATO
+emission.
 
 Fresh deployments are fully configured and unpaused but begin with Hot Potato
 purchases inactive. Only `buyPotato()` is blocked until the current Diamond
