@@ -4,15 +4,17 @@ pragma solidity 0.8.26;
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
+import {BuybackFacet} from "../../src/facets/BuybackFacet.sol";
 import {DiamondCutFacet} from "../../src/facets/DiamondCutFacet.sol";
 import {GovernanceFacet} from "../../src/facets/GovernanceFacet.sol";
 import {PotatoTokenFacet} from "../../src/facets/PotatoTokenFacet.sol";
 import {FoundationInit} from "../../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {Errors} from "../../src/shared/Errors.sol";
-import {FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
+import {BuybackConfig, FacetCut, FacetCutAction, ProtocolConfig} from "../../src/shared/Types.sol";
 import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
 
 contract BurntatoPauseProperties is Test {
@@ -23,13 +25,14 @@ contract BurntatoPauseProperties is Test {
 
     BurntatoDiamond private diamond;
     IGovernance private governance;
+    IBuyback private buybacks;
     IPotatoToken private potato;
 
     function setUp() public {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
         diamond = new BurntatoDiamond(address(this), address(cutFacet));
 
-        FacetCut[] memory cuts = new FacetCut[](2);
+        FacetCut[] memory cuts = new FacetCut[](3);
         cuts[0] = FacetCut({
             facetAddress: address(new GovernanceFacet()),
             action: FacetCutAction.Add,
@@ -39,6 +42,11 @@ contract BurntatoPauseProperties is Test {
             facetAddress: address(new PotatoTokenFacet()),
             action: FacetCutAction.Add,
             functionSelectors: BurntatoSelectors.token()
+        });
+        cuts[2] = FacetCut({
+            facetAddress: address(new BuybackFacet()),
+            action: FacetCutAction.Add,
+            functionSelectors: BurntatoSelectors.buyback()
         });
 
         FoundationInit foundation = new FoundationInit();
@@ -50,7 +58,11 @@ contract BurntatoPauseProperties is Test {
             );
 
         governance = IGovernance(address(diamond));
+        buybacks = IBuyback(address(diamond));
         potato = IPotatoToken(address(diamond));
+        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 1 ether, callerRewardBps: 50, delayBlocks: 1}));
+        vm.deal(address(this), 1 ether);
+        buybacks.fundBuybackReserve{value: 1 ether}();
         governance.setGuardian(GUARDIAN);
         governance.initializePurchases();
         governance.setAuthority(FINAL_ADMIN);
@@ -100,6 +112,41 @@ contract BurntatoPauseProperties is Test {
         assertEq(_selector(reason), Errors.ProtocolPaused.selector);
         assertEq(potato.totalSupply(), supplyBefore);
         assertEq(potato.balanceOf(RECIPIENT), balanceBefore);
+    }
+
+    function check_pausedBuybackRevertsWithoutAccountingChange() public {
+        vm.prank(GUARDIAN);
+        governance.setPaused(true);
+        uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 lastExecutionBlock = buybacks.lastBuybackBlock();
+        uint256 callerBefore = RECIPIENT.balance;
+        uint256 treasuryBefore = potato.balanceOf(TREASURY);
+
+        vm.prank(RECIPIENT);
+        (bool success, bytes memory reason) = address(buybacks).call(abi.encodeCall(IBuyback.buyback, ()));
+
+        assertFalse(success);
+        assertEq(_selector(reason), Errors.ProtocolPaused.selector);
+        assertEq(buybacks.buybackReserveEth(), reserveBefore);
+        assertEq(buybacks.lastBuybackBlock(), lastExecutionBlock);
+        assertEq(RECIPIENT.balance, callerBefore);
+        assertEq(potato.balanceOf(TREASURY), treasuryBefore);
+    }
+
+    function check_pausedDirectFundingRemainsAvailable(uint96 amount) public {
+        vm.assume(amount > 0);
+        vm.prank(GUARDIAN);
+        governance.setPaused(true);
+        uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 lastExecutionBlock = buybacks.lastBuybackBlock();
+        vm.deal(RECIPIENT, amount);
+
+        vm.prank(RECIPIENT);
+        buybacks.fundBuybackReserve{value: amount}();
+
+        assertEq(buybacks.buybackReserveEth(), reserveBefore + amount);
+        assertEq(buybacks.lastBuybackBlock(), lastExecutionBlock);
+        assertTrue(governance.paused());
     }
 
     function check_authorityCannotRelinquishBeforeGuardianClear() public {

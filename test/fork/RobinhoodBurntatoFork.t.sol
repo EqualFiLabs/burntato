@@ -238,6 +238,9 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
         assertEq(governance.authority(), config.finalAdmin);
         assertEq(claims.treasuryRecipient(), config.treasuryRecipient);
         assertEq(rewards.rewardAllocator(), config.rewardAllocator);
+        assertEq(config.buyback.maxSpend, 1 ether);
+        assertEq(config.buyback.callerRewardBps, 50);
+        assertEq(config.buyback.delayBlocks, 1);
         assertEq(hook.owner(), config.finalAdmin);
         assertEq(address(hook.poolManager()), dependencies.poolManager);
         assertEq(hook.token(), deployment.diamond);
@@ -376,6 +379,7 @@ contract RobinhoodBurntatoForkTest is Test, Permit2SignatureHelpers {
             _buybackAccounting(buybackLogs);
         assertEq(boughtBack, loggedBought);
         assertEq(grossSlice, reserveBefore);
+        assertEq(ethSpent, grossSlice * 10_000 / (10_000 + config.buyback.callerRewardBps));
         assertEq(callerReward, ethSpent * config.buyback.callerRewardBps / 10_000);
         assertEq(keeper.balance - keeperEthBefore, callerReward);
         assertEq(potato.balanceOf(config.treasuryRecipient) - treasuryPotatoBefore, boughtBack);

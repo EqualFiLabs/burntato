@@ -14,7 +14,7 @@ import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
-import {BuybackConfig, ProtocolConfig, Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
 
@@ -89,8 +89,12 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
 
         uint256 treasuryPotatoBefore = potato.balanceOf(treasury);
         uint256 keeperNativeBefore = keeper.balance;
-        vm.prank(keeper);
-        uint256 bootstrapBought = buybacks.buyback();
+        uint256 bootstrapBought;
+        for (uint256 index; index < 2; ++index) {
+            vm.prank(keeper);
+            bootstrapBought += buybacks.buyback();
+            if (index == 0) vm.roll(block.number + 1);
+        }
 
         assertGe(bootstrapBought, 6_700_000 ether);
         assertLe(bootstrapBought, 6_750_000 ether);
@@ -131,8 +135,6 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
     }
 
     function test_TreasuryBuybacksCrossAggressiveCurveBands() public {
-        vm.prank(authority);
-        buybacks.setBuybackConfig(BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 0}));
         market.launchMarket();
         uint256[5] memory grossTargets = [uint256(2 ether), 5 ether, 10 ether, 25 ether, 50 ether];
         uint256[5] memory minimumPotato =
@@ -155,10 +157,11 @@ contract DefaultLaunchEconomicsTest is DiamondTestSetup, Deployers, PositionMana
         vm.prank(funder);
         buybacks.fundBuybackReserve{value: grossTarget}();
 
-        uint256 calls = (grossTarget + 2 ether - 1) / 2 ether;
+        uint256 calls = (grossTarget + 1 ether - 1) / 1 ether;
         for (uint256 index; index < calls; ++index) {
             vm.prank(keeper);
             bought += buybacks.buyback();
+            if (index + 1 < calls) vm.roll(block.number + 1);
         }
         assertLe(buybacks.buybackReserveEth(), calls);
     }

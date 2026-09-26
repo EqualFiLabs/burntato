@@ -97,6 +97,9 @@ contract DeterministicDeploymentTest is Test {
 
     function test_DeploymentConfiguresCompleteGenesisState() public view {
         assertEq(config.protocol.roundEmissionBudget, 10_000 ether);
+        assertEq(config.buyback.maxSpend, 1 ether);
+        assertEq(config.buyback.callerRewardBps, 50);
+        assertEq(config.buyback.delayBlocks, 1);
         assertEq(IPoolManagerAuthority(deployment.poolManager).owner(), config.finalAdmin);
         assertEq(BurntatoSwapFeeHook(payable(deployment.hook)).owner(), config.finalAdmin);
         assertEq(deployment.admin, config.finalAdmin);

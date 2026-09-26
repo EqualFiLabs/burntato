@@ -1,10 +1,14 @@
 methods {
     function formalConfigurePauseState(address, address, bool, bool) external envfree;
+    function formalConfigureBuybackState(uint256, uint256) external envfree;
+    function formalInstallBuybackFundingSelector() external envfree;
     function authority() external returns (address) envfree;
     function guardian() external returns (address) envfree;
     function paused() external returns (bool) envfree;
     function totalSupply() external returns (uint256) envfree;
     function balanceOf(address) external returns (uint256) envfree;
+    function buybackReserveEth() external returns (uint256) envfree;
+    function lastBuybackBlock() external returns (uint256) envfree;
 }
 
 rule guardianCanPause(address admin, address guardian_) {
@@ -125,4 +129,53 @@ rule pausedProtocolMintRevertsWithoutSupplyChange(address admin, address recipie
     assert reverted, "paused protocol mint succeeds";
     assert totalSupply() == supplyBefore, "paused mint changes total supply";
     assert balanceOf(recipient) == balanceBefore, "paused mint changes recipient balance";
+}
+
+rule pausedBuybackRevertsWithoutAccountingChange(
+    address admin,
+    address caller,
+    address treasury,
+    uint256 reserve,
+    uint256 lastExecutionBlock
+) {
+    require admin != 0;
+    formalConfigurePauseState(admin, 0, true, true);
+    formalConfigureBuybackState(reserve, lastExecutionBlock);
+    uint256 treasuryBefore = balanceOf(treasury);
+
+    env e;
+    require e.msg.sender == caller;
+    require e.msg.value == 0;
+    buyback@withrevert(e);
+    bool reverted = lastReverted;
+
+    assert reverted, "paused buyback succeeds";
+    assert buybackReserveEth() == reserve, "paused buyback changes reserve";
+    assert lastBuybackBlock() == lastExecutionBlock, "paused buyback changes cooldown";
+    assert balanceOf(treasury) == treasuryBefore, "paused buyback changes Treasury POTATO";
+}
+
+rule pausedDirectFundingRemainsAvailable(
+    address admin,
+    address caller,
+    uint256 reserve,
+    uint256 amount,
+    uint256 lastExecutionBlock
+) {
+    require admin != 0;
+    require amount > 0;
+    require reserve < 340282366920938463463374607431768211456;
+    require amount < 340282366920938463463374607431768211456;
+    formalConfigurePauseState(admin, 0, true, true);
+    formalConfigureBuybackState(reserve, lastExecutionBlock);
+    formalInstallBuybackFundingSelector();
+
+    env e;
+    require e.msg.sender == caller;
+    require e.msg.value == amount;
+    fundBuybackReserve(e);
+
+    assert buybackReserveEth() == reserve + amount, "paused funding does not increase reserve exactly";
+    assert lastBuybackBlock() == lastExecutionBlock, "paused funding changes cooldown";
+    assert paused(), "paused funding clears pause";
 }

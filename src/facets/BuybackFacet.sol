@@ -63,6 +63,8 @@ contract BuybackFacet is IBuyback {
     }
 
     function buyback() external nonReentrant returns (uint256 amountOut) {
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
+
         LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
         if (!ms.launched) revert Errors.MarketNotLaunched();
 
@@ -90,7 +92,7 @@ contract BuybackFacet is IBuyback {
             bytes memory result = IPoolManager(ms.poolManager).unlock(abi.encode(requestedInput, treasuryRecipient));
             (ethSpent, amountOut) = abi.decode(result, (uint256, uint256));
         }
-        if (ethSpent == 0 || amountOut == 0) revert Errors.BuybackNoExecution();
+        if (ethSpent != requestedInput || amountOut == 0) revert Errors.BuybackNoExecution();
 
         uint256 callerReward = LibMath.mulBpsDown(ethSpent, config.callerRewardBps);
         bs.reserveEth += grossSlice - ethSpent - callerReward;
