@@ -53,7 +53,7 @@ The canonical launch profile is:
 | Recovery burn / Treasury POTATO split | 90% / 10% |
 | Bilateral hook fee | 1% |
 | Operator share of hook fee | 40% of the existing fee |
-| Maximum buyback slice | 2 ETH |
+| Maximum buyback slice | 1 ETH |
 | Buyback caller reward | 0.5% |
 | Buyback delay | 1 block |
 
@@ -224,10 +224,11 @@ remaining valid.
 The fixed aggressive profile opens at tick 170,280 and divides the allocation
 across 56 nested positions in six overlapping bands. The bands receive 2.5%,
 7.5%, 12.5%, 20%, 42.5%, and 15% of inventory. With the default 100 million
-POTATO allocation, an otherwise untouched pool, and the full 2 ETH gross
-bootstrap, the first buyback acquires approximately 6.7 million POTATO. At the
-resulting pool state, selling a fully vested first-holder emission of 1,000
-POTATO returns approximately 0.000642 ETH after the default bilateral hook fee.
+POTATO allocation, an otherwise untouched pool, and a 2 ETH gross bootstrap
+across two capped calls, the protocol acquires approximately 6.7 million
+POTATO. At the resulting pool state, selling a fully vested first-holder
+emission of 1,000 POTATO returns approximately 0.000642 ETH after the default
+bilateral hook fee.
 That is below the 0.001 ETH the corresponding 0.01 ETH game purchase contributes
 to the buyback reserve. These figures describe the deterministic default
 bootstrap path, not a minimum-output or market-price guarantee; prior pool
@@ -289,7 +290,7 @@ Diamond finalization. Plain native transfers to the Diamond increase its balance
 but do not enter reserve accounting.
 
 After launch, anyone may call parameterless `buyback()`. The governed defaults
-select at most 2 ETH gross, reward the caller at 50 BPS of actual ETH spent, and
+select at most 1 ETH gross, reward the caller at 50 BPS of actual ETH spent, and
 enforce a one-block delay. The caller-reward rate may be configured from 0
 through 100 BPS:
 
@@ -297,7 +298,7 @@ through 100 BPS:
 grossSlice = min(buybackReserveEth, maxSpend)
 requestedInput = floor(grossSlice * 10_000 / (10_000 + callerRewardBps))
 (ethSpent, potatoBought) = canonicalSwap(requestedInput)
-require ethSpent > 0 and potatoBought > 0
+require ethSpent == requestedInput and potatoBought > 0
 callerReward = floor(ethSpent * callerRewardBps / 10_000)
 reserveRestored = grossSlice - ethSpent - callerReward
 ```
@@ -305,13 +306,11 @@ reserveRestored = grossSlice - ethSpent - callerReward
 The Diamond executes an exact-input native-ETH-to-POTATO swap against only the
 canonical pool with `sqrtPriceLimitX96 = MIN_SQRT_PRICE + 1`. It deliberately
 uses no quote, TWAP, user minimum output, deadline, or offchain sequencing.
-Public execution and MEV exposure remain part of the demand mechanism. If the
-pool partially fills, every unspent base unit outside actual spend and its
-proportional reward returns to the tracked reserve. A zero-spend or zero-output
-attempt reverts atomically, preserving reserve, caller balance, and cooldown.
-The extreme terminal-price path also reverts atomically. This removes the
-reserve leakage present when compensation was calculated from requested input
-without imposing a full-fill or user-facing slippage requirement.
+Public execution and MEV exposure remain part of the demand mechanism. A
+partial fill, zero spend, or zero output reverts atomically, preserving the
+PoolManager state, reserve, caller balance, Treasury balance, and cooldown. The
+extreme terminal-price path therefore also reverts atomically. The global
+emergency pause blocks execution while leaving direct reserve funding live.
 
 Buyback swaps bypass the bilateral hook fee and send purchased POTATO directly
 from PoolManager to the current Diamond Treasury recipient. Treasury may hold,

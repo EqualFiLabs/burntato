@@ -12,7 +12,7 @@ The 100 million inventory is intentional depth, not circulating user supply. At 
 
 - Launch inventory: 100,000,000 POTATO; modeled as 56 permanent Uniswap v4 positions across six bands.
 - Opening pool tick: 170280; opening spot quote is 4.02906e-8 ETH per POTATO.
-- Launch bootstrap: 5.000 ETH net into the pool, requiring about 5.025 ETH of reserve across 3 calls at the configured caller reward and gross-slice cap.
+- Launch bootstrap: 5.000 ETH net into the pool, requiring about 5.025 ETH of reserve across 6 calls at the configured caller reward and gross-slice cap.
 - Grab price: 0.010000 ETH, increasing 10% after each Grab.
 - The first ticket of every round goes entirely to the next round Winner reserve. Later tickets split 25% current Winner, 2% next Winner, 40% Recovery, 5% Treasury, 13% buyback, and 15% Operators.
 - Round emission budget: 10,000 POTATO. Each holder opportunity earns 10% of remaining emissions multiplied by its vesting fraction.
@@ -250,7 +250,7 @@ Those break-even values are arithmetic, not expected round lengths. Sponsorship 
 ## Frozen release decision
 
 1. Fix the **aggressive** profile, 100,000,000 POTATO genesis inventory, 10,000 POTATO round budget, and current Grab allocation as the release candidate.
-2. Bootstrap with 5 ETH net into the pool while external buys remain disabled. At the configured caller reward this requires approximately 5.025 ETH of funded reserve and 3 permissionless calls.
+2. Bootstrap with 5 ETH net into the pool while external buys remain disabled. At the configured caller reward this requires approximately 5.025 ETH of funded reserve and 6 permissionless calls.
 3. Cap the planned sponsorship program at 3 ETH and use 0.05 ETH Winner plus 0.05 ETH Recovery as the baseline announced round.
 4. Keep public-buy enablement as a deliberate governance decision based on observed sell capacity and fork quotes rather than a modeled round number.
 5. Treat keeper execution and exact fork reproduction as release gates. A funded reserve does nothing until `buyback()` is called, and continuous-model quotes do not replace v4 execution evidence.

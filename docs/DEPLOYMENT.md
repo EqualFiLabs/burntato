@@ -65,7 +65,7 @@ on Robinhood and is not comparable to the manifest's L2 block height.
 | Recovery split | 9,000 burn / 1,000 Treasury BPS |
 | Hook fee | 100 BPS |
 | Operator share of hook fee | Disabled locally; required Robinhood input |
-| Buyback cap / reward / delay | 2 ETH / 50 BPS / 1 block |
+| Buyback cap / reward / delay | 1 ETH / 50 BPS / 1 block |
 | Tick spacing | 60 |
 | Initial tick | 170,280 |
 | Genesis POTATO launch allocation | 100,000,000 POTATO across 56 locked positions |
@@ -159,8 +159,8 @@ forge script script/InitializeBurntato.s.sol:InitializeBurntato \
 ## Initial buyback bootstrap
 
 After the token-only market has launched and before game purchases are
-initialized, an operator may seed initial sell-side liquidity with one direct
-reserve contribution followed by one permissionless buyback:
+initialized, an operator may fund the complete bootstrap reserve and execute
+the first capped permissionless buyback:
 
 ```bash
 BURNTATO_DIAMOND="<diamond>" \
@@ -170,12 +170,28 @@ forge script script/BootstrapBurntatoBuyback.s.sol:BootstrapBurntatoBuyback \
   --rpc-url "<rpc-url>" --broadcast
 ```
 
-No amount is hardcoded. The chosen amount must be positive and no greater than
-the configured `maxSpend`. The helper refuses an unlaunched market, initialized
-game purchases, a prior buyback, or unrelated reserve contents. Funding and
-execution are deliberately separate transactions. If execution is interrupted
-after funding, the same command resumes at the buyback only when the reserve
-still equals the requested amount. It does not change the external-buy gate.
+No amount is hardcoded. The release-candidate target is approximately 5.025 ETH
+of reserve for approximately 5 ETH of pool input. The contribution may exceed
+`maxSpend`; the contract limits each execution to the configured 1 ETH gross
+slice. The helper refuses an unlaunched market, initialized game purchases, a
+prior buyback, or unrelated reserve contents. Funding and execution are
+deliberately separate transactions. If execution is interrupted after funding,
+the same command resumes at the buyback only when the reserve still equals the
+requested amount. It does not change the external-buy gate.
+
+Execute each remaining slice in a later block with the execution-only helper:
+
+```bash
+BURNTATO_DIAMOND="<diamond>" \
+PRIVATE_KEY="<broadcaster-key>" \
+forge script script/ExecuteBurntatoBuyback.s.sol:ExecuteBurntatoBuyback \
+  --rpc-url "<rpc-url>" --broadcast
+```
+
+For the release-candidate reserve, run this five times after the initial helper,
+one transaction per eligible block. It never funds the reserve, and it refuses
+an unlaunched market, a global pause, or an empty reserve. Integer rounding may
+leave a negligible tracked remainder.
 
 ## Persistent Robinhood fork
 

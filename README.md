@@ -43,11 +43,13 @@ The buyback share accumulates as dedicated Diamond ETH, and anyone may add a
 positive amount directly through the tracked reserve funding entry point. After
 the canonical market launches, anyone may spend a governed reserve slice to buy
 POTATO for the current Treasury and receive a reward based only on actual ETH
-spent. The installed facet caps the caller-reward rate at 1%; that ceiling
-becomes permanent when Diamond cuts are finalized. A zero-execution attempt
-reverts without consuming reserve or cooldown. External pool buys start
-disabled, but sells and the fee-free protocol buyback remain open; hook
-governance can toggle external buys repeatedly.
+spent. The default gross slice is 1 ETH, and execution requires the canonical
+swap to spend the complete requested input. The installed facet caps the
+caller-reward rate at 1%; that ceiling becomes permanent when Diamond cuts are
+finalized. A zero-execution or partial-fill attempt reverts without consuming
+reserve or cooldown. External pool buys start disabled, but sells remain open
+and the fee-free protocol buyback remains open while the protocol is unpaused;
+hook governance can toggle external buys repeatedly.
 
 Recovery commitments normally remain locked through their target round. If an
 activated predecessor remains completely holderless, its target commitments may
@@ -67,7 +69,7 @@ The guardian can activate one global emergency pause but cannot clear it. While
 active, the pause stops purchases, Recovery commitments, holder-emission
 materialization and protocol minting, round settlement, and every Diamond claim.
 It leaves ordinary token actions and self-burning, stalled-Recovery withdrawals,
-canonical market launch and swaps, buybacks and reserve funding, reward
+canonical market launch and swaps, reserve funding, reward
 scheduling, views, and administration live. Protocol finalization permanently
 disables only future Diamond cuts; it does not disable economic, Treasury, hook,
 PoolManager, pause, or authority administration. Diamond authority can be

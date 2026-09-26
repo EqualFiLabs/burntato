@@ -47,8 +47,8 @@ commitments, matured holder-emission materialization and central protocol
 minting, round settlement, and all Diamond Winner, Recovery, Treasury ETH, and
 Treasury POTATO claims. The pause deliberately does not stop ordinary POTATO
 approvals, Permit, allowed transfers, self-burning, an already-eligible stalled
-Recovery withdrawal, canonical market launch and swaps, buybacks or direct
-reserve funding, Treasury reward scheduling, views, or governance
+Recovery withdrawal, canonical market launch and swaps, direct reserve
+funding, Treasury reward scheduling, views, or governance
 administration.
 
 Authority renunciation is guarded so an uninitialized game or containment
