@@ -715,3 +715,51 @@ was retained because its modeled five-Grab buyback exceeds an immediate sale
 of all five fully vested emissions with a wider margin than the smaller seeds.
 This freezes the candidate for fork and private-testnet qualification; it is
 not a Robinhood mainnet deployment or an independent third-party audit.
+
+## FWA-aligned buyback execution
+
+Date: September 26, 2026
+
+Candidate before this evidence entry: `112c61e`. The default permissionless
+buyback now caps each gross reserve slice at 1 ETH, retains the 50 BPS caller
+reward and one-block delay, and requires the canonical pool to consume the
+complete requested ETH input. The protocol-wide pause blocks buyback execution
+before market, reserve, or cooldown validation, while direct reserve funding
+remains available during an incident. The bootstrap helper funds the complete
+approximately 5.025 ETH gross launch reserve once and executes the first slice;
+a separate execution-only helper performs each of the five later slices without
+funding again.
+
+The 5 ETH net launch bootstrap therefore requires six calls under the 1 ETH
+gross cap. Buybacks remain permissionless and deliberately retain the existing
+FWA-compatible absence of a minimum POTATO output or TWAP bound. Exact-fill
+enforcement does not remove sandwich exposure after public buys open. The
+accepted containment is the smaller per-call cap plus the authority-controlled
+global pause, with the Diamond upgrade path available until cuts are finalized.
+
+The checked-in model configuration SHA-256 is
+`62758b5ed63edaeb3ec2aaa42c77615a038e687ec1433f88d01e4e66e2b3903a`;
+the generated report SHA-256 is
+`73a58eaaa997963f0d147d54cd4b0aa1928bfe5378ac5e409089bc30dc1348d9`.
+
+| Scope | Command or method | Result |
+| --- | --- | --- |
+| Complete local suite | `forge test -j 1` | 238 passed, 0 failed, 7 configured-network skips |
+| Buyback execution unit | `forge test --match-path test/unit/BuybackExecution.t.sol -vv` | 2 passed, including atomic partial-fill rollback and pause precedence |
+| Canonical market lifecycle | `forge test --match-path test/integration/CanonicalMarketLifecycle.t.sol -j 1` | 36 passed, including paused funding and authority recovery |
+| Default launch economics | `forge test --match-path test/integration/DefaultLaunchEconomics.t.sol -j 1` | 2 passed across the real local v4 lifecycle |
+| Canonical market invariant | `forge test --match-path test/invariant/CanonicalMarketInvariant.t.sol -j 1` | 2 properties passed across 12,800 calls with zero handler reverts |
+| Buyback bootstrap | `forge test --match-path test/deployment/BuybackBootstrap.t.sol -vv` | 8 passed, including complete-reserve funding and resumable execution |
+| Strict pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the configured private archive RPC | 4 passed; no skips |
+| Model invariants | `node analysis/potato-market-model/model.test.mjs` | Passed with the six-call bootstrap pinned |
+| Format and diff | `forge fmt --check` and `git diff --check` | Passed |
+| Formal source compilation | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` and `forge inspect formal/certora/harness/BurntatoPauseHarness.sol:BurntatoPauseHarness abi` | Solidity properties and harness compiled successfully |
+| Formal solvers | `formal/scripts/run-halmos.sh` and local Certora preflight | Not executed because Halmos, Certora, Java, and the required Certora compiler were unavailable |
+
+Focused review covered Diamond selector and storage compatibility, pause and
+authority boundaries, PoolManager callback settlement, POTATO movement,
+full-fill rollback, gross-to-net reward rounding, bootstrap resumability, and
+denial-of-service paths. No new release-scope finding remained. The existing
+minimum-output and MEV boundary above remains an explicit product decision.
+This is model, local Foundry, and pinned-fork evidence; it is not a public-
+network deployment, completed formal proof, or independent third-party audit.
