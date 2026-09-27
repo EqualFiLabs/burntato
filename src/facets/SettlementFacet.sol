@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
+// ============================================================================
+//                                  BURNTATO
+//                         Grab it. Hold it. Burn it.
+//                          https://burntato.fun
+//                              EqualFi Labs
+// ============================================================================
 pragma solidity 0.8.26;
 
 import {ISettlement} from "../interfaces/ISettlement.sol";
