@@ -13,6 +13,7 @@ methods {
 }
 
 rule bpsRoundingBounds(uint256 amount, uint256 bps) {
+    require amount <= max_uint128;
     require bps <= 10000;
 
     uint256 down = mulBpsDown(amount, bps);
@@ -25,6 +26,8 @@ rule bpsRoundingBounds(uint256 amount, uint256 bps) {
 }
 
 rule bpsBoundaryIdentities(uint256 amount) {
+    require amount <= max_uint128;
+
     assert mulBpsDown(amount, 0) == 0, "zero BPS rounded down is not zero";
     assert mulBpsUp(amount, 0) == 0, "zero BPS rounded up is not zero";
     assert mulBpsDown(amount, 10000) == amount, "full BPS rounded down is not identity";
@@ -39,6 +42,7 @@ rule purchaseSplitConservesEveryWei(
     uint256 buybackBps,
     uint256 operatorBps
 ) {
+    require amount <= max_uint128;
     require winnerBps <= 10000;
     require nextRoundWinnerBps <= 10000;
     require recoveryBps <= 10000;
@@ -67,6 +71,7 @@ rule purchaseDustBelongsToTreasury(
     uint256 buybackBps,
     uint256 operatorBps
 ) {
+    require amount <= max_uint128;
     require winnerBps <= 10000;
     require nextRoundWinnerBps <= 10000;
     require recoveryBps <= 10000;
@@ -83,13 +88,16 @@ rule purchaseDustBelongsToTreasury(
     winner, nextRoundWinner, recovery, treasury, buyback, operator =
         purchaseSplit(amount, winnerBps, nextRoundWinnerBps, recoveryBps, buybackBps, operatorBps);
 
-    uint256 treasuryBps = 10000 - winnerBps - nextRoundWinnerBps - recoveryBps - buybackBps - operatorBps;
-    uint256 nominalTreasury = mulBpsDown(amount, treasuryBps);
+    mathint treasuryBps = 10000 - winnerBps - nextRoundWinnerBps - recoveryBps - buybackBps - operatorBps;
+    uint256 nominalTreasury = mulBpsDown(amount, require_uint256(treasuryBps));
     assert treasury >= nominalTreasury, "purchase dust is not assigned to Treasury";
     assert treasury - nominalTreasury <= 5, "purchase dust exceeds five floor remainders";
 }
 
 rule linearEarnedBoundsAndSaturates(uint256 maximum, uint256 heldSeconds, uint256 vestingDuration) {
+    require maximum <= max_uint128;
+    require heldSeconds <= max_uint128;
+    require vestingDuration <= max_uint128;
     require vestingDuration > 0;
 
     uint256 earned = linearEarned(maximum, heldSeconds, vestingDuration);
@@ -99,6 +107,10 @@ rule linearEarnedBoundsAndSaturates(uint256 maximum, uint256 heldSeconds, uint25
 }
 
 rule linearEarnedIsMonotonic(uint256 maximum, uint256 earlier, uint256 later, uint256 vestingDuration) {
+    require maximum <= max_uint128;
+    require earlier <= max_uint128;
+    require later <= max_uint128;
+    require vestingDuration <= max_uint128;
     require vestingDuration > 0;
     require earlier <= later;
 
@@ -141,6 +153,7 @@ rule diminishingTimeoutIsMonotonic(
 }
 
 rule recoverySplitConserves(uint256 amount, uint256 treasuryBps) {
+    require amount <= max_uint128;
     require treasuryBps <= 10000;
 
     uint256 burned;
@@ -153,6 +166,8 @@ rule recoverySplitConserves(uint256 amount, uint256 treasuryBps) {
 }
 
 rule buybackQuoteConservesGrossSlice(uint256 reserve, uint256 maxSpend, uint256 callerRewardBps) {
+    require reserve <= max_uint128;
+    require maxSpend <= max_uint128;
     require callerRewardBps <= 100;
 
     uint256 grossSlice;
@@ -173,6 +188,8 @@ rule finalRecoveryClaimGetsExactRemainder(
     uint256 recoveryPaid,
     uint256 committed
 ) {
+    require recoveryPool <= max_uint128;
+    require totalCommitted <= max_uint128;
     require totalCommitted > 0;
     require claimedCommitments <= totalCommitted;
     require committed > 0;
@@ -192,6 +209,8 @@ rule ordinaryRecoveryClaimCannotOverpay(
     uint256 recoveryPaid,
     uint256 committed
 ) {
+    require recoveryPool <= max_uint128;
+    require totalCommitted <= max_uint128;
     require totalCommitted > 0;
     require claimedCommitments <= totalCommitted;
     require committed > 0;

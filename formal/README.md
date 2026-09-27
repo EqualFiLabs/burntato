@@ -136,14 +136,17 @@ Never describe a submitted or still-running job as verified.
 
 ## Reproducibility
 
-The Certora arithmetic harness uses the production `uint256` domain. Activation
-and several Halmos funding and execution properties use `uint96` inputs. The
-Halmos pause-mint property keeps the mint amount symbolic within `uint96` and
-uses one fixed nonzero recipient because Solady's hashed balance slot is not
-concrete for a fully symbolic address in Halmos. The Certora funding properties
-bound both starting reserve and positive contribution below `2^128` to make
-addition non-overflowing. These bounds are explicit proof assumptions, not
-Solidity type changes.
+The Certora arithmetic harness preserves the production `uint256` ABI. Rules
+that multiply two unconstrained values explicitly bound multiplicative operands
+to `max_uint128`, keeping the proof in OpenZeppelin `mulDiv`'s exact non-512-bit
+branch. Certora otherwise over-approximates the assembly branch and produces
+spurious counterexamples. Activation and several Halmos funding and execution
+properties use `uint96` inputs. The Halmos pause-mint property keeps the mint
+amount symbolic within `uint96` and uses one fixed nonzero recipient because
+Solady's hashed balance slot is not concrete for a fully symbolic address in
+Halmos. The Certora funding properties bound both starting reserve and positive
+contribution below `2^128` to make addition non-overflowing. These bounds are
+explicit proof assumptions, not Solidity type changes.
 
 External PoolManager behavior in the buyback execution proof is summarized by
 a deterministic manager boundary with success and failure modes. Uniswap v4
