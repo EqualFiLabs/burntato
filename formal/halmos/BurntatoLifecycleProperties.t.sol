@@ -25,6 +25,10 @@ import {Errors} from "../../src/shared/Errors.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig, RewardSchedule, Round} from "../../src/shared/Types.sol";
 import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
 
+contract FormalNativeReceiver {
+    receive() external payable {}
+}
+
 contract BurntatoLifecycleProperties is Test {
     uint256 private constant PRICE = 10_000;
     uint256 private constant COMMITMENT = 100;
@@ -43,6 +47,7 @@ contract BurntatoLifecycleProperties is Test {
     IRecovery private recovery;
     ISettlement private settlement;
     ITreasuryRewards private rewards;
+    FormalNativeReceiver private receiver;
 
     function setUp() public {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
@@ -72,6 +77,7 @@ contract BurntatoLifecycleProperties is Test {
         recovery = IRecovery(address(diamond));
         settlement = ISettlement(address(diamond));
         rewards = ITreasuryRewards(address(diamond));
+        receiver = new FormalNativeReceiver();
         governance.initializePurchases();
     }
 
@@ -80,20 +86,20 @@ contract BurntatoLifecycleProperties is Test {
         _buy(BUYER_TWO);
         Round memory round = game.getRound(1);
         assertEq(round.winnerPool, 2_500);
-        uint256 winnerBefore = BUYER_TWO.balance;
+        uint256 winnerBefore = address(receiver).balance;
 
         vm.warp(round.deadline);
         settlement.settleRound();
         vm.prank(BUYER_TWO);
-        uint256 claimed = claims.claimWinner(1, BUYER_TWO);
+        uint256 claimed = claims.claimWinner(1, address(receiver));
 
         assertEq(claimed, 2_500);
-        assertEq(BUYER_TWO.balance, winnerBefore + claimed);
+        assertEq(address(receiver).balance, winnerBefore + claimed);
         assertTrue(claims.winnerClaimed(1));
 
         vm.prank(BUYER_TWO);
         (bool replayed, bytes memory reason) =
-            address(claims).call(abi.encodeCall(IClaims.claimWinner, (uint256(1), BUYER_TWO)));
+            address(claims).call(abi.encodeCall(IClaims.claimWinner, (uint256(1), address(receiver))));
         assertFalse(replayed);
         assertEq(_selector(reason), Errors.AlreadyClaimed.selector);
     }
@@ -126,16 +132,16 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(claims.treasuryPotatoAvailable(), treasuryAvailableBefore + 10);
         assertEq(claims.claimableRecovery(2, COMMITTER), 8_000);
 
-        uint256 committerEthBefore = COMMITTER.balance;
+        uint256 committerEthBefore = address(receiver).balance;
         vm.prank(COMMITTER);
-        uint256 claimed = claims.claimRecovery(2, COMMITTER);
+        uint256 claimed = claims.claimRecovery(2, address(receiver));
         assertEq(claimed, 8_000);
-        assertEq(COMMITTER.balance, committerEthBefore + claimed);
+        assertEq(address(receiver).balance, committerEthBefore + claimed);
         assertEq(claims.claimableRecovery(2, COMMITTER), 0);
         assertTrue(claims.recoveryClaimed(2, COMMITTER));
     }
 
-    function check_activeRoundKeepsSnapshotAndNextRoundUsesNewConfig() public {
+    function check_snapshottedRoundKeepsConfigAndLaterSnapshotUsesNewConfig() public {
         _buy(BUYER_ONE);
         Round memory activeBefore = game.getRound(1);
         assertEq(activeBefore.config.startingPrice, PRICE);
@@ -149,9 +155,33 @@ contract BurntatoLifecycleProperties is Test {
         vm.warp(activeAfter.deadline);
         settlement.settleRound();
         Round memory next = game.getRound(2);
-        assertEq(next.config.startingPrice, PRICE * 2);
-        assertEq(next.config.roundTimeout, 200);
-        assertEq(next.nextPrice, PRICE * 2);
+        assertEq(next.config.startingPrice, PRICE);
+        assertEq(next.config.roundTimeout, 100);
+        assertEq(next.nextPrice, PRICE);
+
+        _buy(BUYER_ONE);
+        vm.warp(game.getRound(2).deadline);
+        settlement.settleRound();
+        Round memory later = game.getRound(3);
+        assertEq(later.config.startingPrice, PRICE * 2);
+        assertEq(later.config.roundTimeout, 200);
+        assertEq(later.nextPrice, PRICE * 2);
+    }
+
+    function test_WinnerClaimWitness() public {
+        check_winnerClaimPaysExactPoolOnce();
+    }
+
+    function test_RecoveryClaimWitness() public {
+        check_singleRecoveryCommitmentReceivesExactPoolAndBurnsExactly();
+    }
+
+    function test_ConfigSnapshotWitness() public {
+        check_snapshottedRoundKeepsConfigAndLaterSnapshotUsesNewConfig();
+    }
+
+    function test_RewardScheduleWitness() public {
+        check_rewardAllocationCancellationConservesInventory();
     }
 
     function check_rewardAllocationCancellationConservesInventory() public {

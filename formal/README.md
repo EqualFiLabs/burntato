@@ -100,8 +100,8 @@ FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv
 formal/scripts/run-halmos.sh
 ```
 
-The first command is a compilation check; Foundry does not execute `check_`
-functions. The second command is the proof run. The checked command uses
+The first command compiles every `check_` property and executes the concrete
+lifecycle witness wrappers. The second command is the proof run. The checked command uses
 pessimistic assertion handling and bounded solver timeouts. The Halmos suite is
 intentionally limited to rules that close without timeout; full conservation,
 rounding, and monotonicity arithmetic is assigned to Certora. Review every
