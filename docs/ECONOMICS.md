@@ -304,13 +304,11 @@ reserveRestored = grossSlice - ethSpent - callerReward
 ```
 
 The Diamond executes an exact-input native-ETH-to-POTATO swap against only the
-canonical pool with `sqrtPriceLimitX96 = MIN_SQRT_PRICE + 1`. It deliberately
-uses no quote, TWAP, user minimum output, deadline, or offchain sequencing.
-Public execution and MEV exposure remain part of the demand mechanism. A
-partial fill, zero spend, or zero output reverts atomically, preserving the
-PoolManager state, reserve, caller balance, Treasury balance, and cooldown. The
-extreme terminal-price path therefore also reverts atomically. The global
-emergency pause blocks execution while leaving direct reserve funding live.
+canonical pool with `sqrtPriceLimitX96 = MIN_SQRT_PRICE + 1`. A partial fill,
+zero spend, or zero output reverts atomically, preserving the PoolManager state,
+reserve, caller balance, Treasury balance, and cooldown. The extreme
+terminal-price path therefore also reverts atomically. The global emergency
+pause blocks execution while leaving direct reserve funding live.
 
 Buyback swaps bypass the bilateral hook fee and send purchased POTATO directly
 from PoolManager to the current Diamond Treasury recipient. Treasury may hold,

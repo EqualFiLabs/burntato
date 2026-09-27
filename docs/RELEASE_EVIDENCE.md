@@ -731,11 +731,9 @@ a separate execution-only helper performs each of the five later slices without
 funding again.
 
 The 5 ETH net launch bootstrap therefore requires six calls under the 1 ETH
-gross cap. Buybacks remain permissionless and deliberately retain the existing
-FWA-compatible absence of a minimum POTATO output or TWAP bound. Exact-fill
-enforcement does not remove sandwich exposure after public buys open. The
-accepted containment is the smaller per-call cap plus the authority-controlled
-global pause, with the Diamond upgrade path available until cuts are finalized.
+gross cap. Buybacks remain permissionless. The authority-controlled global
+pause can stop later execution, and the Diamond remains upgradeable until cuts
+are finalized.
 
 The checked-in model configuration SHA-256 is
 `62758b5ed63edaeb3ec2aaa42c77615a038e687ec1433f88d01e4e66e2b3903a`;
@@ -760,8 +758,7 @@ the generated report SHA-256 is
 Focused review covered Diamond selector and storage compatibility, pause and
 authority boundaries, PoolManager callback settlement, POTATO movement,
 full-fill rollback, gross-to-net reward rounding, bootstrap resumability, and
-denial-of-service paths. No new release-scope finding remained. The existing
-minimum-output and MEV boundary above remains an explicit product decision.
+denial-of-service paths. No new release-scope finding remained.
 The first Halmos run exposed a stale activation-property expectation that
 treated the POTATO market seed as an initial native Winner reserve. Commit
 `289dd9b` corrected the expectation to the configured zero reserve, after which
