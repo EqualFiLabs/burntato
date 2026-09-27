@@ -307,6 +307,13 @@ BURNTATO_TREASURY
 BURNTATO_REWARD_ALLOCATOR
 ```
 
+The existing EqualFi Labs role separation is recorded in
+`deployments/equalfi-roles-robinhood-4663.json`. The record preserves the
+Statics Genesis deployer, governance Safe, Treasury Safe, and the absence of a
+timelock for that standalone deployment. It is a public operational reference,
+not an implicit Burntato role assignment; the Burntato roles remain explicit
+deployment inputs.
+
 `BURNTATO_DEPLOYER` must equal the address derived from `PRIVATE_KEY` during
 deployment. The final admin, Treasury, and reward allocator must be nonzero.
 The guardian may be the zero address. Mainnet does not accept environment

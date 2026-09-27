@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "network": "Robinhood Chain",
+  "chainId": 4663,
+  "scope": "EqualFi Labs roles for the deployed Statics standalone Genesis system",
+  "source": {
+    "repository": "https://github.com/EqualFiLabs/statics",
+    "referenceManifest": "deployments/robinhood-mainnet-genesis.json",
+    "launchSourceCommit": "43018f109006aa2c2eef2808adc2aa74dfc9a6d4"
+  },
+  "verification": {
+    "blockNumber": 74053433,
+    "verifiedAt": "2026-09-27T15:48:07Z",
+    "governanceOwnershipAccepted": true,
+    "pendingOwnershipTransfers": false
+  },
+  "roles": {
+    "deployer": {
+      "address": "0x4CF8e4D37F561815F208565a5b6Ca8a85b143205",
+      "accountType": "eoa",
+      "purpose": "historical Statics Genesis deployer and Doppler integrator"
+    },
+    "governance": {
+      "address": "0x603A8A2f22ac1d61E9c932A4F6Fa23170CEcb9Ff",
+      "accountType": "safe",
+      "purpose": "direct owner of the deployed Genesis governance-controlled contracts"
+    },
+    "treasury": {
+      "address": "0x0Ce4140f3Ab03024623a75F248D467912C7E1725",
+      "accountType": "safe",
+      "purpose": "Statics treasury and operations"
+    },
+    "timelock": {
+      "address": null,
+      "status": "not deployed for the standalone Statics Genesis system"
+    }
+  }
+}
