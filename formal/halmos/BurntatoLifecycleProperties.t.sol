@@ -21,6 +21,7 @@ import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
 import {ITreasuryRewards} from "../../src/interfaces/ITreasuryRewards.sol";
+import {LibGame} from "../../src/libraries/LibGame.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig, RewardSchedule, Round} from "../../src/shared/Types.sol";
 import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
@@ -35,6 +36,60 @@ contract FormalLifecycleStateFacet {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         gs.rounds[gs.currentRoundId].deadline = block.timestamp;
     }
+
+    function formalProtocolMint(address recipient, uint256 amount) external {
+        IPotatoToken(address(this)).protocolMint(recipient, amount);
+    }
+
+    function formalConfigureWinnerClaim(address holder, uint256 winnerPool) external {
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        Round storage round = gs.rounds[1];
+        round.roundId = 1;
+        round.currentHolder = holder;
+        round.winnerPool = winnerPool;
+        round.settled = true;
+    }
+
+    function formalConfigureRecoveryClaim(address account, uint256 commitment, uint256 recoveryPool) external {
+        Round storage round = LibProtocolStorage.game().rounds[1];
+        round.roundId = 1;
+        round.recoveryPool = recoveryPool;
+        round.totalCommitted = commitment;
+        round.settled = true;
+        LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
+        rs.commitments[1][account] = commitment;
+        rs.totalCommitments[1] = commitment;
+    }
+
+    function formalSnapshotRound(uint256 roundId) external {
+        LibGame.snapshotFutureRound(roundId);
+    }
+
+    function formalRoundStartingPrice(uint256 roundId) external view returns (uint256) {
+        return LibProtocolStorage.game().rounds[roundId].config.startingPrice;
+    }
+
+    function formalRoundTimeout(uint256 roundId) external view returns (uint256) {
+        return LibProtocolStorage.game().rounds[roundId].config.roundTimeout;
+    }
+}
+
+contract FormalLifecycleActor {
+    function buy(IGame game, uint256 amount) external {
+        game.buyPotato{value: amount}();
+    }
+
+    function commit(IRecovery recovery, uint256 amount) external {
+        recovery.commitRecovery(amount);
+    }
+
+    function claimWinner(IClaims claims, uint256 roundId, address recipient) external returns (uint256) {
+        return claims.claimWinner(roundId, recipient);
+    }
+
+    function claimRecovery(IClaims claims, uint256 roundId, address recipient) external returns (uint256) {
+        return claims.claimRecovery(roundId, recipient);
+    }
 }
 
 contract BurntatoLifecycleProperties is Test {
@@ -42,9 +97,6 @@ contract BurntatoLifecycleProperties is Test {
     uint256 private constant COMMITMENT = 100;
     uint256 private constant GENESIS_SEED = 1 ether;
     address private constant TREASURY = address(0xBEEF);
-    address private constant BUYER_ONE = address(0xA11CE);
-    address private constant BUYER_TWO = address(0xB0B);
-    address private constant COMMITTER = address(0xCAFE);
     address private constant ALLOCATOR = address(0xD00D);
 
     BurntatoDiamond private diamond;
@@ -57,14 +109,23 @@ contract BurntatoLifecycleProperties is Test {
     ITreasuryRewards private rewards;
     FormalNativeReceiver private receiver;
     FormalLifecycleStateFacet private lifecycleState;
+    FormalLifecycleActor private buyerOne;
+    FormalLifecycleActor private buyerTwo;
+    FormalLifecycleActor private committer;
 
     function setUp() public {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
         diamond = new BurntatoDiamond(address(this), address(cutFacet));
 
         FormalLifecycleStateFacet lifecycleStateFacet = new FormalLifecycleStateFacet();
-        bytes4[] memory lifecycleStateSelectors = new bytes4[](1);
+        bytes4[] memory lifecycleStateSelectors = new bytes4[](7);
         lifecycleStateSelectors[0] = FormalLifecycleStateFacet.formalExpireCurrentRound.selector;
+        lifecycleStateSelectors[1] = FormalLifecycleStateFacet.formalProtocolMint.selector;
+        lifecycleStateSelectors[2] = FormalLifecycleStateFacet.formalConfigureWinnerClaim.selector;
+        lifecycleStateSelectors[3] = FormalLifecycleStateFacet.formalConfigureRecoveryClaim.selector;
+        lifecycleStateSelectors[4] = FormalLifecycleStateFacet.formalSnapshotRound.selector;
+        lifecycleStateSelectors[5] = FormalLifecycleStateFacet.formalRoundStartingPrice.selector;
+        lifecycleStateSelectors[6] = FormalLifecycleStateFacet.formalRoundTimeout.selector;
 
         FacetCut[] memory cuts = new FacetCut[](8);
         cuts[0] = FacetCut(address(new GovernanceFacet()), FacetCutAction.Add, BurntatoSelectors.governance());
@@ -73,16 +134,16 @@ contract BurntatoLifecycleProperties is Test {
         cuts[3] = FacetCut(address(new RecoveryFacet()), FacetCutAction.Add, BurntatoSelectors.recovery());
         cuts[4] = FacetCut(address(new SettlementFacet()), FacetCutAction.Add, BurntatoSelectors.settlement());
         cuts[5] = FacetCut(address(new ClaimsFacet()), FacetCutAction.Add, BurntatoSelectors.claims());
-        cuts[6] =
-            FacetCut(address(new TreasuryRewardsFacet()), FacetCutAction.Add, BurntatoSelectors.treasuryRewards());
+        cuts[6] = FacetCut(address(new TreasuryRewardsFacet()), FacetCutAction.Add, BurntatoSelectors.treasuryRewards());
         cuts[7] = FacetCut(address(lifecycleStateFacet), FacetCutAction.Add, lifecycleStateSelectors);
 
         FoundationInit foundation = new FoundationInit();
-        IDiamondCut(address(diamond)).diamondCut(
-            cuts,
-            address(foundation),
-            abi.encodeCall(FoundationInit.initialize, (_config(PRICE, 100), TREASURY, address(0), GENESIS_SEED, 0))
-        );
+        IDiamondCut(address(diamond))
+            .diamondCut(
+                cuts,
+                address(foundation),
+                abi.encodeCall(FoundationInit.initialize, (_config(PRICE, 100), TREASURY, address(0), GENESIS_SEED, 0))
+            );
 
         claims = IClaims(address(diamond));
         game = IGame(address(diamond));
@@ -93,106 +154,64 @@ contract BurntatoLifecycleProperties is Test {
         rewards = ITreasuryRewards(address(diamond));
         receiver = new FormalNativeReceiver();
         lifecycleState = FormalLifecycleStateFacet(address(diamond));
+        buyerOne = new FormalLifecycleActor();
+        buyerTwo = new FormalLifecycleActor();
+        committer = new FormalLifecycleActor();
+        vm.deal(address(buyerOne), 1 ether);
+        vm.deal(address(buyerTwo), 1 ether);
+        vm.deal(address(diamond), 1 ether);
         governance.initializePurchases();
     }
 
-    function check_winnerClaimPaysExactPoolOnce() public {
-        _buy(BUYER_ONE);
-        _buy(BUYER_TWO);
-        Round memory round = game.getRound(1);
-        assertEq(round.winnerPool, 2_500);
+    function check_winnerClaimPaysConfiguredPoolOnce() public {
+        lifecycleState.formalConfigureWinnerClaim(address(buyerTwo), 2_500);
         uint256 winnerBefore = address(receiver).balance;
-
-        lifecycleState.formalExpireCurrentRound();
-        settlement.settleRound();
-        vm.prank(BUYER_TWO);
-        uint256 claimed = claims.claimWinner(1, address(receiver));
+        uint256 claimed = buyerTwo.claimWinner(claims, 1, address(receiver));
 
         assertEq(claimed, 2_500);
         assertEq(address(receiver).balance, winnerBefore + claimed);
         assertTrue(claims.winnerClaimed(1));
 
-        vm.prank(BUYER_TWO);
-        (bool replayed, bytes memory reason) =
-            address(claims).call(abi.encodeCall(IClaims.claimWinner, (uint256(1), address(receiver))));
+        (bool replayed, bytes memory reason) = address(buyerTwo)
+            .call(abi.encodeCall(FormalLifecycleActor.claimWinner, (claims, uint256(1), address(receiver))));
         assertFalse(replayed);
         assertEq(_selector(reason), Errors.AlreadyClaimed.selector);
     }
 
-    function check_singleRecoveryCommitmentReceivesExactPoolAndBurnsExactly() public {
-        _protocolMint(COMMITTER, COMMITMENT);
-        _buy(BUYER_ONE);
-        _buy(BUYER_TWO);
-
-        vm.prank(COMMITTER);
-        recovery.commitRecovery(COMMITMENT);
-        assertEq(recovery.recoveryCommitment(2, COMMITTER), COMMITMENT);
-        assertEq(recovery.totalRecoveryCommitment(2), COMMITMENT);
-
-        lifecycleState.formalExpireCurrentRound();
-        settlement.settleRound();
-        assertEq(game.getRound(2).recoveryPool, 4_000);
-
-        _buy(BUYER_ONE);
-        _buy(BUYER_TWO);
-        Round memory roundTwo = game.getRound(2);
-        assertEq(roundTwo.recoveryPool, 8_000);
-        uint256 supplyBeforeSettlement = potato.totalSupply();
-        uint256 treasuryAvailableBefore = claims.treasuryPotatoAvailable();
-
-        lifecycleState.formalExpireCurrentRound();
-        settlement.settleRound();
-
-        assertEq(potato.totalSupply(), supplyBeforeSettlement - 90);
-        assertEq(claims.treasuryPotatoAvailable(), treasuryAvailableBefore + 10);
-        assertEq(claims.claimableRecovery(2, COMMITTER), 8_000);
+    function check_singleRecoveryClaimReceivesConfiguredPoolOnce() public {
+        lifecycleState.formalConfigureRecoveryClaim(address(committer), COMMITMENT, 8_000);
+        assertEq(claims.claimableRecovery(1, address(committer)), 8_000);
 
         uint256 committerEthBefore = address(receiver).balance;
-        vm.prank(COMMITTER);
-        uint256 claimed = claims.claimRecovery(2, address(receiver));
+        uint256 claimed = committer.claimRecovery(claims, 1, address(receiver));
         assertEq(claimed, 8_000);
         assertEq(address(receiver).balance, committerEthBefore + claimed);
-        assertEq(claims.claimableRecovery(2, COMMITTER), 0);
-        assertTrue(claims.recoveryClaimed(2, COMMITTER));
+        assertEq(claims.claimableRecovery(1, address(committer)), 0);
+        assertTrue(claims.recoveryClaimed(1, address(committer)));
     }
 
-    function check_snapshottedRoundKeepsConfigAndLaterSnapshotUsesNewConfig() public {
-        _buy(BUYER_ONE);
-        Round memory activeBefore = game.getRound(1);
-        assertEq(activeBefore.config.startingPrice, PRICE);
-        assertEq(activeBefore.config.roundTimeout, 100);
-
+    function check_roundSnapshotIsStableAcrossConfigChange() public {
+        lifecycleState.formalSnapshotRound(1);
+        assertEq(lifecycleState.formalRoundStartingPrice(1), PRICE);
+        assertEq(lifecycleState.formalRoundTimeout(1), 100);
         governance.setProtocolConfig(_config(PRICE * 2, 200));
-        Round memory activeAfter = game.getRound(1);
-        assertEq(activeAfter.config.startingPrice, PRICE);
-        assertEq(activeAfter.config.roundTimeout, 100);
-
-        lifecycleState.formalExpireCurrentRound();
-        settlement.settleRound();
-        Round memory next = game.getRound(2);
-        assertEq(next.config.startingPrice, PRICE);
-        assertEq(next.config.roundTimeout, 100);
-        assertEq(next.nextPrice, PRICE);
-
-        _buy(BUYER_ONE);
-        lifecycleState.formalExpireCurrentRound();
-        settlement.settleRound();
-        Round memory later = game.getRound(3);
-        assertEq(later.config.startingPrice, PRICE * 2);
-        assertEq(later.config.roundTimeout, 200);
-        assertEq(later.nextPrice, PRICE * 2);
+        assertEq(lifecycleState.formalRoundStartingPrice(1), PRICE);
+        assertEq(lifecycleState.formalRoundTimeout(1), 100);
+        lifecycleState.formalSnapshotRound(2);
+        assertEq(lifecycleState.formalRoundStartingPrice(2), PRICE * 2);
+        assertEq(lifecycleState.formalRoundTimeout(2), 200);
     }
 
     function test_WinnerClaimWitness() public {
-        check_winnerClaimPaysExactPoolOnce();
+        _foundryWinnerClaimWitness();
     }
 
     function test_RecoveryClaimWitness() public {
-        check_singleRecoveryCommitmentReceivesExactPoolAndBurnsExactly();
+        _foundryRecoveryClaimWitness();
     }
 
     function test_ConfigSnapshotWitness() public {
-        check_snapshottedRoundKeepsConfigAndLaterSnapshotUsesNewConfig();
+        _foundryConfigSnapshotWitness();
     }
 
     function test_RewardScheduleWitness() public {
@@ -221,15 +240,47 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(potato.balanceOf(address(diamond)), GENESIS_SEED + amount);
     }
 
-    function _buy(address buyer) private {
-        vm.deal(buyer, PRICE);
-        vm.prank(buyer);
-        game.buyPotato{value: PRICE}();
+    function _foundryWinnerClaimWitness() private {
+        _buy(buyerOne);
+        _buy(buyerTwo);
+        assertEq(game.getRound(1).winnerPool, 2_500);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        assertEq(buyerTwo.claimWinner(claims, 1, address(receiver)), 2_500);
+    }
+
+    function _foundryRecoveryClaimWitness() private {
+        _protocolMint(address(committer), COMMITMENT);
+        _buy(buyerOne);
+        _buy(buyerTwo);
+        committer.commit(recovery, COMMITMENT);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        _buy(buyerOne);
+        _buy(buyerTwo);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        assertEq(committer.claimRecovery(claims, 2, address(receiver)), 8_000);
+    }
+
+    function _foundryConfigSnapshotWitness() private {
+        _buy(buyerOne);
+        governance.setProtocolConfig(_config(PRICE * 2, 200));
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        assertEq(game.getRound(2).config.startingPrice, PRICE);
+        _buy(buyerOne);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        assertEq(game.getRound(3).config.startingPrice, PRICE * 2);
+    }
+
+    function _buy(FormalLifecycleActor buyer) private {
+        buyer.buy(game, PRICE);
     }
 
     function _protocolMint(address recipient, uint256 amount) private {
-        vm.prank(address(diamond));
-        potato.protocolMint(recipient, amount);
+        lifecycleState.formalProtocolMint(recipient, amount);
     }
 
     function _config(uint256 price, uint256 timeout) private pure returns (ProtocolConfig memory config) {

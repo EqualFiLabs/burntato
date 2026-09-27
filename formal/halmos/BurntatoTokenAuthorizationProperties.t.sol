@@ -43,9 +43,8 @@ contract BurntatoTokenAuthorizationProperties is Test {
         uint256 beforeAllowance = token.transientPoolManagerAllowance();
 
         vm.prank(caller);
-        (bool success, bytes memory reason) = address(token).call(
-            abi.encodeCall(IPotatoToken.authorizePoolManagerTransfer, (uint256(amount)))
-        );
+        (bool success, bytes memory reason) =
+            address(token).call(abi.encodeCall(IPotatoToken.authorizePoolManagerTransfer, (uint256(amount))));
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.NotCanonicalHook.selector);
@@ -135,14 +134,42 @@ contract BurntatoTokenAuthorizationProperties is Test {
         uint256 balanceBefore = token.balanceOf(RECIPIENT);
 
         vm.prank(caller);
-        (bool success, bytes memory reason) = address(token).call(
-            abi.encodeCall(IPotatoToken.protocolMint, (RECIPIENT, uint256(amount)))
-        );
+        (bool success, bytes memory reason) =
+            address(token).call(abi.encodeCall(IPotatoToken.protocolMint, (RECIPIENT, uint256(amount))));
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.NotProtocol.selector);
         assertEq(token.totalSupply(), supplyBefore);
         assertEq(token.balanceOf(RECIPIENT), balanceBefore);
+    }
+
+    function check_protocolBurnReducesBalanceAndSupplyExactly(uint96 amount) public {
+        vm.assume(amount > 0);
+        _protocolMint(HOLDER, amount);
+        uint256 supplyBefore = token.totalSupply();
+        uint256 balanceBefore = token.balanceOf(HOLDER);
+
+        vm.prank(address(harness));
+        token.protocolBurn(HOLDER, amount);
+
+        assertEq(token.totalSupply(), supplyBefore - amount);
+        assertEq(token.balanceOf(HOLDER), balanceBefore - amount);
+    }
+
+    function check_nonProtocolCannotBurn(address caller, uint96 amount) public {
+        vm.assume(caller != address(harness));
+        _protocolMint(HOLDER, amount);
+        uint256 supplyBefore = token.totalSupply();
+        uint256 balanceBefore = token.balanceOf(HOLDER);
+
+        vm.prank(caller);
+        (bool success, bytes memory reason) =
+            address(token).call(abi.encodeCall(IPotatoToken.protocolBurn, (HOLDER, uint256(amount))));
+
+        assertFalse(success);
+        assertEq(_selector(reason), Errors.NotProtocol.selector);
+        assertEq(token.totalSupply(), supplyBefore);
+        assertEq(token.balanceOf(HOLDER), balanceBefore);
     }
 
     function _protocolMint(address recipient, uint256 amount) private {

@@ -40,20 +40,30 @@ fails or the one-shot foundation initializer is repeated.
 The token properties establish canonical-hook-only transient authorization,
 exact PoolManager allowance consumption, overspend rollback, non-reuse after
 consumption, single-use protocol movement authorization, and protocol-only
-minting. The buyback execution properties establish exact reserve and caller
-reward accounting after a successful summarized PoolManager execution and
-atomic rollback for partial fill, zero output, external revert, or malformed
+minting and burning. Authorized protocol burns reduce holder balance and total
+supply by exactly the requested amount, while unauthorized burn attempts revert
+without mutation. The buyback execution properties establish exact reserve and
+caller reward accounting after a successful summarized PoolManager execution
+and atomic rollback for partial fill, zero output, external revert, or malformed
 return data.
 
-The lifecycle properties exercise concrete production state-machine witnesses
-for one-shot Winner claims, a complete two-round Recovery commitment, burn,
-treasury allocation, and claim, active-round configuration snapshots, and
-Treasury reward allocation and cancellation conservation. These witnesses
-prove those paths for the stated concrete setup. They are not universal
-quantification over every multi-round sequence. A verification-only facet moves
-the current deadline to the modeled timestamp because Halmos 0.3.3 does not
-implement Foundry's time-warp cheatcode. Settlement and every other transition
-remain production facet calls.
+The lifecycle properties isolate production transitions for one-shot Winner
+claims, one-shot Recovery claims with exact payout, per-round configuration
+snapshots, and Treasury reward allocation and cancellation conservation. A
+verification-only facet constructs the required settled claim state and reads
+individual storage fields because Halmos 0.3.3 cannot reliably decode the full
+`Round` return through a Diamond delegatecall. The state constructor is not part
+of a deployment, and every claim, configuration, allocation, and cancellation
+transition under test executes through its production facet.
+
+Concrete Foundry witnesses additionally exercise a complete Winner path, a
+complete two-round Recovery commitment, burn, treasury allocation, and claim
+path, and configuration changes across consecutive settlements. Those
+multi-call witnesses prove the stated concrete setup, not universal
+quantification over every multi-round sequence. Their verification-only facet
+moves the current deadline to the modeled timestamp because Halmos 0.3.3 does
+not implement Foundry's time-warp cheatcode. Settlement and every other
+transition remain production facet calls.
 
 The Certora harnesses are thin wrappers over production `LibMath`,
 `GovernanceFacet`, `PotatoTokenFacet`, and `BuybackFacet`. CVL independently
