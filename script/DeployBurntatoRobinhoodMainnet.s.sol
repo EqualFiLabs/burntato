@@ -119,6 +119,7 @@ contract DeployBurntatoRobinhoodMainnet is DeployBurntato {
         vm.serializeBytes32(object, "canonicalManifestBlockHash", dependencies.forkBlockHash);
         vm.serializeUint(object, "staticsFinalizedBlock", operatorDependencies.finalizedBlock);
         vm.serializeBytes32(object, "staticsFinalizedBlockHash", operatorDependencies.finalizedBlockHash);
+        vm.serializeString(object, "sourceCommit", vm.envString("BURNTATO_SOURCE_COMMIT"));
         vm.serializeAddress(object, "deployer", config.deployer);
         vm.serializeAddress(object, "diamond", deployment.diamond);
         vm.serializeAddress(object, "admin", deployment.admin);

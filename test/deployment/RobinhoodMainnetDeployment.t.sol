@@ -16,6 +16,7 @@ import {BurntatoSwapFeeHook} from "../../src/hooks/BurntatoSwapFeeHook.sol";
 import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IMarket} from "../../src/interfaces/IMarket.sol";
+import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 
 contract RobinhoodMainnetDeploymentTest is Test {
     DeployBurntato internal deployScript;
@@ -145,27 +146,27 @@ contract RobinhoodMainnetDeploymentTest is Test {
         IMarket(deployment.diamond).launchMarket();
         vm.expectRevert(OperateBurntatoRobinhoodMainnet.BuybackBootstrapIncomplete.selector);
         operations.checkReadyForInitializationDeployment(
-            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, 2
+            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 6
         );
 
-        _completeTwoEtherBootstrap();
+        _completeMainnetBootstrap();
         assertTrue(
             operations.checkReadyForInitializationDeployment(
-                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, 2
+                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 6
             )
         );
 
         IGovernance(deployment.diamond).initializePurchases();
         assertTrue(
             operations.checkReadyForExternalBuysDeployment(
-                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, 2
+                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 6
             )
         );
 
         BurntatoSwapFeeHook(payable(deployment.hook)).setExternalBuysEnabled(true);
         assertTrue(
             operations.checkFinalizedDeployment(
-                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, 2
+                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 6
             )
         );
     }
@@ -173,8 +174,8 @@ contract RobinhoodMainnetDeploymentTest is Test {
     function test_MainnetInitializationCheckRejectsUnspentBootstrapReserve() public {
         IMarket(deployment.diamond).launchMarket();
         IBuyback buybacks = IBuyback(deployment.diamond);
-        vm.deal(address(this), 2 ether);
-        buybacks.fundBuybackReserve{value: 2 ether}();
+        vm.deal(address(this), 5.025 ether);
+        buybacks.fundBuybackReserve{value: 5.025 ether}();
         buybacks.buyback();
         uint256 reserve = buybacks.buybackReserveEth();
 
@@ -184,13 +185,13 @@ contract RobinhoodMainnetDeploymentTest is Test {
             )
         );
         operations.checkReadyForInitializationDeployment(
-            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, 100
+            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 100
         );
     }
 
     function test_MainnetFinalCheckRejectsAdminAndGuardianDrift() public {
         IMarket(deployment.diamond).launchMarket();
-        _completeTwoEtherBootstrap();
+        _completeMainnetBootstrap();
         IGovernance governance = IGovernance(deployment.diamond);
         governance.initializePurchases();
         BurntatoSwapFeeHook(payable(deployment.hook)).setExternalBuysEnabled(true);
@@ -201,7 +202,9 @@ contract RobinhoodMainnetDeploymentTest is Test {
                 OperateBurntatoRobinhoodMainnet.UnexpectedAuthority.selector, wrongAdmin, config.finalAdmin
             )
         );
-        operations.checkFinalizedDeployment(deployment.diamond, deployment.hook, wrongAdmin, config.guardian, 2);
+        operations.checkFinalizedDeployment(
+            deployment.diamond, deployment.hook, wrongAdmin, config.guardian, config.treasuryRecipient, 6
+        );
 
         address wrongGuardian = makeAddr("wrong-guardian");
         vm.expectRevert(
@@ -209,16 +212,36 @@ contract RobinhoodMainnetDeploymentTest is Test {
                 OperateBurntatoRobinhoodMainnet.UnexpectedGuardian.selector, wrongGuardian, config.guardian
             )
         );
-        operations.checkFinalizedDeployment(deployment.diamond, deployment.hook, config.finalAdmin, wrongGuardian, 2);
+        operations.checkFinalizedDeployment(
+            deployment.diamond, deployment.hook, config.finalAdmin, wrongGuardian, config.treasuryRecipient, 6
+        );
+
+        address wrongTreasury = makeAddr("wrong-treasury");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                OperateBurntatoRobinhoodMainnet.UnexpectedBootstrapPotato.selector,
+                uint256(10_200_000 ether),
+                uint256(10_400_000 ether),
+                uint256(0)
+            )
+        );
+        operations.checkFinalizedDeployment(
+            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, wrongTreasury, 6
+        );
     }
 
-    function _completeTwoEtherBootstrap() private {
+    function _completeMainnetBootstrap() private {
         IBuyback buybacks = IBuyback(deployment.diamond);
-        vm.deal(address(this), 2 ether);
-        buybacks.fundBuybackReserve{value: 2 ether}();
-        buybacks.buyback();
-        vm.roll(block.number + 1);
-        buybacks.buyback();
-        assertLe(buybacks.buybackReserveEth(), 2);
+        uint256 grossTarget = 5.025 ether;
+        vm.deal(address(this), grossTarget);
+        buybacks.fundBuybackReserve{value: grossTarget}();
+        for (uint256 index; index < 6; ++index) {
+            buybacks.buyback();
+            if (index < 5) vm.roll(block.number + 1);
+        }
+        assertLe(buybacks.buybackReserveEth(), 6);
+        uint256 treasuryPotato = IPotatoToken(deployment.diamond).balanceOf(config.treasuryRecipient);
+        assertGe(treasuryPotato, 10_200_000 ether);
+        assertLe(treasuryPotato, 10_400_000 ether);
     }
 }

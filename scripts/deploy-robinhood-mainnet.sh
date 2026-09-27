@@ -2,8 +2,10 @@
 set -euo pipefail
 
 readonly CHAIN_ID=4663
+readonly BOOTSTRAP_BUYBACK_WEI=5025000000000000000
 readonly ARTIFACT=artifacts/robinhood-mainnet/deployment.json
-readonly ADMIN_BUNDLE=artifacts/robinhood-mainnet/admin-calls.json
+readonly INITIALIZE_CALL=artifacts/robinhood-mainnet/initialize-call.json
+readonly ENABLE_CALL=artifacts/robinhood-mainnet/enable-call.json
 readonly OPERATION_LEDGER=artifacts/robinhood-mainnet/operations.json
 readonly RELEASE_RECORD=deployments/robinhood-mainnet-4663-launch.json
 readonly DEPLOY_SCRIPT=script/DeployBurntatoRobinhoodMainnet.s.sol:DeployBurntatoRobinhoodMainnet
@@ -16,14 +18,14 @@ readonly BOOTSTRAP_BROADCAST_FILE=broadcast/BootstrapBurntatoBuyback.s.sol/4663/
 readonly BUYBACK_BROADCAST_FILE=broadcast/ExecuteBurntatoBuyback.s.sol/4663/run-latest.json
 
 usage() {
-  echo "usage: ROBINHOOD_MAINNET=... $0 --preflight|--deploy|--resume-deploy|--inspect|--verify|--launch|--bootstrap|--buyback|--initialize|--enable|--admin-bundle|--check|--record" >&2
+  echo "usage: ROBINHOOD_MAINNET=... $0 --preflight|--deploy|--resume-deploy|--inspect|--verify|--launch|--bootstrap|--buyback|--initialize|--enable|--initialize-bundle|--enable-bundle|--check|--record" >&2
   echo "state-changing modes require PRIVATE_KEY; --verify requires BLOCKSCOUT_API_URL" >&2
 }
 
 [[ $# -eq 1 ]] || { usage; exit 2; }
 mode=$1
 case "$mode" in
-  --preflight|--deploy|--resume-deploy|--inspect|--verify|--launch|--bootstrap|--buyback|--initialize|--enable|--admin-bundle|--check|--record) ;;
+  --preflight|--deploy|--resume-deploy|--inspect|--verify|--launch|--bootstrap|--buyback|--initialize|--enable|--initialize-bundle|--enable-bundle|--check|--record) ;;
   *) usage; exit 2 ;;
 esac
 
@@ -63,6 +65,30 @@ require_key() {
   : "${PRIVATE_KEY:?PRIVATE_KEY is required}"
 }
 
+require_clean_source() {
+  git diff --quiet || { echo "tracked source changes must be committed before mainnet deployment" >&2; exit 1; }
+  git diff --cached --quiet || { echo "staged source changes must be committed before mainnet deployment" >&2; exit 1; }
+}
+
+export_current_source_commit() {
+  require_clean_source
+  export BURNTATO_SOURCE_COMMIT
+  BURNTATO_SOURCE_COMMIT=$(git rev-parse HEAD)
+}
+
+require_recorded_source_commit() {
+  require_clean_source
+  local expected
+  expected=$(jq -er '.sourceCommit' "$ARTIFACT")
+  local actual
+  actual=$(git rev-parse HEAD)
+  [[ "$actual" == "$expected" ]] || {
+    echo "current source commit does not match the deployment artifact" >&2
+    exit 1
+  }
+  export BURNTATO_SOURCE_COMMIT="$expected"
+}
+
 require_artifact() {
   [[ -f "$ARTIFACT" ]] || { echo "missing deployment artifact: $ARTIFACT" >&2; exit 1; }
   jq -e --argjson chainId "$CHAIN_ID" '.chainId == $chainId and .diamond != null and .hook != null' "$ARTIFACT" \
@@ -79,7 +105,11 @@ record_phase() {
   local phase=$1
   local broadcast_file=$2
   [[ -f "$broadcast_file" ]] || { echo "missing phase broadcast artifact: $broadcast_file" >&2; exit 1; }
-  jq -e '[.receipts[] | select(.status != "0x1")] | length == 0' "$broadcast_file" >/dev/null
+  jq -e '(.receipts | length) > 0
+    and all(.receipts[];
+      .status == "0x1"
+      and (.transactionHash | type == "string" and test("^0x[0-9a-fA-F]{64}$")))' \
+    "$broadcast_file" >/dev/null
   mkdir -p "${OPERATION_LEDGER%/*}"
   local existing='[]'
   [[ ! -f "$OPERATION_LEDGER" ]] || existing=$(<"$OPERATION_LEDGER")
@@ -118,7 +148,9 @@ fi
 if [[ "$mode" == "--deploy" ]]; then
   require_roles
   require_key
-  [[ ! -e "$ARTIFACT" && ! -e "$BROADCAST_FILE" ]] || {
+  export_current_source_commit
+  [[ ! -e "$ARTIFACT" && ! -e "$BROADCAST_FILE" && ! -e "$OPERATION_LEDGER" \
+      && ! -e "$INITIALIZE_CALL" && ! -e "$ENABLE_CALL" && ! -e "$RELEASE_RECORD" ]] || {
     echo "deployment state already exists; inspect it or use --resume-deploy" >&2
     exit 1
   }
@@ -134,12 +166,14 @@ if [[ "$mode" == "--resume-deploy" ]]; then
     echo "deployment artifact and broadcast sequence are required for resume" >&2
     exit 1
   }
+  require_recorded_source_commit
   run_redacted forge script "$DEPLOY_SCRIPT" --chain-id "$CHAIN_ID" --resume --slow \
     --gas-estimate-multiplier 200 -vv
   exit 0
 fi
 
 require_artifact
+require_recorded_source_commit
 
 if [[ "$mode" == "--inspect" ]]; then
   BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" scripts/check-deployment.sh "$ARTIFACT"
@@ -165,8 +199,8 @@ export BURNTATO_DIAMOND
 BURNTATO_DIAMOND=$(jq -er '.diamond' "$ARTIFACT")
 
 if [[ "$mode" == "--bootstrap" ]]; then
-  : "${BURNTATO_BOOTSTRAP_BUYBACK_WEI:?BURNTATO_BOOTSTRAP_BUYBACK_WEI is required}"
   require_key
+  export BURNTATO_BOOTSTRAP_BUYBACK_WEI="$BOOTSTRAP_BUYBACK_WEI"
   run_redacted forge script script/BootstrapBurntatoBuyback.s.sol:BootstrapBurntatoBuyback \
     --chain-id "$CHAIN_ID" --broadcast --slow --gas-estimate-multiplier 200 -vv
   record_phase bootstrap-buyback "$BOOTSTRAP_BROADCAST_FILE"
@@ -195,28 +229,43 @@ if [[ "$mode" == "--enable" ]]; then
   exit 0
 fi
 
-if [[ "$mode" == "--admin-bundle" ]]; then
+if [[ "$mode" == "--initialize-bundle" ]]; then
   run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkReadyForInitialization()' --chain-id "$CHAIN_ID" -vv
-  mkdir -p "${ADMIN_BUNDLE%/*}"
-  temporary_bundle=$(mktemp "${ADMIN_BUNDLE%/*}/admin-calls.XXXXXX")
+  mkdir -p "${INITIALIZE_CALL%/*}"
+  temporary_bundle=$(mktemp "${INITIALIZE_CALL%/*}/initialize-call.XXXXXX")
   jq -n \
     --argjson chainId "$CHAIN_ID" \
     --arg admin "$(jq -er '.admin' "$ARTIFACT")" \
     --arg diamond "$BURNTATO_DIAMOND" \
-    --arg hook "$(jq -er '.hook' "$ARTIFACT")" \
     --arg initializeData "$(cast calldata 'initializePurchases()')" \
+    '{schemaVersion: 1, chainId: $chainId, admin: $admin,
+      call: {phase: "initialize-purchases", to: $diamond, value: "0", data: $initializeData}}' \
+    >"$temporary_bundle"
+  mv "$temporary_bundle" "$INITIALIZE_CALL"
+  echo "wrote public initialization call: $INITIALIZE_CALL"
+  exit 0
+fi
+
+if [[ "$mode" == "--enable-bundle" ]]; then
+  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkReadyForExternalBuys()' --chain-id "$CHAIN_ID" -vv
+  mkdir -p "${ENABLE_CALL%/*}"
+  temporary_bundle=$(mktemp "${ENABLE_CALL%/*}/enable-call.XXXXXX")
+  jq -n \
+    --argjson chainId "$CHAIN_ID" \
+    --arg admin "$(jq -er '.admin' "$ARTIFACT")" \
+    --arg hook "$(jq -er '.hook' "$ARTIFACT")" \
     --arg enableData "$(cast calldata 'setExternalBuysEnabled(bool)' true)" \
-    '{schemaVersion: 1, chainId: $chainId, admin: $admin, calls: [
-      {phase: "initialize-purchases", to: $diamond, value: "0", data: $initializeData},
-      {phase: "enable-external-buys", to: $hook, value: "0", data: $enableData}
-    ]}' >"$temporary_bundle"
-  mv "$temporary_bundle" "$ADMIN_BUNDLE"
-  echo "wrote public admin call bundle: $ADMIN_BUNDLE"
+    '{schemaVersion: 1, chainId: $chainId, admin: $admin,
+      call: {phase: "enable-external-buys", to: $hook, value: "0", data: $enableData}}' \
+    >"$temporary_bundle"
+  mv "$temporary_bundle" "$ENABLE_CALL"
+  echo "wrote public buy-opening call: $ENABLE_CALL"
   exit 0
 fi
 
 if [[ "$mode" == "--check" || "$mode" == "--record" ]]; then
-  BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" scripts/check-deployment.sh "$ARTIFACT"
+  EXPECTED_MARKET_READY=false BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" \
+    scripts/check-deployment.sh "$ARTIFACT"
   run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkFinalized()' --chain-id "$CHAIN_ID" -vv
 fi
 
@@ -224,9 +273,24 @@ if [[ "$mode" == "--record" ]]; then
   [[ ! -e "$RELEASE_RECORD" ]] || { echo "release record already exists: $RELEASE_RECORD" >&2; exit 1; }
   [[ -f "$BROADCAST_FILE" ]] || { echo "missing broadcast artifact: $BROADCAST_FILE" >&2; exit 1; }
   [[ -f "$OPERATION_LEDGER" ]] || { echo "missing operation ledger: $OPERATION_LEDGER" >&2; exit 1; }
-  jq -e '[.receipts[] | select(.status != "0x1")] | length == 0' "$BROADCAST_FILE" >/dev/null
-  jq -e 'any(.[]; .phase == "launch-market") and any(.[]; .phase == "bootstrap-buyback")' \
+  jq -e '(.receipts | length) > 0
+    and all(.receipts[];
+      .status == "0x1"
+      and (.transactionHash | type == "string" and test("^0x[0-9a-fA-F]{64}$")))' \
+    "$BROADCAST_FILE" >/dev/null
+  jq -e 'any(.[]; .phase == "launch-market")
+    and any(.[]; .phase == "bootstrap-buyback")
+    and ([.[] | select(.phase == "buyback")] | length == 5)
+    and all(.[];
+      (.transactionHashes | type == "array" and length > 0)
+      and all(.transactionHashes[]; type == "string" and test("^0x[0-9a-fA-F]{64}$")))' \
     "$OPERATION_LEDGER" >/dev/null
+  while IFS= read -r transaction_hash; do
+    require_successful_transaction "$transaction_hash" deploymentTransactionHash
+  done < <(jq -er '.receipts[].transactionHash' "$BROADCAST_FILE")
+  while IFS= read -r transaction_hash; do
+    require_successful_transaction "$transaction_hash" operationTransactionHash
+  done < <(jq -er '.[].transactionHashes[]' "$OPERATION_LEDGER")
   initialize_transaction_hash=
   if ! jq -e 'any(.[]; .phase == "initialize-purchases")' "$OPERATION_LEDGER" >/dev/null; then
     : "${BURNTATO_INITIALIZE_TX_HASH:?BURNTATO_INITIALIZE_TX_HASH is required for an externally executed admin call}"
@@ -239,11 +303,12 @@ if [[ "$mode" == "--record" ]]; then
     require_successful_transaction "$BURNTATO_ENABLE_TX_HASH" BURNTATO_ENABLE_TX_HASH
     enable_transaction_hash=$BURNTATO_ENABLE_TX_HASH
   fi
-  source_commit=$(git rev-parse HEAD)
+  source_commit=$(jq -er '.sourceCommit' "$ARTIFACT")
   if ! recorded_block=$(cast block-number 2>&1); then
     echo "unable to read record block: $(redact_value "$recorded_block")" >&2
     exit 1
   fi
+  mkdir -p "${RELEASE_RECORD%/*}"
   temporary_record=$(mktemp "${RELEASE_RECORD%/*}/robinhood-mainnet-launch.XXXXXX")
   jq \
     --arg sourceCommit "$source_commit" \

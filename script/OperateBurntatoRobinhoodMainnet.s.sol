@@ -7,10 +7,13 @@ import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
 import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
+import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
 
 contract OperateBurntatoRobinhoodMainnet is Script {
     uint256 private constant CHAIN_ID = 4_663;
     uint256 private constant DEFAULT_MAX_BOOTSTRAP_REMAINDER_WEI = 100;
+    uint256 private constant MIN_BOOTSTRAP_POTATO = 10_200_000 ether;
+    uint256 private constant MAX_BOOTSTRAP_POTATO = 10_400_000 ether;
     string private constant OUTPUT_PATH = "artifacts/robinhood-mainnet/deployment.json";
 
     error InvalidMainnetChain(uint256 actualChainId);
@@ -29,11 +32,12 @@ contract OperateBurntatoRobinhoodMainnet is Script {
     error ExternalBuysNotEnabled();
     error BuybackBootstrapIncomplete();
     error BuybackReserveTooLarge(uint256 maximum, uint256 actual);
+    error UnexpectedBootstrapPotato(uint256 minimum, uint256 maximum, uint256 actual);
     error UnexpectedSigner(address expected, address actual);
 
     function launchMarket() external returns (bytes32 poolId, uint256 positionCount, uint256 potatoUsed) {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
+        (address diamond, address hook, address admin, address guardian,) = _deployment();
         checkDeployedDeployment(diamond, hook, admin, guardian);
 
         uint256 privateKey = _privateKey();
@@ -48,8 +52,8 @@ contract OperateBurntatoRobinhoodMainnet is Script {
 
     function initializePurchases() external {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
-        checkReadyForInitializationDeployment(diamond, hook, admin, guardian, _maximumBootstrapRemainder());
+        (address diamond, address hook, address admin, address guardian, address treasury) = _deployment();
+        checkReadyForInitializationDeployment(diamond, hook, admin, guardian, treasury, _maximumBootstrapRemainder());
 
         uint256 privateKey = _privateKey();
         _requireSigner(privateKey, admin);
@@ -60,8 +64,8 @@ contract OperateBurntatoRobinhoodMainnet is Script {
 
     function enableExternalBuys() external {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
-        checkReadyForExternalBuysDeployment(diamond, hook, admin, guardian, _maximumBootstrapRemainder());
+        (address diamond, address hook, address admin, address guardian, address treasury) = _deployment();
+        checkReadyForExternalBuysDeployment(diamond, hook, admin, guardian, treasury, _maximumBootstrapRemainder());
 
         uint256 privateKey = _privateKey();
         _requireSigner(privateKey, admin);
@@ -72,26 +76,30 @@ contract OperateBurntatoRobinhoodMainnet is Script {
 
     function checkDeployed() external view returns (bool) {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
+        (address diamond, address hook, address admin, address guardian,) = _deployment();
         return checkDeployedDeployment(diamond, hook, admin, guardian);
     }
 
     function checkReadyForInitialization() external view returns (bool) {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
-        return checkReadyForInitializationDeployment(diamond, hook, admin, guardian, _maximumBootstrapRemainder());
+        (address diamond, address hook, address admin, address guardian, address treasury) = _deployment();
+        return
+            checkReadyForInitializationDeployment(
+                diamond, hook, admin, guardian, treasury, _maximumBootstrapRemainder()
+            );
     }
 
     function checkReadyForExternalBuys() external view returns (bool) {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
-        return checkReadyForExternalBuysDeployment(diamond, hook, admin, guardian, _maximumBootstrapRemainder());
+        (address diamond, address hook, address admin, address guardian, address treasury) = _deployment();
+        return
+            checkReadyForExternalBuysDeployment(diamond, hook, admin, guardian, treasury, _maximumBootstrapRemainder());
     }
 
     function checkFinalized() external view returns (bool) {
         _requireChain();
-        (address diamond, address hook, address admin, address guardian) = _deployment();
-        return checkFinalizedDeployment(diamond, hook, admin, guardian, _maximumBootstrapRemainder());
+        (address diamond, address hook, address admin, address guardian, address treasury) = _deployment();
+        return checkFinalizedDeployment(diamond, hook, admin, guardian, treasury, _maximumBootstrapRemainder());
     }
 
     function checkDeployedDeployment(address diamond, address hook, address admin, address guardian)
@@ -121,9 +129,10 @@ contract OperateBurntatoRobinhoodMainnet is Script {
         address hook,
         address admin,
         address guardian,
+        address treasury,
         uint256 maximumBootstrapRemainder
     ) public view returns (bool) {
-        _checkSharedLaunchState(diamond, hook, admin, guardian, false, false, maximumBootstrapRemainder);
+        _checkSharedLaunchState(diamond, hook, admin, guardian, treasury, false, false, maximumBootstrapRemainder);
         return true;
     }
 
@@ -132,9 +141,10 @@ contract OperateBurntatoRobinhoodMainnet is Script {
         address hook,
         address admin,
         address guardian,
+        address treasury,
         uint256 maximumBootstrapRemainder
     ) public view returns (bool) {
-        _checkSharedLaunchState(diamond, hook, admin, guardian, true, false, maximumBootstrapRemainder);
+        _checkSharedLaunchState(diamond, hook, admin, guardian, treasury, true, false, maximumBootstrapRemainder);
         return true;
     }
 
@@ -143,9 +153,10 @@ contract OperateBurntatoRobinhoodMainnet is Script {
         address hook,
         address admin,
         address guardian,
+        address treasury,
         uint256 maximumBootstrapRemainder
     ) public view returns (bool) {
-        _checkSharedLaunchState(diamond, hook, admin, guardian, true, true, maximumBootstrapRemainder);
+        _checkSharedLaunchState(diamond, hook, admin, guardian, treasury, true, true, maximumBootstrapRemainder);
         return true;
     }
 
@@ -154,6 +165,7 @@ contract OperateBurntatoRobinhoodMainnet is Script {
         address hook,
         address admin,
         address guardian,
+        address treasury,
         bool expectedInitialized,
         bool expectedExternalBuys,
         uint256 maximumBootstrapRemainder
@@ -185,18 +197,27 @@ contract OperateBurntatoRobinhoodMainnet is Script {
         if (reserve > maximumBootstrapRemainder) {
             revert BuybackReserveTooLarge(maximumBootstrapRemainder, reserve);
         }
+        uint256 treasuryPotato = IPotatoToken(diamond).balanceOf(treasury);
+        if (treasuryPotato < MIN_BOOTSTRAP_POTATO || treasuryPotato > MAX_BOOTSTRAP_POTATO) {
+            revert UnexpectedBootstrapPotato(MIN_BOOTSTRAP_POTATO, MAX_BOOTSTRAP_POTATO, treasuryPotato);
+        }
     }
 
-    function _deployment() private view returns (address diamond, address hook, address admin, address guardian) {
+    function _deployment()
+        private
+        view
+        returns (address diamond, address hook, address admin, address guardian, address treasury)
+    {
         string memory deployment = vm.readFile(OUTPUT_PATH);
         diamond = vm.parseJsonAddress(deployment, ".diamond");
         hook = vm.parseJsonAddress(deployment, ".hook");
         admin = vm.parseJsonAddress(deployment, ".admin");
         guardian = vm.parseJsonAddress(deployment, ".guardian");
+        treasury = vm.parseJsonAddress(deployment, ".treasuryRecipient");
     }
 
-    function _maximumBootstrapRemainder() private view returns (uint256) {
-        return vm.envOr("BURNTATO_MAX_BOOTSTRAP_REMAINDER_WEI", DEFAULT_MAX_BOOTSTRAP_REMAINDER_WEI);
+    function _maximumBootstrapRemainder() private pure returns (uint256) {
+        return DEFAULT_MAX_BOOTSTRAP_REMAINDER_WEI;
     }
 
     function _privateKey() private view returns (uint256 privateKey) {

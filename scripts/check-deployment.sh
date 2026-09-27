@@ -9,6 +9,7 @@ rpc_url=${RPC_URL:-${ROBINHOOD_TESTNET_RPC_URL:-${ROBINHOOD_MAINNET:-}}}
 failures=0
 call_count=0
 receipt_summary=not_checked
+expected_market_ready=${EXPECTED_MARKET_READY:-true}
 export FOUNDRY_DISABLE_NIGHTLY_WARNING=${FOUNDRY_DISABLE_NIGHTLY_WARNING:-1}
 
 for command_name in cast jq; do
@@ -132,7 +133,7 @@ check_call authority "$diamond" 'authority()(address)' "$admin"
 check_call guardian "$diamond" 'guardian()(address)' "$guardian"
 check_call foundation_configured "$diamond" 'foundationConfigured()(bool)' true
 check_call protocol_paused "$diamond" 'paused()(bool)' false
-check_call market_ready "$diamond" 'marketReady()(bool)' true
+check_call market_ready "$diamond" 'marketReady()(bool)' "$expected_market_ready"
 check_call treasury_recipient "$diamond" 'treasuryRecipient()(address)' "$treasury"
 check_call reward_allocator "$diamond" 'rewardAllocator()(address)' "$reward_allocator"
 
