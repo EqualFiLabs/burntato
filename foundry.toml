@@ -45,3 +45,4 @@ via_ir = true
 
 [rpc_endpoints]
 robinhood_mainnet = "${ROBINHOOD_MAINNET}"
+robinhood_testnet = "${ROBINHOOD_TESTNET}"

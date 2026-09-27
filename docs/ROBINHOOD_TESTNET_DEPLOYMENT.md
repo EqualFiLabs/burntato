@@ -1,8 +1,10 @@
 # Robinhood testnet deployment
 
-This is the live Burntato and standalone Statics Genesis launch used for app
-integration on Robinhood Chain testnet, chain ID `46630`. The canonical
-machine-readable record is
+## Historical integrated deployment
+
+The addresses below are the historical Burntato and standalone Statics Genesis
+launch used for app integration on Robinhood Chain testnet, chain ID `46630`.
+The canonical machine-readable record is
 [`deployments/robinhood-testnet-46630-launch.json`](../deployments/robinhood-testnet-46630-launch.json).
 
 > Compatibility note: this deployment was built from Burntato commit
@@ -16,6 +18,53 @@ machine-readable record is
 > configurable-final-admin and one-shot purchase-activation deployment flow;
 > the timelock details below describe this historical instance, not current
 > deployment tooling.
+
+The Statics Genesis epoch ended at `2026-09-18 14:05:17 UTC`. This deployment
+remains useful as provenance, but it is not the current Burntato release
+candidate and must not be used to qualify current clients.
+
+## Fresh integrated replica ceremony
+
+The current ceremony creates a fresh Statics Genesis replica before Burntato,
+then immutably binds the new Burntato Operator rewards router to that replica's
+Genesis NFT and Activation Registry.
+
+1. Deploy and finalize the Statics Genesis testnet replica from its reviewed
+   source revision.
+2. Deploy and fund a new 200,000 STATICS faucet bound to the new STATICS token.
+3. Run `scripts/deploy-robinhood-testnet.sh --prepare-statics` with the public
+   Statics artifact and exact Statics source commit.
+4. Review and commit the regenerated
+   `deployments/statics-operators-robinhood-testnet-46630.json` manifest before
+   any Burntato broadcast.
+5. Run the Burntato preflight and deployment from that committed source.
+6. Inspect and source-verify the deployment, launch the POTATO market, and run
+   the complete buyback bootstrap while external buys and Grabs remain closed.
+7. Acquire, optionally activate, and explicitly register test Operators in the
+   Burntato router before generating Operator revenue.
+8. Check the staged state, initialize purchases, enable external buys, and
+   check the finalized state.
+9. Build the combined public release record only after every recorded
+   transaction has a successful live receipt.
+
+The record step consumes the Statics Genesis and faucet broadcast files plus
+the faucet's public deployment artifact. It cross-checks the Genesis NFT,
+Activation Registry, and faucet deployment transactions against the handoff,
+then verifies the faucet binding, runtime hash, claim configuration, and live
+funding before writing the combined record.
+
+The handoff generator rejects the wrong chain, malformed source revisions,
+expired Genesis epochs, missing bytecode, unfinalized Genesis launches,
+reciprocal NFT/Registry binding mismatches, NFT/Vault binding or epoch
+mismatches, and unavailable historical block hashes. The Burntato preflight
+independently revalidates the committed runtime hashes, bindings, live Genesis
+vault epoch, launch-finalized state, and canonical Uniswap dependencies before
+reading the deployment key.
+
+The staged checkpoint requires the market to be launched, the reviewed
+buyback bootstrap to be complete, `purchasesInitialized()` to remain false,
+and external buys to remain disabled. This captures the intended mainnet-like
+prelaunch state before the two explicit opening calls.
 
 ## Addresses
 

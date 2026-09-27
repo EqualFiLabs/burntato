@@ -21,6 +21,7 @@ import {
     StaticsOperatorDependencies
 } from "../../script/DeploymentTypes.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
+import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
@@ -278,7 +279,56 @@ contract DeterministicDeploymentTest is Test {
 
         FinalizeBurntatoRobinhoodTestnet finalizer = new FinalizeBurntatoRobinhoodTestnet();
         vm.expectRevert(FinalizeBurntatoRobinhoodTestnet.ProtocolPaused.selector);
-        finalizer.checkFinalizedDeployment(deployment.diamond, deployment.hook);
+        finalizer.checkFinalizedDeployment(
+            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 100
+        );
+    }
+
+    function test_TestnetOperationsEnforceStagedLaunchLifecycle() public {
+        FinalizeBurntatoRobinhoodTestnet finalizer = new FinalizeBurntatoRobinhoodTestnet();
+        assertTrue(
+            finalizer.checkDeployedDeployment(deployment.diamond, deployment.hook, config.finalAdmin, config.guardian)
+        );
+
+        IMarket(deployment.diamond).launchMarket();
+        vm.expectRevert(FinalizeBurntatoRobinhoodTestnet.BuybackBootstrapIncomplete.selector);
+        finalizer.checkStagedDeployment(
+            deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 100
+        );
+
+        _completeTestnetBootstrap();
+        assertTrue(
+            finalizer.checkStagedDeployment(
+                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 100
+            )
+        );
+
+        vm.prank(config.finalAdmin);
+        IGovernance(deployment.diamond).initializePurchases();
+        assertTrue(
+            finalizer.checkReadyForExternalBuysDeployment(
+                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 100
+            )
+        );
+
+        vm.prank(config.finalAdmin);
+        BurntatoSwapFeeHook(payable(deployment.hook)).setExternalBuysEnabled(true);
+        assertTrue(
+            finalizer.checkFinalizedDeployment(
+                deployment.diamond, deployment.hook, config.finalAdmin, config.guardian, config.treasuryRecipient, 100
+            )
+        );
+    }
+
+    function _completeTestnetBootstrap() private {
+        IBuyback buybacks = IBuyback(deployment.diamond);
+        uint256 grossTarget = 5.025 ether;
+        vm.deal(address(this), grossTarget);
+        buybacks.fundBuybackReserve{value: grossTarget}();
+        for (uint256 index; index < 6; ++index) {
+            buybacks.buyback();
+            if (index < 5) vm.roll(block.number + 1);
+        }
     }
 
     function _selectRobinhoodFork() internal {
@@ -329,6 +379,13 @@ contract DeterministicDeploymentTest is Test {
         assertEq(testnet.initialTick, 170_280);
         assertEq(testnet.tickUpper, 170_280);
         assertEq(testnet.potatoSeed, 100_000_000 ether);
+    }
+
+    function test_RobinhoodTestnetPreflightRejectsWrongChainBeforeEnvironmentReads() public {
+        DeployBurntatoRobinhoodTestnet testnet = new DeployBurntatoRobinhoodTestnet();
+        vm.chainId(1);
+        vm.expectRevert(abi.encodeWithSelector(DeployBurntatoRobinhoodTestnet.InvalidTestnetChain.selector, 1));
+        testnet.preflight();
     }
 
     function test_RobinhoodTestnetManifestsMatchLiveDependencies() public {
