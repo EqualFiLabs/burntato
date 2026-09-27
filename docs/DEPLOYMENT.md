@@ -293,6 +293,93 @@ machine-readable handoff. It contains only public addresses and launch
 configuration; deployment transaction hashes and final live readback belong in
 the checked-in testnet deployment record.
 
+## Robinhood mainnet launch
+
+Mainnet reuses the validated chain-4663 v4 and finalized Statics Operator
+manifests. It deploys only Burntato-owned contracts. The mainnet profile pins
+the reviewed launch economics in code and requires every role explicitly:
+
+```text
+BURNTATO_DEPLOYER
+BURNTATO_FINAL_ADMIN
+BURNTATO_GUARDIAN
+BURNTATO_TREASURY
+BURNTATO_REWARD_ALLOCATOR
+```
+
+`BURNTATO_DEPLOYER` must equal the address derived from `PRIVATE_KEY` during
+deployment. The final admin, Treasury, and reward allocator must be nonzero.
+The guardian may be the zero address. Mainnet does not accept environment
+overrides for economics, market geometry, or canonical dependencies.
+
+Load `ROBINHOOD_MAINNET` and any required signing key through the private
+operations environment. Do not put either value in a command argument. Run
+each phase separately and inspect its result before continuing:
+
+```bash
+scripts/deploy-robinhood-mainnet.sh --preflight
+scripts/deploy-robinhood-mainnet.sh --deploy
+scripts/deploy-robinhood-mainnet.sh --inspect
+BLOCKSCOUT_API_URL="<explorer-api>" scripts/deploy-robinhood-mainnet.sh --verify
+scripts/deploy-robinhood-mainnet.sh --launch
+scripts/deploy-robinhood-mainnet.sh --bootstrap
+scripts/deploy-robinhood-mainnet.sh --buyback
+scripts/deploy-robinhood-mainnet.sh --buyback
+scripts/deploy-robinhood-mainnet.sh --buyback
+scripts/deploy-robinhood-mainnet.sh --buyback
+scripts/deploy-robinhood-mainnet.sh --buyback
+```
+
+The release-candidate bootstrap uses one initial capped buyback plus five later
+executions, one transaction per eligible block. Purchase initialization remains
+false and external buys remain closed throughout the bootstrap. The readiness
+check rejects a missing buyback or more than 100 wei of tracked reserve by
+default. It also requires the Treasury to hold between 10.2 million and 10.4
+million POTATO from the reviewed bootstrap curve. The reserve threshold and
+POTATO output band are fixed in the mainnet operations script.
+
+When the final admin is an EOA controlled by the operations key, complete the
+two privileged phases directly:
+
+```bash
+scripts/deploy-robinhood-mainnet.sh --initialize
+scripts/deploy-robinhood-mainnet.sh --enable
+scripts/deploy-robinhood-mainnet.sh --check
+scripts/deploy-robinhood-mainnet.sh --record
+```
+
+Both commands verify that the signing key resolves to the configured final
+admin before broadcasting. When the final admin is a Safe or another contract,
+generate the initialization call after the bootstrap instead:
+
+```bash
+scripts/deploy-robinhood-mainnet.sh --initialize-bundle
+```
+
+Submit that call as a standalone transaction. After it confirms, generate and
+submit the separately checked buy-opening call:
+
+```bash
+scripts/deploy-robinhood-mainnet.sh --enable-bundle
+```
+
+Do not batch the two privileged transitions. Each bundle command verifies the
+complete state expected immediately before its call. After the second
+transaction confirms, run `--check`. Supply the two public transaction hashes as
+`BURNTATO_INITIALIZE_TX_HASH` and `BURNTATO_ENABLE_TX_HASH` when running
+`--record`. The record command writes
+`deployments/robinhood-mainnet-4663-launch.json` only after exact deployment
+inspection and final lifecycle checks pass. Review that public record before
+committing it.
+
+If deployment submission is interrupted, `--resume-deploy` uses Foundry's
+recorded transaction sequence. The bootstrap helper separately resumes after
+an exact completed reserve contribution without funding it twice. Every
+successful launch operation is appended to the ignored public-only operations
+ledger used to construct the final release record. Every post-deployment mode
+also requires a clean checkout at the exact source commit recorded during
+deployment, so later edits cannot silently change the launch procedure.
+
 ## Post-deployment inspection
 
 `scripts/check-deployment.sh` performs read-only `cast` calls and emits compact
@@ -300,7 +387,11 @@ the checked-in testnet deployment record.
 deployed code presence, chain ID, governance roles, pause and foundation state,
 market readiness, Treasury and reward roles, hook configuration, PositionManager
 bindings, and Statics Operator bindings. It does not compare runtime code hashes
-or deploy helper contracts. Set `RPC_URL` and pass the deployment JSON path.
+when the artifact omits them and does not deploy helper contracts. Mainnet
+artifacts include exact runtime code hashes for Burntato-owned and canonical
+dependencies, so those hashes are checked. Set `RPC_URL` and pass the deployment
+JSON path. Set `EXPECTED_MARKET_READY=false` only for post-launch inspection;
+the chain-specific final checker must separately prove the launched state.
 
 The testnet wrapper's `--verify` mode uses Foundry's standard Blockscout source
 verification flow. Override `BLOCKSCOUT_API_URL` only when the explorer changes

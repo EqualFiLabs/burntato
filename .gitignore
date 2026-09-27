@@ -12,6 +12,7 @@ deployments/*
 !deployments/robinhood-chain-testnet-46630.json
 !deployments/statics-operators-robinhood-testnet-46630.json
 !deployments/robinhood-testnet-46630-launch.json
+!deployments/robinhood-mainnet-4663-launch.json
 artifacts/
 analysis/potato-market-model/results.json
 analysis/potato-market-model/round-traces.csv

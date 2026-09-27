@@ -5,17 +5,19 @@ readonly DEFAULT_ARTIFACT="artifacts/robinhood-testnet/deployment.json"
 readonly ZERO_ADDRESS="0x0000000000000000000000000000000000000000"
 
 artifact=${1:-$DEFAULT_ARTIFACT}
-rpc_url=${RPC_URL:-${ROBINHOOD_TESTNET_RPC_URL:-}}
+rpc_url=${RPC_URL:-${ROBINHOOD_TESTNET_RPC_URL:-${ROBINHOOD_MAINNET:-}}}
 failures=0
 call_count=0
 receipt_summary=not_checked
+expected_market_ready=${EXPECTED_MARKET_READY:-true}
 export FOUNDRY_DISABLE_NIGHTLY_WARNING=${FOUNDRY_DISABLE_NIGHTLY_WARNING:-1}
 
 for command_name in cast jq; do
   command -v "$command_name" >/dev/null || { printf 'FAIL missing_command=%s\n' "$command_name" >&2; exit 1; }
 done
-[[ -n "$rpc_url" ]] || { printf 'FAIL missing_rpc set RPC_URL or ROBINHOOD_TESTNET_RPC_URL\n' >&2; exit 1; }
+[[ -n "$rpc_url" ]] || { printf 'FAIL missing_rpc set RPC_URL, ROBINHOOD_TESTNET_RPC_URL, or ROBINHOOD_MAINNET\n' >&2; exit 1; }
 [[ -f "$artifact" ]] || { printf 'FAIL missing_artifact=%s\n' "$artifact" >&2; exit 1; }
+export ETH_RPC_URL="$rpc_url"
 
 fail() {
   printf 'FAIL %s\n' "$1" >&2
@@ -45,7 +47,7 @@ check_call() {
   local actual
 
   call_count=$((call_count + 1))
-  if ! actual=$(cast call "$address" "$signature" --rpc-url "$rpc_url" 2>&1); then
+  if ! actual=$(cast call "$address" "$signature" 2>&1); then
     fail "$name error=$(sanitize "$actual")"
     return
   fi
@@ -58,7 +60,8 @@ check_call() {
 required_fields=(
   chainId diamond admin guardian treasuryRecipient rewardAllocator hook hookDeployer
   operatorRewardsRouter operatorsNft activationRegistry hookFeeBps operatorRewardShareBps
-  poolManager positionManager permit2 diamondCutFacet diamondLoupeFacet governanceFacet
+  poolManager positionDescriptor positionManager quoter stateView reservesLens universalRouter permit2 weth
+  diamondCutFacet diamondLoupeFacet governanceFacet
   marketFacet buybackFacet potatoTokenFacet gameFacet recoveryFacet settlementFacet
   claimsFacet treasuryRewardsFacet foundationInit
 )
@@ -68,7 +71,7 @@ done
 ((failures == 0)) || exit 1
 
 expected_chain=$(json_value chainId)
-actual_chain=$(cast chain-id --rpc-url "$rpc_url" 2>&1) || {
+actual_chain=$(cast chain-id 2>&1) || {
   fail "chain_id error=$(sanitize "$actual_chain")"
   exit 1
 }
@@ -81,15 +84,30 @@ fi
 code_fields=(
   diamond diamondCutFacet diamondLoupeFacet governanceFacet marketFacet buybackFacet
   potatoTokenFacet gameFacet recoveryFacet settlementFacet claimsFacet treasuryRewardsFacet
-  foundationInit hookDeployer hook operatorRewardsRouter
+  foundationInit hookDeployer hook operatorRewardsRouter operatorsNft activationRegistry
+  poolManager positionDescriptor positionManager quoter stateView reservesLens universalRouter permit2 weth
 )
 code_count=0
+hash_count=0
 for field in "${code_fields[@]}"; do
   address=$(json_value "$field" 2>/dev/null || true)
   [[ -n "$address" && "${address,,}" != "$ZERO_ADDRESS" ]] || continue
-  if code=$(cast code "$address" --rpc-url "$rpc_url" 2>&1); then
+  if code=$(cast code "$address" 2>&1); then
     if [[ "$code" != "0x" && "$code" != "0x0" ]]; then
       code_count=$((code_count + 1))
+      hash_field="${field}RuntimeCodeHash"
+      expected_hash=$(jq -er --arg field "$hash_field" '.[$field] // empty' "$artifact" 2>/dev/null || true)
+      if [[ -n "$expected_hash" ]]; then
+        if actual_hash=$(cast codehash "$address" 2>&1); then
+          if same_value "$actual_hash" "$expected_hash"; then
+            hash_count=$((hash_count + 1))
+          else
+            fail "$field codehash_expected=$expected_hash codehash_actual=$(sanitize "$actual_hash")"
+          fi
+        else
+          fail "$field codehash_error=$(sanitize "$actual_hash")"
+        fi
+      fi
     else
       fail "$field code=empty"
     fi
@@ -115,7 +133,7 @@ check_call authority "$diamond" 'authority()(address)' "$admin"
 check_call guardian "$diamond" 'guardian()(address)' "$guardian"
 check_call foundation_configured "$diamond" 'foundationConfigured()(bool)' true
 check_call protocol_paused "$diamond" 'paused()(bool)' false
-check_call market_ready "$diamond" 'marketReady()(bool)' true
+check_call market_ready "$diamond" 'marketReady()(bool)' "$expected_market_ready"
 check_call treasury_recipient "$diamond" 'treasuryRecipient()(address)' "$treasury"
 check_call reward_allocator "$diamond" 'rewardAllocator()(address)' "$reward_allocator"
 
@@ -153,8 +171,8 @@ if [[ -n "${BROADCAST_FILE:-}" ]]; then
 fi
 
 if ((failures == 0)); then
-  printf 'PASS deployment_check chain_id=%s deployed_code=%d calls=%d receipts=%s\n' \
-    "$actual_chain" "$code_count" "$call_count" "$receipt_summary"
+  printf 'PASS deployment_check chain_id=%s deployed_code=%d codehashes=%d calls=%d receipts=%s\n' \
+    "$actual_chain" "$code_count" "$hash_count" "$call_count" "$receipt_summary"
 else
   printf 'FAIL deployment_check failures=%d\n' "$failures" >&2
   exit 1
