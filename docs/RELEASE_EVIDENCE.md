@@ -754,12 +754,17 @@ the generated report SHA-256 is
 | Model invariants | `node analysis/potato-market-model/model.test.mjs` | Passed with the six-call bootstrap pinned |
 | Format and diff | `forge fmt --check` and `git diff --check` | Passed |
 | Formal source compilation | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` and `forge inspect formal/certora/harness/BurntatoPauseHarness.sol:BurntatoPauseHarness abi` | Solidity properties and harness compiled successfully |
-| Formal solvers | `formal/scripts/run-halmos.sh` and local Certora preflight | Not executed because Halmos, Certora, Java, and the required Certora compiler were unavailable |
+| Halmos | `formal/scripts/run-halmos.sh` at `289dd9b` with Halmos 0.3.3, Foundry 1.7.1, and Solidity 0.8.26 | 21 properties passed, 0 failed: 6 activation, 4 buyback funding, 4 arithmetic, and 7 pause properties; no timeout or unknown result |
+| Certora | Current CVL source compilation and historical result review | Not rerun against this candidate; prior successful jobs do not prove the current buyback and pause delta |
 
 Focused review covered Diamond selector and storage compatibility, pause and
 authority boundaries, PoolManager callback settlement, POTATO movement,
 full-fill rollback, gross-to-net reward rounding, bootstrap resumability, and
 denial-of-service paths. No new release-scope finding remained. The existing
 minimum-output and MEV boundary above remains an explicit product decision.
-This is model, local Foundry, and pinned-fork evidence; it is not a public-
-network deployment, completed formal proof, or independent third-party audit.
+The first Halmos run exposed a stale activation-property expectation that
+treated the POTATO market seed as an initial native Winner reserve. Commit
+`289dd9b` corrected the expectation to the configured zero reserve, after which
+the complete suite passed. This is model, local Foundry, pinned-fork, and scoped
+Halmos evidence; it is not a public-network deployment, protocol-wide formal
+proof, current Certora rerun, or independent third-party audit.
