@@ -10,15 +10,13 @@ import {BalanceDelta, BalanceDeltaLibrary} from "@uniswap/v4-core/src/types/Bala
 import {Currency} from "@uniswap/v4-core/src/types/Currency.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-
 import {IBuyback} from "../interfaces/IBuyback.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
-import {BuybackConfig} from "../shared/Types.sol";
+import {BuybackConfig, BuybackQuote} from "../shared/Types.sol";
 
 contract BuybackFacet is IBuyback {
     using BalanceDeltaLibrary for BalanceDelta;
@@ -63,6 +61,8 @@ contract BuybackFacet is IBuyback {
     }
 
     function buyback() external nonReentrant returns (uint256 amountOut) {
+        if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
+
         LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
         if (!ms.launched) revert Errors.MarketNotLaunched();
 
@@ -78,8 +78,9 @@ contract BuybackFacet is IBuyback {
         uint256 nextBlock = bs.lastBuybackBlock + config.delayBlocks;
         if (block.number < nextBlock) revert Errors.BuybackTooSoon(nextBlock);
 
-        uint256 grossSlice = reserve < config.maxSpend ? reserve : config.maxSpend;
-        uint256 requestedInput = Math.mulDiv(grossSlice, Constants.BPS, Constants.BPS + uint256(config.callerRewardBps));
+        BuybackQuote memory quote = LibMath.quoteBuyback(reserve, config.maxSpend, config.callerRewardBps);
+        uint256 grossSlice = quote.grossSlice;
+        uint256 requestedInput = quote.requestedInput;
         if (requestedInput > uint256(type(int256).max)) revert Errors.InvalidMarketConfiguration();
         bs.reserveEth = reserve - grossSlice;
         bs.lastBuybackBlock = block.number;
@@ -90,9 +91,9 @@ contract BuybackFacet is IBuyback {
             bytes memory result = IPoolManager(ms.poolManager).unlock(abi.encode(requestedInput, treasuryRecipient));
             (ethSpent, amountOut) = abi.decode(result, (uint256, uint256));
         }
-        if (ethSpent == 0 || amountOut == 0) revert Errors.BuybackNoExecution();
+        if (ethSpent != requestedInput || amountOut == 0) revert Errors.BuybackNoExecution();
 
-        uint256 callerReward = LibMath.mulBpsDown(ethSpent, config.callerRewardBps);
+        uint256 callerReward = quote.callerReward;
         bs.reserveEth += grossSlice - ethSpent - callerReward;
         if (callerReward != 0) SafeTransferLib.forceSafeTransferETH(msg.sender, callerReward);
         emit BuybackExecuted(

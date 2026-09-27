@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-
 import {IClaims} from "../interfaces/IClaims.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
+import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {Errors} from "../shared/Errors.sol";
@@ -120,9 +119,13 @@ contract ClaimsFacet is IClaims {
         uint256 committed
     ) private view returns (uint256) {
         if (committed == 0) return 0;
-        uint256 newClaimedCommitments = rs.claimedCommitments[roundId] + committed;
-        if (newClaimedCommitments == round.totalCommitted) return round.recoveryPool - rs.recoveryPaid[roundId];
-        return Math.mulDiv(round.recoveryPool, committed, round.totalCommitted);
+        return LibMath.recoveryClaimAmount(
+            round.recoveryPool,
+            round.totalCommitted,
+            rs.claimedCommitments[roundId],
+            rs.recoveryPaid[roundId],
+            committed
+        );
     }
 
     function _sendNative(address recipient, uint256 amount) private {

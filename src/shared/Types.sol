@@ -62,6 +62,21 @@ struct BuybackConfig {
     uint256 delayBlocks;
 }
 
+struct PurchaseAllocation {
+    uint256 winner;
+    uint256 nextRoundWinner;
+    uint256 recovery;
+    uint256 treasury;
+    uint256 buyback;
+    uint256 operator;
+}
+
+struct BuybackQuote {
+    uint256 grossSlice;
+    uint256 requestedInput;
+    uint256 callerReward;
+}
+
 struct RewardSchedule {
     uint256 scheduleId;
     uint256 amount;

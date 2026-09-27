@@ -76,7 +76,7 @@ for (const curveConfig of config.curves) {
   const buyback = executeBuybackReserve(curve, start, 5, config.market);
   near(buyback.spentEth + buyback.callerRewardEth + buyback.remainingReserveEth, 5, 1e-9, `${curve.name}: buyback conservation`);
   near(buyback.spentEth, 5 * 10_000 / 10_050, 1e-9, `${curve.name}: gross-slice spend`);
-  assert.equal(buyback.calls, 3, `${curve.name}: 2 ETH max-spend chunking`);
+  assert.equal(buyback.calls, 5, `${curve.name}: 1 ETH max-spend chunking`);
 }
 
 const five = ticketRound(5, config.game);
@@ -112,7 +112,7 @@ const releaseBootstrap = executeBuybackReserve(
 near(releaseBootstrap.spentEth, 5, 1e-9, "release bootstrap net spend");
 near(releaseBootstrap.callerRewardEth, 0.025, 1e-9, "release bootstrap caller reward");
 near(releaseBootstrap.potatoReceived, 10_276_304.95867, 1e-3, "release bootstrap POTATO");
-assert.equal(releaseBootstrap.calls, 3, "release bootstrap calls");
+assert.equal(releaseBootstrap.calls, 6, "release bootstrap calls");
 
 const fiveEmission = emissionForRound(5, 1, config.game).emittedPotato;
 const inventoryCoverage = new Map();

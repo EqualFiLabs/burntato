@@ -41,7 +41,7 @@ library BurntatoDeploymentConfig {
                 minimumRoundTimeout: 5 minutes
             }),
             initialWinnerReserve: 0,
-            buyback: BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1}),
+            buyback: BuybackConfig({maxSpend: 1 ether, callerRewardBps: 50, delayBlocks: 1}),
             hookFeeBps: 100,
             operatorRewardShareBps: 0,
             initialTick: BurntatoLaunchCurves.initialTick(),

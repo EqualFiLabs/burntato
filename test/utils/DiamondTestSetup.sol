@@ -135,7 +135,7 @@ abstract contract DiamondTestSetup is Test {
     }
 
     function _defaultBuybackConfig() internal pure returns (BuybackConfig memory config) {
-        config = BuybackConfig({maxSpend: 2 ether, callerRewardBps: 50, delayBlocks: 1});
+        config = BuybackConfig({maxSpend: 1 ether, callerRewardBps: 50, delayBlocks: 1});
     }
 
     function _loupeSelectors() internal pure returns (bytes4[] memory selectors) {

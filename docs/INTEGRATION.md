@@ -237,35 +237,40 @@ plain receive function does not credit the reserve.
 Calling the standalone facet implementation directly also reverts, preventing
 native funds from being stranded outside Diamond accounting.
 
-Call `IBuyback.buyback()` without parameters after market launch. It selects the
-governed gross slice from `buybackReserveEth`, derives a swap budget that leaves
+Call `IBuyback.buyback()` without parameters while the protocol is unpaused and
+after market launch. It selects the governed gross slice from
+`buybackReserveEth`, derives a swap budget that leaves
 room for the configured reward, and swaps exact-input native ETH for POTATO at
-the extreme Uniswap price limit. The reward is then calculated from actual ETH
-spent. There is intentionally no caller-provided quote, slippage, deadline, or
-recipient parameter. Partial fills restore everything except actual spend and
-its proportional reward to the reserve.
+the extreme Uniswap price limit. The canonical swap must spend the complete
+requested input, and the reward is calculated from that exact spend. There is
+intentionally no caller-provided quote, slippage, deadline, or recipient
+parameter.
 
 PoolManager sends output directly to the current `IClaims.treasuryRecipient()`.
 The hook exact-authorizes that transfer even when the current recipient is not a
 distributor, and the buyback leaves `externalBuysEnabled` unchanged. Observe
 `BuybackExecuted` for gross slice, actual ETH spent, POTATO bought, caller
-reward, and final reserve. The default cap, reward, and delay are 2 ETH, 50 BPS,
+reward, and final reserve. The default cap, reward, and delay are 1 ETH, 50 BPS,
 and one block. The reward rate cannot exceed 100 BPS.
 
-If the canonical swap spends zero ETH or returns zero POTATO, the complete call
-reverts: no reward is paid, reserve is unchanged, and the cooldown is not
-consumed. A partial positive fill remains valid. Integrators should expose the
-current cap, reward, delay, and reserve; no new user input is required.
+If the canonical swap partially fills, spends zero ETH, or returns zero POTATO,
+the complete call reverts: PoolManager changes roll back, no reward is paid,
+reserve is unchanged, and the cooldown is not consumed. The global pause also
+blocks `buyback()` before market or reserve validation. Integrators should
+expose the current cap, reward, delay, reserve, and pause state; no new user
+input is required.
 
 `BootstrapBurntatoBuyback.s.sol` provides an optional two-transaction launch
 helper: it funds the reserve and then calls `buyback()`. It accepts the Diamond,
 funding amount in wei, and broadcaster key through
 `BURNTATO_DIAMOND`, `BURNTATO_BOOTSTRAP_BUYBACK_WEI`, and `PRIVATE_KEY`. It
-requires a launched market, inactive game purchases, no prior buyback, and an
-amount no greater than `maxSpend`. If the funding transaction succeeded but the
-buyback transaction did not, rerunning resumes only when the tracked reserve
-still equals the exact requested amount. The helper never enables external
-buys.
+requires a launched market, inactive game purchases, no prior buyback, and a
+positive complete-reserve amount that may exceed `maxSpend`. If the funding
+transaction succeeded but the buyback transaction did not, rerunning resumes
+only when the tracked reserve still equals the exact requested amount. The
+helper never enables external buys. `ExecuteBurntatoBuyback.s.sol` performs one
+later execution without funding and rejects an unlaunched, paused, or
+empty-reserve state.
 
 - [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
 

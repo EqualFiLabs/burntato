@@ -18,7 +18,7 @@
     "positionsPerBand": 11,
     "hookFeeBps": 100,
     "hookTreasuryShareBps": 6000,
-    "buybackMaxSpendEth": 2,
+    "buybackMaxSpendEth": 1,
     "buybackCallerRewardBps": 50,
     "buybackDelayBlocks": 1
   },

@@ -6,8 +6,10 @@ import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
 import {CustomRevert} from "@uniswap/v4-core/src/libraries/CustomRevert.sol";
 import {IHooks} from "@uniswap/v4-core/src/interfaces/IHooks.sol";
 import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
 import {PoolSwapTest} from "@uniswap/v4-core/src/test/PoolSwapTest.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
+import {PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
@@ -99,10 +101,13 @@ contract IntegrationActivationRegistry {
 }
 
 contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionManagerTestSetup {
+    using PoolIdLibrary for PoolKey;
+    using StateLibrary for IPoolManager;
+
     address internal constant CREATE2_DEPLOYER = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
     int24 internal constant TICK_SPACING = 60;
     int24 internal constant INITIAL_TICK = 170_280;
-    uint256 internal constant POTATO_SEED = 1 ether;
+    uint256 internal constant POTATO_SEED = 100_000_000 ether;
 
     address internal alice = makeAddr("alice");
     address internal bob = makeAddr("bob");
@@ -765,9 +770,8 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertGt(amountOut, 0);
         assertEq(amountOut, bought);
         assertEq(grossSlice, 0.002 ether);
-        assertGt(ethSpent, 0);
+        assertEq(ethSpent, grossSlice * 10_000 / 10_050);
         assertEq(reward, ethSpent * 50 / 10_000);
-        assertLe(ethSpent + reward, grossSlice);
         assertEq(reserveAfter, grossSlice - ethSpent - reward);
         assertEq(potato.balanceOf(treasury) - treasuryPotatoBefore, amountOut);
         assertEq(keeper.balance - keeperBefore, reward);
@@ -787,6 +791,43 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         _sell(alice, amountOut / 2);
         assertGt(alice.balance, nativeBefore);
         assertFalse(hook.externalBuysEnabled());
+    }
+
+    function test_GlobalPauseBlocksBuybackButNotReserveFundingAndAdminCanResume() public {
+        _createTreasuryInventory();
+        market.launchMarket();
+
+        IGovernance governance = IGovernance(address(diamond));
+        IPoolManager poolManager = IPoolManager(address(manager));
+        uint256 reserveBefore = buybacks.buybackReserveEth();
+        uint256 lastExecutionBlock = buybacks.lastBuybackBlock();
+        uint256 keeperBefore = keeper.balance;
+        uint256 treasuryPotatoBefore = potato.balanceOf(treasury);
+        (uint160 sqrtPriceBefore, int24 tickBefore,,) = poolManager.getSlot0(key.toId());
+
+        vm.prank(guardian);
+        governance.setPaused(true);
+        vm.prank(keeper);
+        vm.expectRevert(Errors.ProtocolPaused.selector);
+        buybacks.buyback();
+
+        assertEq(buybacks.buybackReserveEth(), reserveBefore);
+        assertEq(buybacks.lastBuybackBlock(), lastExecutionBlock);
+        assertEq(keeper.balance, keeperBefore);
+        assertEq(potato.balanceOf(treasury), treasuryPotatoBefore);
+        (uint160 sqrtPricePaused, int24 tickPaused,,) = poolManager.getSlot0(key.toId());
+        assertEq(sqrtPricePaused, sqrtPriceBefore);
+        assertEq(tickPaused, tickBefore);
+
+        vm.prank(alice);
+        buybacks.fundBuybackReserve{value: 0.001 ether}();
+        assertEq(buybacks.buybackReserveEth(), reserveBefore + 0.001 ether);
+        assertEq(buybacks.lastBuybackBlock(), lastExecutionBlock);
+
+        vm.prank(authority);
+        governance.setPaused(false);
+        vm.prank(keeper);
+        assertGt(buybacks.buyback(), 0);
     }
 
     function test_DirectReserveBootstrapCreatesSellLiquidityWithoutGamePurchase() public {
@@ -835,6 +876,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
             _buybackAccounting(vm.getRecordedLogs());
         assertGt(firstOut, 0);
         assertEq(firstGross, 0.001 ether);
+        assertEq(firstSpent, firstGross * 10_000 / 10_050);
         assertEq(firstReward, firstSpent * 50 / 10_000);
         assertEq(keeper.balance, firstReward);
         assertEq(firstReserve, 0.002 ether - firstSpent - firstReward);
@@ -852,6 +894,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
             _buybackAccounting(vm.getRecordedLogs());
         assertGt(secondOut, 0);
         assertEq(secondGross, 0.001 ether);
+        assertEq(secondSpent, secondGross * 10_000 / 10_050);
         assertEq(secondReward, secondSpent * 50 / 10_000);
         assertEq(keeper.balance, firstReward + secondReward);
         assertEq(secondReserve, firstReserve - secondSpent - secondReward);
@@ -920,7 +963,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         assertGt(buybacks.buyback(), 0);
         (uint256 gross, uint256 spent,, uint256 reward, uint256 reserve) = _buybackAccounting(vm.getRecordedLogs());
         assertEq(gross, 0.001 ether);
-        assertGt(spent, 0);
+        assertEq(spent, gross * 10_000 / 10_100);
         assertEq(reward, spent * 100 / 10_000);
         assertEq(keeper.balance, reward);
         assertEq(reserve, 0.002 ether - spent - reward);
@@ -976,7 +1019,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
 
         assertEq(amountOut, bought);
         assertGt(amountOut, 0);
-        assertLe(spent, gross * 10_000 / 10_050);
+        assertEq(spent, gross * 10_000 / 10_050);
         assertEq(reward, spent * 50 / 10_000);
         assertEq(reserve, gross - spent - reward);
         assertEq(buybacks.buybackReserveEth(), reserve);
@@ -1044,7 +1087,7 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
         vm.prank(bob);
         game.buyPotato{value: 0.01 ether}();
         _expireAndSettle();
-        assertEq(potato.balanceOf(address(diamond)), 1_001 ether);
+        assertEq(potato.balanceOf(address(diamond)), POTATO_SEED + 1_000 ether);
     }
 
     function _expireAndSettle() internal {
@@ -1133,5 +1176,9 @@ contract CanonicalMarketLifecycleTest is DiamondTestSetup, Deployers, PositionMa
                 return abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
             }
         }
+    }
+
+    function _genesisMarketSupply() internal pure override returns (uint256) {
+        return POTATO_SEED;
     }
 }

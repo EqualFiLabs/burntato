@@ -4,6 +4,7 @@ pragma solidity 0.8.26;
 import {ITreasuryRewards} from "../interfaces/ITreasuryRewards.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibDiamond} from "../libraries/LibDiamond.sol";
+import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
 import {Errors} from "../shared/Errors.sol";
@@ -35,8 +36,7 @@ contract TreasuryRewardsFacet is ITreasuryRewards {
         if (IPotatoToken(address(this)).balanceOf(msg.sender) < amount) revert Errors.InsufficientBalance();
 
         uint256 lastRoundId = firstRoundId + roundCount - 1;
-        uint256 perRound = amount / roundCount;
-        uint256 remainder = amount - perRound * roundCount;
+        (uint256 perRound, uint256 remainder) = LibMath.splitSchedule(amount, roundCount);
 
         IPotatoToken(address(this)).protocolTransfer(msg.sender, address(this), amount);
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();

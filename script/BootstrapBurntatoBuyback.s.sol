@@ -6,7 +6,6 @@ import {Script, console2} from "forge-std/Script.sol";
 import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
-import {BuybackConfig} from "../src/shared/Types.sol";
 
 contract BootstrapBurntatoBuyback is Script {
     error InvalidDiamond(address diamond);
@@ -14,7 +13,7 @@ contract BootstrapBurntatoBuyback is Script {
     error MarketNotLaunched();
     error PurchasesAlreadyInitialized();
     error BuybackAlreadyExecuted(uint256 lastBuybackBlock);
-    error InvalidBootstrapAmount(uint256 amount, uint256 maxSpend);
+    error InvalidBootstrapAmount(uint256 amount);
     error UnexpectedBuybackReserve(uint256 expected, uint256 actual);
 
     function run() external returns (uint256 funded, uint256 potatoBought, uint256 reserveAfter) {
@@ -57,8 +56,7 @@ contract BootstrapBurntatoBuyback is Script {
         uint256 lastExecutionBlock = buybacks.lastBuybackBlock();
         if (lastExecutionBlock != 0) revert BuybackAlreadyExecuted(lastExecutionBlock);
 
-        BuybackConfig memory config = buybacks.buybackConfig();
-        if (amount == 0 || amount > config.maxSpend) revert InvalidBootstrapAmount(amount, config.maxSpend);
+        if (amount == 0) revert InvalidBootstrapAmount(amount);
 
         uint256 reserve = buybacks.buybackReserveEth();
         if (reserve == 0) return true;

@@ -21,7 +21,7 @@ import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
-import {Round} from "../../src/shared/Types.sol";
+import {BuybackConfig, Round} from "../../src/shared/Types.sol";
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 import {PositionManagerTestSetup} from "../utils/PositionManagerTestSetup.sol";
 
@@ -195,14 +195,22 @@ contract CanonicalMarketHandler is Test {
         vm.recordLogs();
         try buybacks.buyback() returns (uint256 amountOut) {
             uint256 reserveAfter = buybacks.buybackReserveEth();
-            (bool found, uint256 ethSpent, uint256 potatoBought, uint256 callerReward, uint256 eventReserve) =
-                _buybackExecution(vm.getRecordedLogs());
-            uint256 expectedReward = ethSpent * buybacks.buybackConfig().callerRewardBps / 10_000;
+            (
+                bool found,
+                uint256 grossSlice,
+                uint256 ethSpent,
+                uint256 potatoBought,
+                uint256 callerReward,
+                uint256 eventReserve
+            ) = _buybackExecution(vm.getRecordedLogs());
+            BuybackConfig memory config = buybacks.buybackConfig();
+            uint256 expectedInput = grossSlice * 10_000 / (10_000 + config.callerRewardBps);
+            uint256 expectedReward = ethSpent * config.callerRewardBps / 10_000;
             uint256 treasuryPotatoAfter = potato.balanceOf(feeAddress);
             uint256 callerAfter = address(this).balance;
             if (
-                !found || reserveAfter > reserveBefore || potatoBought != amountOut || callerReward != expectedReward
-                    || ethSpent + callerReward > reserveBefore
+                !found || reserveAfter > reserveBefore || ethSpent != expectedInput || potatoBought != amountOut
+                    || callerReward != expectedReward || ethSpent + callerReward > reserveBefore
                     || reserveAfter != reserveBefore - ethSpent - callerReward || eventReserve != reserveAfter
                     || treasuryPotatoAfter < treasuryPotatoBefore
                     || treasuryPotatoAfter - treasuryPotatoBefore != amountOut || callerAfter < callerBefore
@@ -233,14 +241,21 @@ contract CanonicalMarketHandler is Test {
     function _buybackExecution(Vm.Log[] memory logs)
         internal
         view
-        returns (bool found, uint256 ethSpent, uint256 potatoBought, uint256 callerReward, uint256 reserveEth)
+        returns (
+            bool found,
+            uint256 grossSlice,
+            uint256 ethSpent,
+            uint256 potatoBought,
+            uint256 callerReward,
+            uint256 reserveEth
+        )
     {
         bytes32 executionTopic = keccak256("BuybackExecuted(address,address,uint256,uint256,uint256,uint256,uint256)");
         for (uint256 i; i < logs.length; ++i) {
             if (logs[i].emitter == address(potato) && logs[i].topics[0] == executionTopic) {
-                (, ethSpent, potatoBought, callerReward, reserveEth) =
+                (grossSlice, ethSpent, potatoBought, callerReward, reserveEth) =
                     abi.decode(logs[i].data, (uint256, uint256, uint256, uint256, uint256));
-                return (true, ethSpent, potatoBought, callerReward, reserveEth);
+                return (true, grossSlice, ethSpent, potatoBought, callerReward, reserveEth);
             }
         }
     }
@@ -291,7 +306,7 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
                 tickLower: TickMath.minUsableTick(60),
                 tickUpper: 170_280,
                 tickSpacing: 60,
-                potatoSeed: 1 ether
+                potatoSeed: 100_000_000 ether
             })
         );
         _createTreasuryInventory();
@@ -376,5 +391,9 @@ contract CanonicalMarketInvariantTest is DiamondTestSetup, Deployers, PositionMa
         Round memory round = game.getRound(game.currentRoundId());
         vm.warp(round.deadline);
         settlement.settleRound();
+    }
+
+    function _genesisMarketSupply() internal pure override returns (uint256) {
+        return 100_000_000 ether;
     }
 }
