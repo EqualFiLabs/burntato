@@ -7,8 +7,8 @@ or a substitute for review.
 
 ## Solver-backed scope
 
-The Halmos properties execute production `LibMath`, the production Diamond,
-`FoundationInit`, `GovernanceFacet`, and `GameFacet`. They establish:
+The Halmos properties execute production libraries, the production Diamond,
+`FoundationInit`, and the production facets. They establish:
 
 - diminishing-timeout bounds and its fixed-reset branches;
 - rejection of every pre-activation `buyPotato()` payment;
@@ -23,29 +23,54 @@ reserve and Diamond balance exactly, repeated funding is additive, zero-value
 funding reverts without mutation, and a raw native transfer does not enter
 reserve accounting.
 
-The pause properties execute the production Diamond, `GovernanceFacet`,
-`PotatoTokenFacet`, and `BuybackFacet`. They establish that the guardian can
-pause but cannot unpause, unauthorized callers cannot pause, authority can
-clear the pause, paused central protocol minting and buyback execution revert
-without changing their protected accounting, direct reserve funding remains
-available while paused, and authority cannot be renounced while a guardian
-remains.
+The pause properties execute the production Diamond and every protected facet.
+They establish that the guardian can pause but cannot unpause, unauthorized
+callers cannot pause, authority can clear the pause, and authority cannot be
+renounced while a guardian remains. While paused, purchases, emission
+materialization, Recovery commitments, settlement, all claim paths, central
+protocol minting, and buyback execution revert with the exact shared pause
+error and without changing protected accounting. Direct Winner, Recovery, and
+buyback reserve funding remains available while paused.
+
+The Diamond properties establish current-authority-only cuts, authority
+succession, permanent rejection of add, replace, remove, and init-only cuts
+after finalization, and atomic selector-graph rollback when an initializer
+fails or the one-shot foundation initializer is repeated.
+
+The token properties establish canonical-hook-only transient authorization,
+exact PoolManager allowance consumption, overspend rollback, non-reuse after
+consumption, single-use protocol movement authorization, and protocol-only
+minting. The buyback execution properties establish exact reserve and caller
+reward accounting after a successful summarized PoolManager execution and
+atomic rollback for partial fill, zero output, external revert, or malformed
+return data.
+
+The lifecycle properties exercise concrete production state-machine witnesses
+for one-shot Winner claims, a complete two-round Recovery commitment, burn,
+treasury allocation, and claim, active-round configuration snapshots, and
+Treasury reward allocation and cancellation conservation. These witnesses
+prove those paths for the stated concrete setup. They are not universal
+quantification over every multi-round sequence.
 
 The Certora harnesses are thin wrappers over production `LibMath`,
 `GovernanceFacet`, `PotatoTokenFacet`, and `BuybackFacet`. CVL independently
-checks the arithmetic properties and the activation transition, including
-foundation initialization, unauthorized callers, repeat calls, and authority
-transfer before activation. The buyback funding harness checks exact reserve
-addition for arbitrary callers, zero-value rollback, cooldown isolation, and
-enforcement of the shared reentrancy guard. The pause harness checks guardian
-and authority permissions, safe authority renunciation including the
-pre-initialization rejection, supply preservation when paused protocol minting
-reverts, buyback reserve and cooldown preservation when paused execution
-reverts, and paused direct-funding availability.
+checks production-linked purchase allocation, buyback quoting, Recovery claim,
+reward schedule, emission, timeout, and BPS arithmetic. It also checks the
+purchase-activation transition, unauthorized callers, repeat calls, and
+authority transfer before activation. The buyback funding harness checks exact
+reserve addition for arbitrary callers, zero-value rollback, cooldown
+isolation, and enforcement of the shared reentrancy guard. The pause harness
+checks guardian and authority permissions, safe authority renunciation,
+protocol mint containment, exact pause-error behavior for buybacks, a reachable
+unpaused buyback manager boundary, and paused direct-funding availability.
 
 The activation, pause, and buyback funding harnesses have clearly marked
 state-construction methods. They are verification-only and are never part of a
 deployment. Every transition under test is executed by its production facet.
+The pause harness installs one selector directly to make the `onlyDiamond`
+funding precondition reachable. That local construction does not prove the
+complete selector graph; the actual-Diamond Halmos properties cover graph
+authority, rollback, and finalization separately.
 
 ## Deliberate boundaries
 
@@ -56,8 +81,9 @@ The following properties are not modeled as universal solver proofs here:
 - canonical Robinhood addresses, runtime bytecode, or live ownership;
 - external receiver behavior, forced ETH, and transaction ordering across
   unrelated contracts;
-- the complete Diamond selector graph and all multi-round state-machine paths;
-  and
+- every possible multi-round state-machine path;
+- the operator rewards router's complete dynamic registration and ownership
+  state space; and
 - gas availability, liveness, governance key safety, or economic desirability.
 
 Those surfaces remain covered by Foundry unit, fuzz, invariant, integration,
@@ -97,15 +123,21 @@ Never describe a submitted or still-running job as verified.
 
 ## Reproducibility
 
-The arithmetic harness bounds monetary values to `uint128`, BPS inputs to
-`uint16`, and timing/count inputs to `uint64`. Activation and Halmos buyback
-funding use `uint96` payment inputs. The Halmos pause-mint property keeps the
-mint amount symbolic within `uint96` and uses one fixed nonzero recipient
-because Solady's hashed balance slot is not concrete for a fully symbolic
-address in Halmos. Certora checks arbitrary recipients and `uint256` amounts.
-Certora bounds both the starting reserve and positive contribution below
-`2^128`. These bounds are explicit proof assumptions, not Solidity type
-changes.
+The Certora arithmetic harness uses the production `uint256` domain. Activation
+and several Halmos funding and execution properties use `uint96` inputs. The
+Halmos pause-mint property keeps the mint amount symbolic within `uint96` and
+uses one fixed nonzero recipient because Solady's hashed balance slot is not
+concrete for a fully symbolic address in Halmos. The Certora funding properties
+bound both starting reserve and positive contribution below `2^128` to make
+addition non-overflowing. These bounds are explicit proof assumptions, not
+Solidity type changes.
+
+External PoolManager behavior in the buyback execution proof is summarized by
+a deterministic manager boundary with success and failure modes. Uniswap v4
+integration behavior remains a Foundry integration and pinned-fork claim, not a
+solver claim. The launch-curve property uses production math in Foundry because
+symbolically expanding all 56 positions and Uniswap square-root-price math is
+not a useful solver model.
 
 The intended toolchain is Solidity 0.8.26 with the repository's production
 optimizer, `via_ir`, Cancun EVM, and metadata-free bytecode settings; Foundry
