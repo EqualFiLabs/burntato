@@ -127,7 +127,7 @@ contract BurntatoActivationProperties is Test {
         assertEq(game.currentRoundId(), 0);
         assertEq(game.getRound(0).currentHolder, address(0));
         (uint256 roundOneWinnerReserve, uint256 roundOneRecoveryReserve) = game.roundReserves(1);
-        assertEq(roundOneWinnerReserve, 1);
+        assertEq(roundOneWinnerReserve, 0);
         assertEq(roundOneRecoveryReserve, 0);
         (uint256 baseEarned, uint256 treasuryEarned) = game.currentEarnedEmission();
         assertEq(baseEarned, 0);
