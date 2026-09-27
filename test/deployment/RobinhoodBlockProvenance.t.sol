@@ -13,8 +13,24 @@ contract RobinhoodBlockValidationHarness {
         RobinhoodDeploymentConfig.validate(dependencies);
     }
 
+    function validateCanonicalAnvil(
+        CanonicalV4Dependencies memory dependencies,
+        uint256 currentBlock,
+        bytes32 actualBlockHash
+    ) external view {
+        RobinhoodDeploymentConfig.validateAnvilFork(dependencies, currentBlock, actualBlockHash);
+    }
+
     function validateStatics(StaticsOperatorDependencies memory dependencies) external view {
         StaticsOperatorDeploymentConfig.validate(dependencies);
+    }
+
+    function validateStaticsAnvil(
+        StaticsOperatorDependencies memory dependencies,
+        uint256 currentBlock,
+        bytes32 actualBlockHash
+    ) external view {
+        StaticsOperatorDeploymentConfig.validateAnvilFork(dependencies, currentBlock, actualBlockHash);
     }
 }
 
@@ -56,6 +72,30 @@ contract RobinhoodBlockProvenanceTest is Test {
         harness.validateCanonical(dependencies);
     }
 
+    function test_AnvilCanonicalValidatorRejectsBlockBeforeManifest() public {
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        uint256 priorBlock = dependencies.forkBlock - 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RobinhoodDeploymentConfig.InvalidCanonicalBlock.selector, dependencies.forkBlock, priorBlock
+            )
+        );
+        harness.validateCanonicalAnvil(dependencies, priorBlock, dependencies.forkBlockHash);
+    }
+
+    function test_AnvilCanonicalValidatorRequiresHistoricalHash() public {
+        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+        bytes32 incorrectHash = bytes32(uint256(dependencies.forkBlockHash) ^ 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RobinhoodDeploymentConfig.InvalidCanonicalBlockHash.selector, dependencies.forkBlockHash, incorrectHash
+            )
+        );
+        harness.validateCanonicalAnvil(dependencies, dependencies.forkBlock, incorrectHash);
+    }
+
     function test_StaticsValidatorUsesRobinhoodBlockNumber() public {
         StaticsOperatorDependencies memory dependencies = StaticsOperatorDeploymentConfig.load();
         uint256 priorBlock = dependencies.finalizedBlock - 1;
@@ -87,5 +127,31 @@ contract RobinhoodBlockProvenanceTest is Test {
             )
         );
         harness.validateStatics(dependencies);
+    }
+
+    function test_AnvilStaticsValidatorRejectsBlockBeforeFinalization() public {
+        StaticsOperatorDependencies memory dependencies = StaticsOperatorDeploymentConfig.load();
+        uint256 priorBlock = dependencies.finalizedBlock - 1;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                StaticsOperatorDeploymentConfig.InvalidStaticsBlock.selector, dependencies.finalizedBlock, priorBlock
+            )
+        );
+        harness.validateStaticsAnvil(dependencies, priorBlock, dependencies.finalizedBlockHash);
+    }
+
+    function test_AnvilStaticsValidatorRequiresHistoricalHash() public {
+        StaticsOperatorDependencies memory dependencies = StaticsOperatorDeploymentConfig.load();
+        bytes32 incorrectHash = bytes32(uint256(dependencies.finalizedBlockHash) ^ 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                StaticsOperatorDeploymentConfig.InvalidStaticsBlockHash.selector,
+                dependencies.finalizedBlockHash,
+                incorrectHash
+            )
+        );
+        harness.validateStaticsAnvil(dependencies, dependencies.finalizedBlock, incorrectHash);
     }
 }

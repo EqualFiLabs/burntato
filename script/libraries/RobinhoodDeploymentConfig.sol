@@ -77,9 +77,7 @@ library RobinhoodDeploymentConfig {
 
     function validate(CanonicalV4Dependencies memory dependencies) internal view {
         requireManifest(dependencies);
-        if (block.chainid != dependencies.chainId || !_isSupportedChain(dependencies.chainId)) {
-            revert InvalidCanonicalChain(dependencies.chainId, block.chainid);
-        }
+        _validateChain(dependencies.chainId);
         uint256 currentBlock = RobinhoodBlockProvenance.blockNumber();
         if (currentBlock < dependencies.forkBlock) revert InvalidCanonicalBlock(dependencies.forkBlock, currentBlock);
         uint256 blockDistance = currentBlock - dependencies.forkBlock;
@@ -90,6 +88,25 @@ library RobinhoodDeploymentConfig {
             }
         }
 
+        _validateDependencies(dependencies);
+    }
+
+    function validateAnvilFork(
+        CanonicalV4Dependencies memory dependencies,
+        uint256 currentBlock,
+        bytes32 actualBlockHash
+    ) internal view {
+        requireManifest(dependencies);
+        _validateChain(dependencies.chainId);
+        if (currentBlock < dependencies.forkBlock) revert InvalidCanonicalBlock(dependencies.forkBlock, currentBlock);
+        if (actualBlockHash != dependencies.forkBlockHash) {
+            revert InvalidCanonicalBlockHash(dependencies.forkBlockHash, actualBlockHash);
+        }
+
+        _validateDependencies(dependencies);
+    }
+
+    function _validateDependencies(CanonicalV4Dependencies memory dependencies) private view {
         _validateCode(dependencies.poolManager, dependencies.poolManagerCodeHash);
         _validateCode(dependencies.positionDescriptor, dependencies.positionDescriptorCodeHash);
         _validateCode(dependencies.positionManager, dependencies.positionManagerCodeHash);
@@ -122,6 +139,12 @@ library RobinhoodDeploymentConfig {
         _validateBinding(
             "ROUTER_POOL", dependencies.poolManager, IUniversalRouterBinding(dependencies.universalRouter).poolManager()
         );
+    }
+
+    function _validateChain(uint256 chainId) private view {
+        if (block.chainid != chainId || !_isSupportedChain(chainId)) {
+            revert InvalidCanonicalChain(chainId, block.chainid);
+        }
     }
 
     function _validateCode(address dependency, bytes32 expectedCodeHash) private view {

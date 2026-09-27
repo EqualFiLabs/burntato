@@ -2,6 +2,7 @@
 set -euo pipefail
 
 readonly CHAIN_ID=4663
+readonly RPC_ALIAS=robinhood_mainnet
 readonly BOOTSTRAP_BUYBACK_WEI=5025000000000000000
 readonly ARTIFACT=artifacts/robinhood-mainnet/deployment.json
 readonly INITIALIZE_CALL=artifacts/robinhood-mainnet/initialize-call.json
@@ -53,6 +54,18 @@ if ! actual_chain=$(cast chain-id 2>&1); then
 fi
 [[ "$actual_chain" == "$CHAIN_ID" ]] || { echo "Robinhood mainnet chain $CHAIN_ID is required" >&2; exit 1; }
 
+if [[ "${BURNTATO_ANVIL_REHEARSAL:-false}" == "true" ]]; then
+  if ! anvil_probe=$(cast rpc anvil_getAutomine 2>&1); then
+    echo "BURNTATO_ANVIL_REHEARSAL requires an Anvil RPC: $(redact_value "$anvil_probe")" >&2
+    exit 1
+  fi
+fi
+
+broadcast_fee_args=()
+if [[ "${BURNTATO_ANVIL_REHEARSAL:-false}" == "true" ]]; then
+  broadcast_fee_args=(--legacy)
+fi
+
 require_roles() {
   : "${BURNTATO_DEPLOYER:?BURNTATO_DEPLOYER is required}"
   : "${BURNTATO_FINAL_ADMIN:?BURNTATO_FINAL_ADMIN is required}"
@@ -97,7 +110,8 @@ require_artifact() {
 
 run_operation() {
   local signature=$1
-  run_redacted forge script "$OPERATE_SCRIPT" --sig "$signature" --chain-id "$CHAIN_ID" --broadcast --slow \
+  run_redacted forge script "$OPERATE_SCRIPT" --sig "$signature" --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" \
+    --broadcast "${broadcast_fee_args[@]}" --slow \
     --gas-estimate-multiplier 200 -vv
 }
 
@@ -128,20 +142,20 @@ require_successful_transaction() {
   local transaction_hash=$1
   local name=$2
   [[ "$transaction_hash" =~ ^0x[0-9a-fA-F]{64}$ ]] || { echo "invalid $name" >&2; exit 1; }
-  local status
-  if ! status=$(cast receipt "$transaction_hash" status 2>&1); then
-    echo "unable to read $name receipt: $(redact_value "$status")" >&2
+  local receipt
+  if ! receipt=$(cast receipt "$transaction_hash" --json 2>&1); then
+    echo "unable to read $name receipt: $(redact_value "$receipt")" >&2
     exit 1
   fi
-  [[ "$status" == "1" ]] || {
+  if ! jq -e '.status == "0x1" or .status == "1" or .status == true' <<<"$receipt" >/dev/null; then
     echo "$name does not identify a successful chain-$CHAIN_ID transaction" >&2
     exit 1
-  }
+  fi
 }
 
 if [[ "$mode" == "--preflight" ]]; then
   require_roles
-  run_redacted forge script "$DEPLOY_SCRIPT" --sig 'preflight()' --chain-id "$CHAIN_ID" -vv
+  run_redacted forge script "$DEPLOY_SCRIPT" --sig 'preflight()' --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" -vv
   exit 0
 fi
 
@@ -154,7 +168,8 @@ if [[ "$mode" == "--deploy" ]]; then
     echo "deployment state already exists; inspect it or use --resume-deploy" >&2
     exit 1
   }
-  run_redacted forge script "$DEPLOY_SCRIPT" --chain-id "$CHAIN_ID" --broadcast --slow \
+  run_redacted forge script "$DEPLOY_SCRIPT" --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" \
+    --broadcast "${broadcast_fee_args[@]}" --slow \
     --gas-estimate-multiplier 200 -vv
   exit 0
 fi
@@ -167,7 +182,8 @@ if [[ "$mode" == "--resume-deploy" ]]; then
     exit 1
   }
   require_recorded_source_commit
-  run_redacted forge script "$DEPLOY_SCRIPT" --chain-id "$CHAIN_ID" --resume --slow \
+  run_redacted forge script "$DEPLOY_SCRIPT" --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" \
+    --resume "${broadcast_fee_args[@]}" --slow \
     --gas-estimate-multiplier 200 -vv
   exit 0
 fi
@@ -176,14 +192,14 @@ require_artifact
 require_recorded_source_commit
 
 if [[ "$mode" == "--inspect" ]]; then
-  BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" scripts/check-deployment.sh "$ARTIFACT"
-  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkDeployed()' --chain-id "$CHAIN_ID" -vv
+  env BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" scripts/check-deployment.sh "$ARTIFACT"
+  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkDeployed()' --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" -vv
   exit 0
 fi
 
 if [[ "$mode" == "--verify" ]]; then
   : "${BLOCKSCOUT_API_URL:?BLOCKSCOUT_API_URL is required}"
-  run_redacted forge script "$DEPLOY_SCRIPT" --chain-id "$CHAIN_ID" --resume --verify --verify-external \
+  run_redacted forge script "$DEPLOY_SCRIPT" --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" --resume --verify --verify-external \
     --verifier blockscout --verifier-url "$BLOCKSCOUT_API_URL" -vv
   exit 0
 fi
@@ -202,7 +218,8 @@ if [[ "$mode" == "--bootstrap" ]]; then
   require_key
   export BURNTATO_BOOTSTRAP_BUYBACK_WEI="$BOOTSTRAP_BUYBACK_WEI"
   run_redacted forge script script/BootstrapBurntatoBuyback.s.sol:BootstrapBurntatoBuyback \
-    --chain-id "$CHAIN_ID" --broadcast --slow --gas-estimate-multiplier 200 -vv
+    --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" --broadcast "${broadcast_fee_args[@]}" --slow \
+    --gas-estimate-multiplier 200 -vv
   record_phase bootstrap-buyback "$BOOTSTRAP_BROADCAST_FILE"
   exit 0
 fi
@@ -210,7 +227,8 @@ fi
 if [[ "$mode" == "--buyback" ]]; then
   require_key
   run_redacted forge script script/ExecuteBurntatoBuyback.s.sol:ExecuteBurntatoBuyback \
-    --chain-id "$CHAIN_ID" --broadcast --slow --gas-estimate-multiplier 200 -vv
+    --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" --broadcast "${broadcast_fee_args[@]}" --slow \
+    --gas-estimate-multiplier 200 -vv
   record_phase buyback "$BUYBACK_BROADCAST_FILE"
   exit 0
 fi
@@ -230,7 +248,7 @@ if [[ "$mode" == "--enable" ]]; then
 fi
 
 if [[ "$mode" == "--initialize-bundle" ]]; then
-  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkReadyForInitialization()' --chain-id "$CHAIN_ID" -vv
+  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkReadyForInitialization()' --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" -vv
   mkdir -p "${INITIALIZE_CALL%/*}"
   temporary_bundle=$(mktemp "${INITIALIZE_CALL%/*}/initialize-call.XXXXXX")
   jq -n \
@@ -247,7 +265,7 @@ if [[ "$mode" == "--initialize-bundle" ]]; then
 fi
 
 if [[ "$mode" == "--enable-bundle" ]]; then
-  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkReadyForExternalBuys()' --chain-id "$CHAIN_ID" -vv
+  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkReadyForExternalBuys()' --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" -vv
   mkdir -p "${ENABLE_CALL%/*}"
   temporary_bundle=$(mktemp "${ENABLE_CALL%/*}/enable-call.XXXXXX")
   jq -n \
@@ -264,9 +282,9 @@ if [[ "$mode" == "--enable-bundle" ]]; then
 fi
 
 if [[ "$mode" == "--check" || "$mode" == "--record" ]]; then
-  EXPECTED_MARKET_READY=false BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" \
+  env EXPECTED_MARKET_READY=false BROADCAST_FILE="$BROADCAST_FILE" RPC_URL="$ETH_RPC_URL" \
     scripts/check-deployment.sh "$ARTIFACT"
-  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkFinalized()' --chain-id "$CHAIN_ID" -vv
+  run_redacted forge script "$OPERATE_SCRIPT" --sig 'checkFinalized()' --rpc-url "$RPC_ALIAS" --chain-id "$CHAIN_ID" -vv
 fi
 
 if [[ "$mode" == "--record" ]]; then
