@@ -35,6 +35,25 @@ including the global emergency pause where applicable.
 | Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | `finalAdmin` owns the Diamond authority and Burntato hook only |
 | Robinhood testnet | Pinned chain-46630 v4 contracts plus a standalone Statics Genesis replica | Live market launch against the canonical PoolManager and PositionManager | Profile deployer is `finalAdmin`; canonical PoolManager ownership is external |
 
+The Robinhood testnet deployment is a two-repository ceremony. A fresh Statics
+Genesis replica must be finalized first. The read-only
+`PrepareBurntatoRobinhoodTestnet` script validates its source revision, active
+epoch, reciprocal Genesis NFT and Activation Registry bindings, finalized
+launch state, the live Genesis vault epoch, runtime hashes, and Robinhood block
+provenance. It writes a public handoff artifact from which
+`scripts/deploy-robinhood-testnet.sh
+--prepare-statics` regenerates the committed Operator dependency manifest.
+That manifest must be reviewed and committed before the Burntato deployment
+preflight can pass.
+
+The testnet ceremony uses the full Robinhood launch defaults rather than the
+historical low-cost profile. After deployment it enforces four explicit states:
+deployed but unlaunched, market launched and buyback-bootstrapped while closed,
+purchases initialized while external buys remain closed, and fully open. The
+combined public release record is produced only after live receipt checks for
+the Statics deployment, Statics faucet, Burntato deployment, and every Burntato
+operation.
+
 The committed manifest pins block `45234855`, its block hash, and exact runtime
 hashes for all nine canonical dependencies. Addresses and hashes are not
 environment-overridable. Canonical deployment validates code plus PoolManager,

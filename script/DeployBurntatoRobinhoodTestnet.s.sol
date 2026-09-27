@@ -14,19 +14,37 @@ import {BurntatoLaunchCurves} from "../src/libraries/BurntatoLaunchCurves.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
+interface ITestnetStaticsGenesis {
+    function vault() external view returns (address);
+}
+
+interface ITestnetStaticsGenesisVault {
+    function genesisEpochEnd() external view returns (uint256);
+}
+
 contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
     uint256 public constant CHAIN_ID = 46_630;
     string public constant OUTPUT_PATH = "artifacts/robinhood-testnet/deployment.json";
+    string private constant STATICS_MANIFEST_PATH = "deployments/statics-operators-robinhood-testnet-46630.json";
 
     error InvalidTestnetChain(uint256 actualChainId);
+    error UnexpectedDeployer(address expected, address actual);
+    error InsufficientDeployerBalance(uint256 required, uint256 actual);
+    error InvalidStaticsGenesisVault(address expected, address actual);
+    error InvalidStaticsGenesisVaultCodeHash(bytes32 expected, bytes32 actual);
+    error InvalidStaticsGenesisEpoch(uint256 expected, uint256 actual);
+    error ExpiredStaticsGenesisEpoch(uint256 epochEnd, uint256 currentTimestamp);
 
     function run() external override returns (BurntatoDeployment memory deployment) {
-        if (block.chainid != CHAIN_ID) revert InvalidTestnetChain(block.chainid);
+        (
+            GenesisConfig memory config,
+            CanonicalV4Dependencies memory dependencies,
+            StaticsOperatorDependencies memory operatorDependencies
+        ) = _preflight();
+
         uint256 privateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(privateKey);
-        GenesisConfig memory config = testnetConfig(deployer);
-        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
-        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
+        if (deployer != config.deployer) revert UnexpectedDeployer(config.deployer, deployer);
 
         vm.startBroadcast(privateKey);
         deployment = deployWithDependencies(config, deployer, dependencies, operatorDependencies);
@@ -34,6 +52,18 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
 
         _writeDeployment(deployment, config, dependencies, operatorDependencies);
         _log(deployment);
+    }
+
+    function preflight()
+        external
+        view
+        returns (
+            GenesisConfig memory config,
+            CanonicalV4Dependencies memory dependencies,
+            StaticsOperatorDependencies memory operatorDependencies
+        )
+    {
+        return _preflight();
     }
 
     function testnetConfig(address deployer) public pure returns (GenesisConfig memory config) {
@@ -47,6 +77,59 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         config.initialWinnerReserve = BurntatoDeploymentConfig.defaultInitialWinnerReserve(config.protocol);
     }
 
+    function _preflight()
+        private
+        view
+        returns (
+            GenesisConfig memory config,
+            CanonicalV4Dependencies memory dependencies,
+            StaticsOperatorDependencies memory operatorDependencies
+        )
+    {
+        if (block.chainid != CHAIN_ID) {
+            revert InvalidTestnetChain(block.chainid);
+        }
+        dependencies = RobinhoodDeploymentConfig.load();
+        operatorDependencies = StaticsOperatorDeploymentConfig.load();
+        RobinhoodDeploymentConfig.validate(dependencies);
+        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        _validateActiveStaticsReplica(operatorDependencies);
+
+        config = testnetConfig(vm.envAddress("BURNTATO_DEPLOYER"));
+        if (config.deployer.balance < config.initialWinnerReserve) {
+            revert InsufficientDeployerBalance(config.initialWinnerReserve, config.deployer.balance);
+        }
+    }
+
+    function _validateActiveStaticsReplica(StaticsOperatorDependencies memory operatorDependencies) private view {
+        string memory manifest = vm.readFile(STATICS_MANIFEST_PATH);
+        address expectedVault = vm.parseJsonAddress(manifest, ".contracts.genesisVault.address");
+        bytes32 expectedVaultCodeHash = vm.parseJsonBytes32(manifest, ".contracts.genesisVault.runtimeCodeHash");
+        uint256 expectedEpochEnd = vm.parseJsonUint(manifest, ".genesisEpochEnd");
+
+        validateActiveStaticsReplica(
+            operatorDependencies.operatorsNft, expectedVault, expectedVaultCodeHash, expectedEpochEnd
+        );
+    }
+
+    function validateActiveStaticsReplica(
+        address operatorsNft,
+        address expectedVault,
+        bytes32 expectedVaultCodeHash,
+        uint256 expectedEpochEnd
+    ) public view returns (bool) {
+        address actualVault = ITestnetStaticsGenesis(operatorsNft).vault();
+        if (actualVault != expectedVault) revert InvalidStaticsGenesisVault(expectedVault, actualVault);
+        bytes32 actualVaultCodeHash = actualVault.codehash;
+        if (actualVaultCodeHash != expectedVaultCodeHash) {
+            revert InvalidStaticsGenesisVaultCodeHash(expectedVaultCodeHash, actualVaultCodeHash);
+        }
+        uint256 actualEpochEnd = ITestnetStaticsGenesisVault(actualVault).genesisEpochEnd();
+        if (actualEpochEnd != expectedEpochEnd) revert InvalidStaticsGenesisEpoch(expectedEpochEnd, actualEpochEnd);
+        if (actualEpochEnd <= block.timestamp) revert ExpiredStaticsGenesisEpoch(actualEpochEnd, block.timestamp);
+        return true;
+    }
+
     function _writeDeployment(
         BurntatoDeployment memory deployment,
         GenesisConfig memory config,
@@ -55,9 +138,14 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
     ) private {
         vm.createDir("artifacts/robinhood-testnet", true);
         string memory object = "robinhoodTestnet";
-        vm.serializeUint(object, "schemaVersion", 2);
+        vm.serializeUint(object, "schemaVersion", 3);
         vm.serializeUint(object, "chainId", dependencies.chainId);
         vm.serializeUint(object, "deploymentBlock", block.number);
+        vm.serializeUint(object, "canonicalManifestBlock", dependencies.forkBlock);
+        vm.serializeBytes32(object, "canonicalManifestBlockHash", dependencies.forkBlockHash);
+        vm.serializeUint(object, "staticsFinalizedBlock", operatorDependencies.finalizedBlock);
+        vm.serializeBytes32(object, "staticsFinalizedBlockHash", operatorDependencies.finalizedBlockHash);
+        vm.serializeString(object, "sourceCommit", vm.envString("BURNTATO_SOURCE_COMMIT"));
         vm.serializeAddress(object, "deployer", config.deployer);
         vm.serializeAddress(object, "diamond", deployment.diamond);
         vm.serializeAddress(object, "admin", deployment.admin);
@@ -69,16 +157,32 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeAddress(object, "operatorRewardsRouter", deployment.operatorRewardsRouter);
         vm.serializeAddress(object, "operatorsNft", operatorDependencies.operatorsNft);
         vm.serializeAddress(object, "activationRegistry", operatorDependencies.activationRegistry);
+        vm.serializeUint(object, "startingPrice", config.protocol.startingPrice);
+        vm.serializeUint(object, "priceIncreaseBps", config.protocol.priceIncreaseBps);
+        vm.serializeUint(object, "roundTimeout", config.protocol.roundTimeout);
+        vm.serializeUint(object, "roundTimeoutDecay", config.protocol.roundTimeoutDecay);
+        vm.serializeUint(object, "minimumRoundTimeout", config.protocol.minimumRoundTimeout);
+        vm.serializeUint(object, "roundEmissionBudget", config.protocol.roundEmissionBudget);
+        vm.serializeUint(object, "emissionStepBps", config.protocol.emissionStepBps);
+        vm.serializeUint(object, "emissionVestingDuration", config.protocol.emissionVestingDuration);
         vm.serializeUint(object, "winnerBps", config.protocol.winnerBps);
         vm.serializeUint(object, "nextRoundWinnerBps", config.protocol.nextRoundWinnerBps);
         vm.serializeUint(object, "recoveryBps", config.protocol.recoveryBps);
         vm.serializeUint(object, "treasuryBps", config.protocol.treasuryBps);
         vm.serializeUint(object, "buybackBps", config.protocol.buybackBps);
         vm.serializeUint(object, "operatorPurchaseBps", config.protocol.operatorPurchaseBps);
+        vm.serializeUint(object, "recoveryBurnBps", config.protocol.recoveryBurnBps);
+        vm.serializeUint(object, "recoveryTreasuryBps", config.protocol.recoveryTreasuryBps);
         vm.serializeUint(object, "initialWinnerReserve", config.initialWinnerReserve);
+        vm.serializeUint(object, "buybackMaxSpend", config.buyback.maxSpend);
+        vm.serializeUint(object, "buybackCallerRewardBps", config.buyback.callerRewardBps);
+        vm.serializeUint(object, "buybackDelayBlocks", config.buyback.delayBlocks);
         vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
         vm.serializeUint(object, "operatorRewardShareBps", config.operatorRewardShareBps);
-        vm.serializeUint(object, "roundEmissionBudget", config.protocol.roundEmissionBudget);
+        vm.serializeInt(object, "initialTick", config.initialTick);
+        vm.serializeInt(object, "tickSpacing", config.tickSpacing);
+        vm.serializeInt(object, "tickLower", config.tickLower);
+        vm.serializeInt(object, "tickUpper", config.tickUpper);
         vm.serializeUint(object, "potatoSeed", config.potatoSeed);
         vm.serializeUint(object, "marketPositionCount", BurntatoLaunchCurves.positionCount());
         vm.serializeBytes32(object, "marketCurveHash", IMarket(deployment.diamond).marketCurveHash());
@@ -102,7 +206,45 @@ contract DeployBurntatoRobinhoodTestnet is DeployBurntato {
         vm.serializeAddress(object, "reservesLens", deployment.reservesLens);
         vm.serializeAddress(object, "universalRouter", deployment.universalRouter);
         vm.serializeAddress(object, "permit2", deployment.permit2);
-        string memory json = vm.serializeAddress(object, "weth", deployment.weth9);
+        vm.serializeAddress(object, "weth", deployment.weth9);
+        _serializeRuntimeHashes(object, deployment, dependencies, operatorDependencies);
+        string memory json = vm.serializeBytes32(object, "wethRuntimeCodeHash", dependencies.wethCodeHash);
         vm.writeJson(json, OUTPUT_PATH);
+    }
+
+    function _serializeRuntimeHashes(
+        string memory object,
+        BurntatoDeployment memory deployment,
+        CanonicalV4Dependencies memory dependencies,
+        StaticsOperatorDependencies memory operatorDependencies
+    ) private {
+        vm.serializeBytes32(object, "diamondRuntimeCodeHash", deployment.diamond.codehash);
+        vm.serializeBytes32(object, "diamondCutFacetRuntimeCodeHash", deployment.diamondCutFacet.codehash);
+        vm.serializeBytes32(object, "diamondLoupeFacetRuntimeCodeHash", deployment.diamondLoupeFacet.codehash);
+        vm.serializeBytes32(object, "governanceFacetRuntimeCodeHash", deployment.governanceFacet.codehash);
+        vm.serializeBytes32(object, "marketFacetRuntimeCodeHash", deployment.marketFacet.codehash);
+        vm.serializeBytes32(object, "buybackFacetRuntimeCodeHash", deployment.buybackFacet.codehash);
+        vm.serializeBytes32(object, "potatoTokenFacetRuntimeCodeHash", deployment.potatoTokenFacet.codehash);
+        vm.serializeBytes32(object, "gameFacetRuntimeCodeHash", deployment.gameFacet.codehash);
+        vm.serializeBytes32(object, "recoveryFacetRuntimeCodeHash", deployment.recoveryFacet.codehash);
+        vm.serializeBytes32(object, "settlementFacetRuntimeCodeHash", deployment.settlementFacet.codehash);
+        vm.serializeBytes32(object, "claimsFacetRuntimeCodeHash", deployment.claimsFacet.codehash);
+        vm.serializeBytes32(object, "treasuryRewardsFacetRuntimeCodeHash", deployment.treasuryRewardsFacet.codehash);
+        vm.serializeBytes32(object, "foundationInitRuntimeCodeHash", deployment.foundationInit.codehash);
+        vm.serializeBytes32(object, "hookDeployerRuntimeCodeHash", deployment.hookDeployer.codehash);
+        vm.serializeBytes32(object, "hookRuntimeCodeHash", deployment.hook.codehash);
+        vm.serializeBytes32(object, "operatorRewardsRouterRuntimeCodeHash", deployment.operatorRewardsRouter.codehash);
+        vm.serializeBytes32(object, "operatorsNftRuntimeCodeHash", operatorDependencies.operatorsNftCodeHash);
+        vm.serializeBytes32(
+            object, "activationRegistryRuntimeCodeHash", operatorDependencies.activationRegistryCodeHash
+        );
+        vm.serializeBytes32(object, "poolManagerRuntimeCodeHash", dependencies.poolManagerCodeHash);
+        vm.serializeBytes32(object, "positionDescriptorRuntimeCodeHash", dependencies.positionDescriptorCodeHash);
+        vm.serializeBytes32(object, "positionManagerRuntimeCodeHash", dependencies.positionManagerCodeHash);
+        vm.serializeBytes32(object, "quoterRuntimeCodeHash", dependencies.quoterCodeHash);
+        vm.serializeBytes32(object, "stateViewRuntimeCodeHash", dependencies.stateViewCodeHash);
+        vm.serializeBytes32(object, "reservesLensRuntimeCodeHash", dependencies.reservesLensCodeHash);
+        vm.serializeBytes32(object, "universalRouterRuntimeCodeHash", dependencies.universalRouterCodeHash);
+        vm.serializeBytes32(object, "permit2RuntimeCodeHash", dependencies.permit2CodeHash);
     }
 }
