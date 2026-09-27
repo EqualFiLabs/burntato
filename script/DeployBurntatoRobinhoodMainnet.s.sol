@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {LibString} from "solady/src/utils/LibString.sol";
+
 import {DeployBurntato} from "./DeployBurntato.s.sol";
 import {
     BurntatoDeployment,
@@ -19,6 +21,7 @@ contract DeployBurntatoRobinhoodMainnet is DeployBurntato {
     string public constant OUTPUT_PATH = "artifacts/robinhood-mainnet/deployment.json";
 
     error InvalidMainnetChain(uint256 actualChainId);
+    error InvalidMainnetAnvilRpc();
     error InvalidMainnetRole(bytes32 role, address account);
     error UnexpectedDeployer(address expected, address actual);
     error InsufficientDeployerBalance(uint256 required, uint256 actual);
@@ -44,7 +47,6 @@ contract DeployBurntatoRobinhoodMainnet is DeployBurntato {
 
     function preflight()
         external
-        view
         returns (
             GenesisConfig memory config,
             CanonicalV4Dependencies memory dependencies,
@@ -77,7 +79,6 @@ contract DeployBurntatoRobinhoodMainnet is DeployBurntato {
 
     function _preflight()
         private
-        view
         returns (
             GenesisConfig memory config,
             CanonicalV4Dependencies memory dependencies,
@@ -90,8 +91,20 @@ contract DeployBurntatoRobinhoodMainnet is DeployBurntato {
 
         dependencies = RobinhoodDeploymentConfig.load();
         operatorDependencies = StaticsOperatorDeploymentConfig.load();
-        RobinhoodDeploymentConfig.validate(dependencies);
-        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        if (vm.envOr("BURNTATO_ANVIL_REHEARSAL", false)) {
+            bytes memory automine = vm.rpc("anvil_getAutomine", "[]");
+            if (automine.length == 0) revert InvalidMainnetAnvilRpc();
+            uint256 currentBlock = _rpcBlockNumber();
+            RobinhoodDeploymentConfig.validateAnvilFork(
+                dependencies, currentBlock, _rpcBlockHash(dependencies.forkBlock)
+            );
+            StaticsOperatorDeploymentConfig.validateAnvilFork(
+                operatorDependencies, currentBlock, _rpcBlockHash(operatorDependencies.finalizedBlock)
+            );
+        } else {
+            RobinhoodDeploymentConfig.validate(dependencies);
+            StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        }
 
         config = mainnetConfig(
             vm.envAddress("BURNTATO_DEPLOYER"),
@@ -103,6 +116,22 @@ contract DeployBurntatoRobinhoodMainnet is DeployBurntato {
         if (config.deployer.balance < config.initialWinnerReserve) {
             revert InsufficientDeployerBalance(config.initialWinnerReserve, config.deployer.balance);
         }
+    }
+
+    function _rpcBlockHash(uint256 blockNumber) private returns (bytes32) {
+        string memory blockJson = vm.rpcJson(
+            "eth_getBlockByNumber", string.concat("[\"", LibString.toMinimalHexString(blockNumber), "\",false]")
+        );
+        return vm.parseJsonBytes32(blockJson, ".hash");
+    }
+
+    function _rpcBlockNumber() private returns (uint256) {
+        bytes memory encoded = vm.rpc("eth_blockNumber", "[]");
+        uint256 blockNumber;
+        for (uint256 index; index < encoded.length; ++index) {
+            blockNumber = (blockNumber << 8) | uint8(encoded[index]);
+        }
+        return blockNumber;
     }
 
     function _writeDeployment(

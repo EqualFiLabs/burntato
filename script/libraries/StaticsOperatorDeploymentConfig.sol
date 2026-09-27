@@ -43,9 +43,7 @@ library StaticsOperatorDeploymentConfig {
 
     function validate(StaticsOperatorDependencies memory dependencies) internal view {
         requireManifest(dependencies);
-        if (block.chainid != dependencies.chainId || !_isSupportedChain(dependencies.chainId)) {
-            revert InvalidStaticsChain(dependencies.chainId, block.chainid);
-        }
+        _validateChain(dependencies.chainId);
         uint256 currentBlock = RobinhoodBlockProvenance.blockNumber();
         if (currentBlock < dependencies.finalizedBlock) {
             revert InvalidStaticsBlock(dependencies.finalizedBlock, currentBlock);
@@ -58,6 +56,27 @@ library StaticsOperatorDeploymentConfig {
             }
         }
 
+        _validateDependencies(dependencies);
+    }
+
+    function validateAnvilFork(
+        StaticsOperatorDependencies memory dependencies,
+        uint256 currentBlock,
+        bytes32 actualBlockHash
+    ) internal view {
+        requireManifest(dependencies);
+        _validateChain(dependencies.chainId);
+        if (currentBlock < dependencies.finalizedBlock) {
+            revert InvalidStaticsBlock(dependencies.finalizedBlock, currentBlock);
+        }
+        if (actualBlockHash != dependencies.finalizedBlockHash) {
+            revert InvalidStaticsBlockHash(dependencies.finalizedBlockHash, actualBlockHash);
+        }
+
+        _validateDependencies(dependencies);
+    }
+
+    function _validateDependencies(StaticsOperatorDependencies memory dependencies) private view {
         _validateCode(dependencies.operatorsNft, dependencies.operatorsNftCodeHash);
         _validateCode(dependencies.activationRegistry, dependencies.activationRegistryCodeHash);
         IStaticsOperators operators = IStaticsOperators(dependencies.operatorsNft);
@@ -65,6 +84,12 @@ library StaticsOperatorDeploymentConfig {
         _validateBinding("ACTIVATION_REGISTRY", dependencies.activationRegistry, operators.activationRegistry());
         _validateBinding("GENESIS_COLLECTION", dependencies.operatorsNft, registry.genesisCollection());
         if (!operators.launchFinalized()) revert StaticsLaunchNotFinalized();
+    }
+
+    function _validateChain(uint256 chainId) private view {
+        if (block.chainid != chainId || !_isSupportedChain(chainId)) {
+            revert InvalidStaticsChain(chainId, block.chainid);
+        }
     }
 
     function validateLocalReplica(StaticsOperatorDependencies memory dependencies) internal view {

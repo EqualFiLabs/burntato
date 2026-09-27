@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {LibString} from "solady/src/utils/LibString.sol";
+
 import {DeployBurntato} from "./DeployBurntato.s.sol";
 import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
 import {IMarket} from "../src/interfaces/IMarket.sol";
@@ -12,7 +14,6 @@ import {
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
-import {RobinhoodBlockProvenance} from "./libraries/RobinhoodBlockProvenance.sol";
 import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
@@ -78,10 +79,12 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         if (block.chainid != RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
             revert InvalidLocalForkChain(block.chainid);
         }
-        bytes memory nodeInfo = vm.rpc("anvil_nodeInfo", "[]");
-        if (nodeInfo.length == 0) revert InvalidLocalForkRpc();
+        bytes memory automine = vm.rpc("anvil_getAutomine", "[]");
+        if (automine.length == 0) revert InvalidLocalForkRpc();
         dependencies = RobinhoodDeploymentConfig.load();
-        RobinhoodDeploymentConfig.validate(dependencies);
+        RobinhoodDeploymentConfig.validateAnvilFork(
+            dependencies, _rpcBlockNumber(), _rpcBlockHash(dependencies.forkBlock)
+        );
     }
 
     function _localForkPreflight(bool requireExactBlock)
@@ -92,25 +95,40 @@ contract DeployBurntatoLocalFork is DeployBurntato {
         if (block.chainid != RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
             revert InvalidLocalForkChain(block.chainid);
         }
-        bytes memory nodeInfo = vm.rpc("anvil_nodeInfo", "[]");
-        if (nodeInfo.length == 0) revert InvalidLocalForkRpc();
+        bytes memory automine = vm.rpc("anvil_getAutomine", "[]");
+        if (automine.length == 0) revert InvalidLocalForkRpc();
 
         dependencies = RobinhoodDeploymentConfig.load();
         StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
-        uint256 currentBlock = RobinhoodBlockProvenance.blockNumber();
+        uint256 currentBlock = _rpcBlockNumber();
         if (
             currentBlock < operatorDependencies.finalizedBlock
                 || (requireExactBlock && currentBlock != operatorDependencies.finalizedBlock)
         ) {
             revert InvalidLocalForkBlock(operatorDependencies.finalizedBlock, currentBlock);
         }
-        string memory pinnedBlock = vm.rpcJson("eth_getBlockByNumber", "[\"0x2d7b367\",false]");
-        bytes32 actualBlockHash = vm.parseJsonBytes32(pinnedBlock, ".hash");
+        bytes32 actualBlockHash = _rpcBlockHash(operatorDependencies.finalizedBlock);
         if (actualBlockHash != operatorDependencies.finalizedBlockHash) {
             revert InvalidLocalForkBlockHash(operatorDependencies.finalizedBlockHash, actualBlockHash);
         }
-        RobinhoodDeploymentConfig.validate(dependencies);
-        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
+        RobinhoodDeploymentConfig.validateAnvilFork(dependencies, currentBlock, _rpcBlockHash(dependencies.forkBlock));
+        StaticsOperatorDeploymentConfig.validateAnvilFork(operatorDependencies, currentBlock, actualBlockHash);
+    }
+
+    function _rpcBlockHash(uint256 blockNumber) private returns (bytes32) {
+        string memory blockJson = vm.rpcJson(
+            "eth_getBlockByNumber", string.concat("[\"", LibString.toMinimalHexString(blockNumber), "\",false]")
+        );
+        return vm.parseJsonBytes32(blockJson, ".hash");
+    }
+
+    function _rpcBlockNumber() private returns (uint256) {
+        bytes memory encoded = vm.rpc("eth_blockNumber", "[]");
+        uint256 blockNumber;
+        for (uint256 index; index < encoded.length; ++index) {
+            blockNumber = (blockNumber << 8) | uint8(encoded[index]);
+        }
+        return blockNumber;
     }
 
     function _writeDeployment(

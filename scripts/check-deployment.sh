@@ -98,7 +98,7 @@ for field in "${code_fields[@]}"; do
       hash_field="${field}RuntimeCodeHash"
       expected_hash=$(jq -er --arg field "$hash_field" '.[$field] // empty' "$artifact" 2>/dev/null || true)
       if [[ -n "$expected_hash" ]]; then
-        if actual_hash=$(cast codehash "$address" 2>&1); then
+        if actual_hash=$(cast keccak "$code" 2>&1); then
           if same_value "$actual_hash" "$expected_hash"; then
             hash_count=$((hash_count + 1))
           else

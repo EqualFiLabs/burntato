@@ -312,6 +312,17 @@ deployment. The final admin, Treasury, and reward allocator must be nonzero.
 The guardian may be the zero address. Mainnet does not accept environment
 overrides for economics, market geometry, or canonical dependencies.
 
+To rehearse the production phases on a persistent chain-4663 Anvil fork, start
+the fork at the committed Statics finalization block and point
+`ROBINHOOD_MAINNET` at that Anvil instance. Set
+`BURNTATO_ANVIL_REHEARSAL=true` for every wrapper phase. This mode first
+requires an Anvil-only RPC method, then checks both committed historical block
+hashes through the fork RPC before running the same dependency code-hash and
+binding checks. Without the flag, production preflight continues to use
+Robinhood's ArbSys provenance. Rehearsal broadcasts use legacy transaction fee
+estimation because the pinned Anvil fork does not retain the fee-history
+metadata Foundry requests. Production broadcasts retain their normal fee mode.
+
 Load `ROBINHOOD_MAINNET` and any required signing key through the private
 operations environment. Do not put either value in a command argument. Run
 each phase separately and inspect its result before continuing:
