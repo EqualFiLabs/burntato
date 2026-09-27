@@ -24,9 +24,17 @@ import {ITreasuryRewards} from "../../src/interfaces/ITreasuryRewards.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 import {FacetCut, FacetCutAction, ProtocolConfig, RewardSchedule, Round} from "../../src/shared/Types.sol";
 import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
+import {LibProtocolStorage} from "../../src/libraries/LibProtocolStorage.sol";
 
 contract FormalNativeReceiver {
     receive() external payable {}
+}
+
+contract FormalLifecycleStateFacet {
+    function formalExpireCurrentRound() external {
+        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
+        gs.rounds[gs.currentRoundId].deadline = block.timestamp;
+    }
 }
 
 contract BurntatoLifecycleProperties is Test {
@@ -48,12 +56,17 @@ contract BurntatoLifecycleProperties is Test {
     ISettlement private settlement;
     ITreasuryRewards private rewards;
     FormalNativeReceiver private receiver;
+    FormalLifecycleStateFacet private lifecycleState;
 
     function setUp() public {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
         diamond = new BurntatoDiamond(address(this), address(cutFacet));
 
-        FacetCut[] memory cuts = new FacetCut[](7);
+        FormalLifecycleStateFacet lifecycleStateFacet = new FormalLifecycleStateFacet();
+        bytes4[] memory lifecycleStateSelectors = new bytes4[](1);
+        lifecycleStateSelectors[0] = FormalLifecycleStateFacet.formalExpireCurrentRound.selector;
+
+        FacetCut[] memory cuts = new FacetCut[](8);
         cuts[0] = FacetCut(address(new GovernanceFacet()), FacetCutAction.Add, BurntatoSelectors.governance());
         cuts[1] = FacetCut(address(new PotatoTokenFacet()), FacetCutAction.Add, BurntatoSelectors.token());
         cuts[2] = FacetCut(address(new GameFacet()), FacetCutAction.Add, BurntatoSelectors.game());
@@ -62,6 +75,7 @@ contract BurntatoLifecycleProperties is Test {
         cuts[5] = FacetCut(address(new ClaimsFacet()), FacetCutAction.Add, BurntatoSelectors.claims());
         cuts[6] =
             FacetCut(address(new TreasuryRewardsFacet()), FacetCutAction.Add, BurntatoSelectors.treasuryRewards());
+        cuts[7] = FacetCut(address(lifecycleStateFacet), FacetCutAction.Add, lifecycleStateSelectors);
 
         FoundationInit foundation = new FoundationInit();
         IDiamondCut(address(diamond)).diamondCut(
@@ -78,6 +92,7 @@ contract BurntatoLifecycleProperties is Test {
         settlement = ISettlement(address(diamond));
         rewards = ITreasuryRewards(address(diamond));
         receiver = new FormalNativeReceiver();
+        lifecycleState = FormalLifecycleStateFacet(address(diamond));
         governance.initializePurchases();
     }
 
@@ -88,7 +103,7 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(round.winnerPool, 2_500);
         uint256 winnerBefore = address(receiver).balance;
 
-        vm.warp(round.deadline);
+        lifecycleState.formalExpireCurrentRound();
         settlement.settleRound();
         vm.prank(BUYER_TWO);
         uint256 claimed = claims.claimWinner(1, address(receiver));
@@ -114,7 +129,7 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(recovery.recoveryCommitment(2, COMMITTER), COMMITMENT);
         assertEq(recovery.totalRecoveryCommitment(2), COMMITMENT);
 
-        vm.warp(game.getRound(1).deadline);
+        lifecycleState.formalExpireCurrentRound();
         settlement.settleRound();
         assertEq(game.getRound(2).recoveryPool, 4_000);
 
@@ -125,7 +140,7 @@ contract BurntatoLifecycleProperties is Test {
         uint256 supplyBeforeSettlement = potato.totalSupply();
         uint256 treasuryAvailableBefore = claims.treasuryPotatoAvailable();
 
-        vm.warp(roundTwo.deadline);
+        lifecycleState.formalExpireCurrentRound();
         settlement.settleRound();
 
         assertEq(potato.totalSupply(), supplyBeforeSettlement - 90);
@@ -152,7 +167,7 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(activeAfter.config.startingPrice, PRICE);
         assertEq(activeAfter.config.roundTimeout, 100);
 
-        vm.warp(activeAfter.deadline);
+        lifecycleState.formalExpireCurrentRound();
         settlement.settleRound();
         Round memory next = game.getRound(2);
         assertEq(next.config.startingPrice, PRICE);
@@ -160,7 +175,7 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(next.nextPrice, PRICE);
 
         _buy(BUYER_ONE);
-        vm.warp(game.getRound(2).deadline);
+        lifecycleState.formalExpireCurrentRound();
         settlement.settleRound();
         Round memory later = game.getRound(3);
         assertEq(later.config.startingPrice, PRICE * 2);

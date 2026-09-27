@@ -50,7 +50,10 @@ for one-shot Winner claims, a complete two-round Recovery commitment, burn,
 treasury allocation, and claim, active-round configuration snapshots, and
 Treasury reward allocation and cancellation conservation. These witnesses
 prove those paths for the stated concrete setup. They are not universal
-quantification over every multi-round sequence.
+quantification over every multi-round sequence. A verification-only facet moves
+the current deadline to the modeled timestamp because Halmos 0.3.3 does not
+implement Foundry's time-warp cheatcode. Settlement and every other transition
+remain production facet calls.
 
 The Certora harnesses are thin wrappers over production `LibMath`,
 `GovernanceFacet`, `PotatoTokenFacet`, and `BuybackFacet`. CVL independently
