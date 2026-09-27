@@ -83,7 +83,10 @@ deployment. Every transition under test is executed by its production facet.
 The pause harness installs one selector directly to make the `onlyDiamond`
 funding precondition reachable. That local construction does not prove the
 complete selector graph; the actual-Diamond Halmos properties cover graph
-authority, rollback, and finalization separately.
+authority, rollback, and finalization separately. Its positive buyback rule
+uses a pessimistic dispatcher summary to resolve the configured verification
+manager's `unlock(bytes)` implementation. Exact successful and failed buyback
+accounting remains covered by the actual-Diamond Halmos properties.
 
 ## Deliberate boundaries
 
