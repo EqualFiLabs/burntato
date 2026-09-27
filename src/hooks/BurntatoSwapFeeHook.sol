@@ -17,6 +17,7 @@ import {ModifyLiquidityParams, SwapParams} from "@uniswap/v4-core/src/types/Pool
 import {IMarket} from "../interfaces/IMarket.sol";
 import {IGame} from "../interfaces/IGame.sol";
 import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
+import {LibMath} from "../libraries/LibMath.sol";
 import {Constants} from "../shared/Constants.sol";
 import {Errors} from "../shared/Errors.sol";
 
@@ -186,7 +187,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         private
         returns (int128 feeDelta)
     {
-        uint256 fee = grossPotatoOut * feeBps / Constants.BPS;
+        uint256 fee = LibMath.mulBpsDown(grossPotatoOut, feeBps);
         if (fee == 0) return 0;
         if (fee > uint256(uint128(type(int128).max))) revert Errors.InvalidMarketConfiguration();
 
@@ -203,7 +204,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
         private
         returns (int128 feeDelta)
     {
-        uint256 fee = grossNativeOut * feeBps / Constants.BPS;
+        uint256 fee = LibMath.mulBpsDown(grossNativeOut, feeBps);
         if (fee == 0) return 0;
         if (fee > uint256(uint128(type(int128).max))) revert Errors.InvalidMarketConfiguration();
 
@@ -256,7 +257,7 @@ contract BurntatoSwapFeeHook is BaseHook, Ownable {
     }
 
     function _allocateNativeFee(bytes32 poolId, uint256 nativeFee) private {
-        uint256 operatorAmount = nativeFee * operatorRewardShareBps / Constants.BPS;
+        uint256 operatorAmount = LibMath.mulBpsDown(nativeFee, operatorRewardShareBps);
         uint256 treasuryAmount = nativeFee - operatorAmount;
         if (operatorAmount != 0) SafeTransferLib.forceSafeTransferETH(operatorRewardsRouter, operatorAmount);
         if (treasuryAmount != 0) SafeTransferLib.forceSafeTransferETH(feeAddress, treasuryAmount);

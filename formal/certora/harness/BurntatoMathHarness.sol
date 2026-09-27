@@ -2,19 +2,19 @@
 pragma solidity 0.8.26;
 
 import {LibMath} from "../../../src/libraries/LibMath.sol";
-import {Constants} from "../../../src/shared/Constants.sol";
+import {BuybackQuote, PurchaseAllocation} from "../../../src/shared/Types.sol";
 
 /// @notice Thin executable surface over the production arithmetic used by CVL.
 contract BurntatoMathHarness {
-    function mulBpsDown(uint128 amount, uint16 bps) external pure returns (uint256) {
+    function mulBpsDown(uint256 amount, uint256 bps) external pure returns (uint256) {
         return LibMath.mulBpsDown(amount, bps);
     }
 
-    function mulBpsUp(uint128 amount, uint16 bps) external pure returns (uint256) {
+    function mulBpsUp(uint256 amount, uint256 bps) external pure returns (uint256) {
         return LibMath.mulBpsUp(amount, bps);
     }
 
-    function linearEarned(uint128 maximum, uint64 heldSeconds, uint64 vestingDuration)
+    function linearEarned(uint256 maximum, uint256 heldSeconds, uint256 vestingDuration)
         external
         pure
         returns (uint256)
@@ -23,15 +23,15 @@ contract BurntatoMathHarness {
     }
 
     function diminishingTimeout(
-        uint64 initialTimeout,
-        uint64 decay,
-        uint64 minimumTimeout,
-        uint64 priorPurchases
+        uint256 initialTimeout,
+        uint256 decay,
+        uint256 minimumTimeout,
+        uint256 priorPurchases
     ) external pure returns (uint256) {
         return LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
     }
 
-    function splitRecovery(uint128 amount, uint16 treasuryBps)
+    function splitRecovery(uint256 amount, uint256 treasuryBps)
         external
         pure
         returns (uint256 burned, uint256 treasury)
@@ -40,12 +40,12 @@ contract BurntatoMathHarness {
     }
 
     function purchaseSplit(
-        uint128 amount,
-        uint16 winnerBps,
-        uint16 nextRoundWinnerBps,
-        uint16 recoveryBps,
-        uint16 buybackBps,
-        uint16 operatorBps
+        uint256 amount,
+        uint256 winnerBps,
+        uint256 nextRoundWinnerBps,
+        uint256 recoveryBps,
+        uint256 buybackBps,
+        uint256 operatorBps
     )
         external
         pure
@@ -58,14 +58,44 @@ contract BurntatoMathHarness {
             uint256 operator
         )
     {
-        require(
-            uint256(winnerBps) + nextRoundWinnerBps + recoveryBps + buybackBps + operatorBps <= Constants.BPS
+        PurchaseAllocation memory allocation =
+            LibMath.splitPurchase(amount, winnerBps, nextRoundWinnerBps, recoveryBps, buybackBps, operatorBps);
+        return (
+            allocation.winner,
+            allocation.nextRoundWinner,
+            allocation.recovery,
+            allocation.treasury,
+            allocation.buyback,
+            allocation.operator
         );
-        winner = LibMath.mulBpsDown(amount, winnerBps);
-        nextRoundWinner = LibMath.mulBpsDown(amount, nextRoundWinnerBps);
-        recovery = LibMath.mulBpsDown(amount, recoveryBps);
-        buyback = LibMath.mulBpsDown(amount, buybackBps);
-        operator = LibMath.mulBpsDown(amount, operatorBps);
-        treasury = amount - winner - nextRoundWinner - recovery - buyback - operator;
+    }
+
+    function buybackQuote(uint256 reserve, uint256 maxSpend, uint256 callerRewardBps)
+        external
+        pure
+        returns (uint256 grossSlice, uint256 requestedInput, uint256 callerReward)
+    {
+        BuybackQuote memory quote = LibMath.quoteBuyback(reserve, maxSpend, callerRewardBps);
+        return (quote.grossSlice, quote.requestedInput, quote.callerReward);
+    }
+
+    function recoveryClaimAmount(
+        uint256 recoveryPool,
+        uint256 totalCommitted,
+        uint256 claimedCommitments,
+        uint256 recoveryPaid,
+        uint256 committed
+    ) external pure returns (uint256 amount) {
+        return LibMath.recoveryClaimAmount(
+            recoveryPool, totalCommitted, claimedCommitments, recoveryPaid, committed
+        );
+    }
+
+    function splitSchedule(uint256 amount, uint256 roundCount)
+        external
+        pure
+        returns (uint256 perRound, uint256 firstRoundRemainder)
+    {
+        return LibMath.splitSchedule(amount, roundCount);
     }
 }

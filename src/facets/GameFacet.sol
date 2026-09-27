@@ -8,7 +8,7 @@ import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Errors} from "../shared/Errors.sol";
-import {Round} from "../shared/Types.sol";
+import {PurchaseAllocation, Round} from "../shared/Types.sol";
 
 contract GameFacet is IGame {
     function buyPotato() external payable {
@@ -29,20 +29,22 @@ contract GameFacet is IGame {
         if (round.purchaseIndex == 0) {
             _fundWinnerReserve(gs, msg.sender, round.roundId + 1, msg.value, false);
         } else {
-            uint256 winnerShare = LibMath.mulBpsDown(msg.value, round.config.winnerBps);
-            uint256 nextRoundWinnerShare = LibMath.mulBpsDown(msg.value, round.config.nextRoundWinnerBps);
-            uint256 recoveryShare = LibMath.mulBpsDown(msg.value, round.config.recoveryBps);
-            uint256 buybackShare = LibMath.mulBpsDown(msg.value, round.config.buybackBps);
-            operatorShare = LibMath.mulBpsDown(msg.value, round.config.operatorPurchaseBps);
-            uint256 treasuryShare =
-                msg.value - winnerShare - nextRoundWinnerShare - recoveryShare - buybackShare - operatorShare;
-            round.winnerPool += winnerShare;
-            round.recoveryPool += recoveryShare;
-            _fundWinnerReserve(gs, msg.sender, round.roundId + 1, nextRoundWinnerShare, false);
-            LibProtocolStorage.treasury().purchaseEth += treasuryShare;
+            PurchaseAllocation memory allocation = LibMath.splitPurchase(
+                msg.value,
+                round.config.winnerBps,
+                round.config.nextRoundWinnerBps,
+                round.config.recoveryBps,
+                round.config.buybackBps,
+                round.config.operatorPurchaseBps
+            );
+            round.winnerPool += allocation.winner;
+            round.recoveryPool += allocation.recovery;
+            _fundWinnerReserve(gs, msg.sender, round.roundId + 1, allocation.nextRoundWinner, false);
+            LibProtocolStorage.treasury().purchaseEth += allocation.treasury;
             LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();
-            bs.reserveEth += buybackShare;
-            emit BuybackFunded(round.roundId, buybackShare, bs.reserveEth);
+            bs.reserveEth += allocation.buyback;
+            operatorShare = allocation.operator;
+            emit BuybackFunded(round.roundId, allocation.buyback, bs.reserveEth);
         }
 
         round.currentHolder = msg.sender;
