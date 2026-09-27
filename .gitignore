@@ -8,6 +8,7 @@ out-formal/
 certora_metadata.json
 deployments/*
 !deployments/robinhood-chain-4663.json
+!deployments/equalfi-roles-robinhood-4663.json
 !deployments/statics-operators-robinhood-4663.json
 !deployments/robinhood-chain-testnet-46630.json
 !deployments/statics-operators-robinhood-testnet-46630.json
