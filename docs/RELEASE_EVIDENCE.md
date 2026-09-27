@@ -759,9 +759,6 @@ Focused review covered Diamond selector and storage compatibility, pause and
 authority boundaries, PoolManager callback settlement, POTATO movement,
 full-fill rollback, gross-to-net reward rounding, bootstrap resumability, and
 denial-of-service paths. No new release-scope finding remained.
-The first Halmos run exposed a stale activation-property expectation that
-treated the POTATO market seed as an initial native Winner reserve. Commit
-`289dd9b` corrected the expectation to the configured zero reserve, after which
-the complete suite passed. This is model, local Foundry, pinned-fork, and scoped
-Halmos evidence; it is not a public-network deployment, protocol-wide formal
-proof, current Certora rerun, or independent third-party audit.
+This is model, local Foundry, pinned-fork, and scoped Halmos evidence; it is not
+a public-network deployment, protocol-wide formal proof, current Certora rerun,
+or independent third-party audit.
