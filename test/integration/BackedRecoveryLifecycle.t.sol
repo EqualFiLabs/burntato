@@ -32,6 +32,8 @@ contract BackedRecoveryLifecycleTest is DiamondTestSetup {
     function setUp() public {
         _deployCore();
         potato = IPotatoToken(address(diamond));
+        vm.prank(authority);
+        potato.setPublicWrapCap(2_000_000 ether);
         game = IGame(address(diamond));
         recovery = IRecovery(address(diamond));
         claims = IClaims(address(diamond));

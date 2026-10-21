@@ -85,6 +85,10 @@ contract BackedStaticsForkTest is DiamondTestSetup {
         vm.prank(alice);
         potato.unwrap(200 ether);
         assertEq(underlyingToken.balanceOf(alice), 200 ether);
+        assertEq(potato.publicWrapCap(), 0);
+        assertEq(potato.availablePublicWrapCapacity(), 0);
+        vm.prank(authority);
+        potato.setPublicWrapCap(200 ether);
         vm.startPrank(alice);
         underlyingToken.approve(address(diamond), 200 ether);
         potato.wrap(200 ether);
@@ -136,9 +140,9 @@ contract BackedStaticsForkTest is DiamondTestSetup {
         IGovernance(fresh.diamond).initializePurchases();
         verifier.verify(fresh, config, market, operators, 2);
         assertEq(IGovernance(fresh.diamond).protocolConfig().operatorPurchaseBps, 1500);
-        IGame(fresh.diamond).buyPotato{value: 0.01 ether}();
+        IGame(fresh.diamond).buyPotato{value: 0.003 ether}();
         vm.warp(vm.getBlockTimestamp() + 4 minutes);
         IGame(fresh.diamond).materializeMaturedEmission();
-        assertEq(IPotatoToken(fresh.diamond).balanceOf(address(this)), 500 ether);
+        assertEq(IPotatoToken(fresh.diamond).balanceOf(address(this)), 1_000 ether);
     }
 }

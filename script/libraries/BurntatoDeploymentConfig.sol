@@ -23,11 +23,11 @@ library BurntatoDeploymentConfig {
             treasuryRecipient: ANVIL_TREASURY,
             rewardAllocator: ANVIL_TREASURY,
             protocol: ProtocolConfig({
-                startingPrice: 0.01 ether,
+                startingPrice: 0.003 ether,
                 priceIncreaseBps: 1_000,
                 roundTimeout: 1 hours,
-                roundEmissionBudget: 5_000 ether,
-                emissionStepBps: 1_000,
+                roundEmissionBudget: 20_000 ether,
+                emissionStepBps: 500,
                 emissionVestingDuration: 4 minutes,
                 winnerBps: 2_500,
                 nextRoundWinnerBps: 500,
@@ -40,7 +40,7 @@ library BurntatoDeploymentConfig {
             }),
             initialWinnerReserve: 0,
             buyback: BuybackConfig({maxSpend: 1 ether, callerRewardBps: 50, delayBlocks: 1}),
-            publicWrapCap: 2_000_000 ether
+            publicWrapCap: 0
         });
         config.initialWinnerReserve = defaultInitialWinnerReserve(config.protocol);
     }

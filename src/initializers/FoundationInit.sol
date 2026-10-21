@@ -56,7 +56,7 @@ contract FoundationInit {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         ts.recipient = treasury;
         LibProtocolStorage.wrapper().underlying = statics;
-        LibProtocolStorage.wrapper().publicWrapCap = 2_000_000 ether;
+        LibProtocolStorage.wrapper().publicWrapCap = 0;
         if (initialWinnerReserve != 0) {
             emit IGame.WinnerReserveFunded(msg.sender, 1, initialWinnerReserve, initialWinnerReserve);
         }

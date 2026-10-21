@@ -11,11 +11,13 @@ records qualification results without changing source, dependencies, compiler
 settings or proof inputs.
 
 The subsequent local maintenance changes are not covered by that qualification.
+This includes the subsequent launch defaults: a zero public wrap cap,
+0.003 ETH starting price, and 20,000 POTATO budget with a 5% reward step.
 Their focused tests and review are separate; remote formal proofs and complete
 CI must be renewed against the changed source before treating it as qualified.
 
-POTATO starts with zero supply and purchases inactive. Public wrapping deposits
-STATICS 1:1 under a 2,000,000 POTATO capacity; permissionless backed reserve
+The qualified source candidate starts with zero supply and purchases inactive.
+Public wrapping deposits STATICS 1:1 under a 2,000,000 POTATO capacity; permissionless backed reserve
 contributions do not consume that capacity. Base rewards transfer from the one
 accounted Diamond reserve, with the full snapshotted budget required at the
 first Grab. Settlement redeems all Recovery commitments into equal STATICS for

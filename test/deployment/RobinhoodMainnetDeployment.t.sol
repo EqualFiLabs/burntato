@@ -49,8 +49,11 @@ contract RobinhoodMarketManifestTest is Test {
 
     function test_ProductionDefaultsMatchApprovedEconomics() public pure {
         GenesisConfig memory c = BurntatoDeploymentConfig.launchDefaults();
-        assertEq(c.protocol.roundEmissionBudget, 5_000 ether);
-        assertEq(c.publicWrapCap, 2_000_000 ether);
+        assertEq(c.protocol.roundEmissionBudget, 20_000 ether);
+        assertEq(c.protocol.startingPrice, 0.003 ether);
+        assertEq(c.protocol.priceIncreaseBps, 1_000);
+        assertEq(c.protocol.emissionStepBps, 500);
+        assertEq(c.publicWrapCap, 0);
         assertEq(c.protocol.winnerBps, 2500);
         assertEq(c.protocol.nextRoundWinnerBps, 500);
         assertEq(c.protocol.recoveryBps, 3000);
@@ -58,7 +61,7 @@ contract RobinhoodMarketManifestTest is Test {
         assertEq(c.protocol.buybackBps, 1000);
         assertEq(c.protocol.operatorPurchaseBps, 1500);
         assertEq(c.protocol.emissionVestingDuration, 4 minutes);
-        assertEq(c.initialWinnerReserve, 0.0105 ether);
+        assertEq(c.initialWinnerReserve, 0.00315 ether);
         assertEq(c.buyback.maxSpend, 1 ether);
         assertEq(c.buyback.callerRewardBps, 50);
         assertEq(c.buyback.delayBlocks, 1);

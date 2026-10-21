@@ -110,7 +110,7 @@ contract LocalDeploymentConfigurationTest is Test {
         assertEq(c.buyback.maxSpend, 0.2 ether);
         assertEq(c.buyback.callerRewardBps, 75);
         assertEq(c.buyback.delayBlocks, 3);
-        assertEq(c.publicWrapCap, 2_000_000 ether);
+        assertEq(c.publicWrapCap, 0);
         assertEq(c.finalAdmin, address(0x11));
         assertEq(c.guardian, address(0x12));
         assertEq(c.treasuryRecipient, address(0x13));

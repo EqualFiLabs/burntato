@@ -79,10 +79,11 @@ contract BackedDeploymentTest is Test {
         assertEq(token.backingBalance(), 0);
         assertEq(token.rewardReserve(), 0);
         assertEq(token.underlying(), address(statics));
-        assertEq(token.publicWrapCap(), 2_000_000 ether);
+        assertEq(token.publicWrapCap(), 0);
+        assertEq(token.availablePublicWrapCapacity(), 0);
         assertEq(IGovernance(deployment.diamond).authority(), admin);
         assertFalse(IGovernance(deployment.diamond).purchasesInitialized());
-        assertEq(IGame(deployment.diamond).winnerReserveEth(), 0.0105 ether);
+        assertEq(IGame(deployment.diamond).winnerReserveEth(), 0.00315 ether);
         assertEq(IDiamondLoupe(deployment.diamond).facetAddresses().length, 10);
     }
 
@@ -104,19 +105,52 @@ contract BackedDeploymentTest is Test {
 
     function test_ActualReserveFundingAndAuthorityActivationStartGameplay() public {
         InitializeBurntato activation = new InitializeBurntato();
-        vm.expectRevert(abi.encodeWithSelector(InitializeBurntato.RewardReserveNotFunded.selector, 5_000 ether, 0));
+        vm.expectRevert(abi.encodeWithSelector(InitializeBurntato.RewardReserveNotFunded.selector, 20_000 ether, 0));
         activation.checkReady(deployment.diamond);
         vm.prank(admin);
         IGovernance(deployment.diamond).initializePurchases();
         uint256 beforeBalance = address(this).balance;
-        vm.expectRevert(abi.encodeWithSelector(Errors.InsufficientRewardReserve.selector, 0, 5_000 ether));
-        IGame(deployment.diamond).buyPotato{value: 0.01 ether}();
+        vm.expectRevert(abi.encodeWithSelector(Errors.InsufficientRewardReserve.selector, 0, 20_000 ether));
+        IGame(deployment.diamond).buyPotato{value: 0.003 ether}();
         assertEq(address(this).balance, beforeBalance);
-        statics.mint(address(this), 5_000 ether);
-        statics.approve(deployment.diamond, 5_000 ether);
-        IPotatoToken(deployment.diamond).fundRewardReserve(5_000 ether);
-        IGame(deployment.diamond).buyPotato{value: 0.01 ether}();
+        statics.mint(address(this), 20_000 ether);
+        statics.approve(deployment.diamond, 20_000 ether);
+        IPotatoToken(deployment.diamond).fundRewardReserve(20_000 ether);
+        IGame(deployment.diamond).buyPotato{value: 0.003 ether}();
         assertEq(IGame(deployment.diamond).getRound(1).currentHolder, address(this));
+    }
+
+    function test_ZeroLaunchCapAllowsEarnedRedemptionAndOnlyAuthorityCanOpenWrapping() public {
+        IPotatoToken token = IPotatoToken(deployment.diamond);
+        IGame game = IGame(deployment.diamond);
+        statics.mint(address(this), 20_000 ether);
+        statics.approve(deployment.diamond, type(uint256).max);
+        vm.expectRevert(abi.encodeWithSelector(Errors.PublicWrapCapacityExceeded.selector, 0, 1));
+        token.wrap(1);
+        assertEq(statics.balanceOf(address(this)), 20_000 ether);
+        token.fundRewardReserve(20_000 ether);
+        vm.prank(admin);
+        IGovernance(deployment.diamond).initializePurchases();
+        game.buyPotato{value: 0.003 ether}();
+        vm.warp(block.timestamp + 4 minutes);
+        game.materializeMaturedEmission();
+        assertEq(token.balanceOf(address(this)), 1_000 ether);
+        token.unwrap(1_000 ether);
+        assertEq(statics.balanceOf(address(this)), 1_000 ether);
+        assertEq(token.rewardReserve(), 19_000 ether);
+        assertEq(token.publicWrapOutstanding(), 0);
+        assertEq(token.publicWrapCap(), 0);
+        assertEq(token.availablePublicWrapCapacity(), 0);
+        vm.expectRevert(abi.encodeWithSelector(Errors.PublicWrapCapacityExceeded.selector, 0, 1));
+        token.wrap(1);
+        vm.expectRevert(abi.encodeWithSelector(Errors.NotAuthority.selector, address(this)));
+        token.setPublicWrapCap(1_000 ether);
+        vm.prank(admin);
+        token.setPublicWrapCap(1_000 ether);
+        token.wrap(1_000 ether);
+        assertEq(token.publicWrapOutstanding(), 1_000 ether);
+        assertEq(token.balanceOf(address(this)), 1_000 ether);
+        assertEq(token.backingBalance(), token.totalSupply());
     }
 
     function test_DependencyDriftFailsBeforeOwnedDeployment() public {
@@ -139,9 +173,9 @@ contract BackedDeploymentTest is Test {
     }
 
     function test_ActivationExportsCalldataOnlyAfterFunding() public {
-        statics.mint(address(this), 5_000 ether);
-        statics.approve(deployment.diamond, 5_000 ether);
-        IPotatoToken(deployment.diamond).fundRewardReserve(5_000 ether);
+        statics.mint(address(this), 20_000 ether);
+        statics.approve(deployment.diamond, 20_000 ether);
+        IPotatoToken(deployment.diamond).fundRewardReserve(20_000 ether);
         (address target, bytes memory data) = new InitializeBurntato().initializationCall(deployment.diamond);
         assertEq(target, deployment.diamond);
         assertEq(data, abi.encodeCall(IGovernance.initializePurchases, ()));
@@ -150,9 +184,9 @@ contract BackedDeploymentTest is Test {
     function test_VerifierChecksFundedAndActivatedPhases() public {
         StaticsOperatorDependencies memory operators;
         VerifyBurntato verifier = new VerifyBurntato();
-        statics.mint(address(this), 5_000 ether);
-        statics.approve(deployment.diamond, 5_000 ether);
-        IPotatoToken(deployment.diamond).fundRewardReserve(5_000 ether);
+        statics.mint(address(this), 20_000 ether);
+        statics.approve(deployment.diamond, 20_000 ether);
+        IPotatoToken(deployment.diamond).fundRewardReserve(20_000 ether);
         verifier.verify(deployment, config, market, operators, 1);
         vm.prank(admin);
         IGovernance(deployment.diamond).initializePurchases();

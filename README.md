@@ -8,7 +8,8 @@ reserve. Buybacks acquire STATICS through its existing Uniswap v4 market.
 
 The launch profile gives the first holder one hour and shortens each later
 purchase reset by five minutes until reaching a five-minute floor, alongside a
-10% price step, a fresh 5,000 POTATO base reward budget, 10% holder
+0.003 ETH starting price, 10% price step, a fresh 20,000 POTATO base reward
+budget, 5% holder
 opportunities vesting over four minutes, a 25% Winner / 5% next-Winner / 30%
 Recovery / 15% Treasury / 10% buyback / 15% Operators purchase split. Recovery
 settlement burns all committed POTATO and sends equal underlying STATICS to
@@ -32,8 +33,9 @@ authority or an administered distributor, and exact protocol movements are
 allowed; ordinary wallet transfers revert. The initial Treasury recipient is a
 distributor, and later Treasury-recipient and distributor changes are administered
 independently. Users wrap STATICS 1:1 and unwrap POTATO for equal STATICS. Public
-wrapping initially allows 2,000,000 POTATO outstanding; redemption reopens that
-capacity, including redemption of reserve-origin rewards. Lowering the cap never
+wrapping starts disabled with a zero cap; the authority can raise it later.
+Redemption reduces outstanding usage, including for reserve-origin rewards,
+but cannot reopen wrapping while the cap is zero. Lowering the cap never
 blocks redemption. There is no standalone burn selector, unbacked token seed,
 or default POTATO market.
 

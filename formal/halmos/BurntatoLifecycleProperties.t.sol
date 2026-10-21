@@ -126,6 +126,8 @@ contract BurntatoLifecycleProperties is Test {
         game = IGame(address(diamond));
         governance = IGovernance(address(diamond));
         potato = IPotatoToken(address(diamond));
+        // Lifecycle fixtures explicitly open wrapping to fund Recovery commitments.
+        potato.setPublicWrapCap(2_000_000 ether);
         recovery = IRecovery(address(diamond));
         settlement = ISettlement(address(diamond));
         rewards = ITreasuryRewards(address(diamond));

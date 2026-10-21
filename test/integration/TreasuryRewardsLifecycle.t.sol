@@ -258,6 +258,8 @@ contract TreasuryRewardsLifecycleTest is DiamondTestSetup {
         _buy(bob);
         _expireAndSettle();
         assertEq(statics.balanceOf(treasury), 10_000 ether);
+        vm.prank(authority);
+        potato.setPublicWrapCap(1_000 ether);
         vm.startPrank(treasury);
         statics.approve(address(diamond), 1_000 ether);
         potato.wrap(1_000 ether);

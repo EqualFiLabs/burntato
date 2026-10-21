@@ -79,7 +79,9 @@ Diamond first. `unwrap(amount)` burns caller POTATO and returns equal STATICS
 without requiring approval, including during pause. Public `burn(amount)` and
 unbacked mint selectors are removed.
 
-The initial public wrap cap is 2,000,000 POTATO. Wrapping increases
+The initial public wrap cap is zero. Public wrapping stays disabled until the
+authority raises it with `setPublicWrapCap(amount)`. Redemption never raises the
+cap, so unwrapping at a zero cap cannot enable new wraps. Wrapping increases
 `publicWrapOutstanding`; every public or Recovery redemption reduces it by
 `min(amount, publicWrapOutstanding)` regardless of token origin. Lowering the
 cap below outstanding usage blocks new wraps without preventing redemption.

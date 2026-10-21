@@ -124,6 +124,7 @@ abstract contract BackedBuybackLifecycleTestBase is DiamondTestSetup {
     }
 
     function test_RealWethSettlementMintsExactBackedReserveWithoutPublicCapacity() public {
+        assertEq(potato.publicWrapCap(), 0);
         uint256 reserveBefore = buybacks.buybackReserveEth();
         uint256 keeperBefore = keeper.balance;
         uint256 managerWeth = weth.balanceOf(address(manager));
@@ -150,6 +151,7 @@ abstract contract BackedBuybackLifecycleTestBase is DiamondTestSetup {
         vm.prank(keeper);
         potato.unwrap(0.05 ether);
         assertEq(statics.balanceOf(keeper), 0.05 ether);
+        assertEq(potato.availablePublicWrapCapacity(), 0);
         assertEq(potato.backingBalance(), potato.totalSupply());
     }
 
@@ -233,6 +235,8 @@ abstract contract BackedBuybackLifecycleTestBase is DiamondTestSetup {
     }
 
     function test_BuybackReserveCreditIsIndependentOfFullPublicCap() public {
+        vm.prank(authority);
+        potato.setPublicWrapCap(2_000_000 ether);
         statics.mint(keeper, 2_000_000 ether);
         vm.startPrank(keeper);
         statics.approve(address(diamond), 2_000_000 ether);

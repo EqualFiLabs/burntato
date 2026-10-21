@@ -38,17 +38,17 @@ The canonical launch profile is:
 
 | Setting | Default |
 | --- | ---: |
-| Starting price | 0.01 ETH |
+| Starting price | 0.003 ETH |
 | Price increase | 10% |
 | Round timeout | 1 hour |
 | Timeout decay per purchase | 5 minutes |
 | Minimum round timeout | 5 minutes |
-| Round emission budget | 5,000 POTATO |
-| Emission opportunity | 10% of remaining budget |
+| Round emission budget | 20,000 POTATO |
+| Emission opportunity | 5% of remaining budget |
 | Emission vesting duration | 4 minutes |
 | Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 5% / 30% / 15% / 10% / 15% |
-| Initial Winner reserve | 0.0105 ETH; opens Round 1 at 105% of its first-Grab price |
-| Public wrap cap | 2,000,000 POTATO |
+| Initial Winner reserve | 0.00315 ETH; opens Round 1 at 105% of its first-Grab price |
+| Public wrap cap | 0 POTATO (public wrapping disabled at launch) |
 | Backing and redemption | 1 STATICS per POTATO |
 | Recovery settlement | 100% redeemed to STATICS for Treasury |
 | Maximum buyback slice | 1 ETH |
@@ -114,7 +114,8 @@ accounting.
 
 Fresh deployments fund the initial reserve to `ceil(startingPrice * 105%)`, so
 Round 1 opens with a Winner pool above its first-Grab price before any purchase.
-At 0.01 ETH the default seed is 0.0105 ETH; at 0.003 ETH it is 0.00315 ETH.
+At the default 0.003 ETH price the seed is 0.00315 ETH; an overridden
+0.01 ETH starting price would require 0.0105 ETH.
 With an unchanged next-round starting price, a one-Grab round funds the next
 opening Winner pool exactly 1:1; later Grabs or direct sponsorship increase it.
 Buyback ETH remains separate from Winner, Recovery, and Treasury-claim
@@ -145,8 +146,8 @@ Rewards transfer existing backed POTATO. An unearned portion remains available
 inside the same round budget and informs the next holder's opportunity.
 Same-timestamp cycling earns zero and does not advance the curve.
 
-At the default four-minute vesting duration, a first holder earns 250 POTATO
-after two minutes and reaches the same 500 POTATO maximum after four minutes.
+At the default four-minute vesting duration, a first holder earns 500 POTATO
+after two minutes and reaches the 1,000 POTATO maximum after four minutes.
 An uninterrupted holder can fully vest one minute before the five-minute
 minimum round deadline. The duration is governed and snapshotted per round;
 changing deployment defaults does not alter an existing deployment.
@@ -158,16 +159,16 @@ per-opportunity finalized flag prevents double payment and no holder can exceed
 their snapshotted maximum. During an emergency pause neither entry point may
 materialize holder emission.
 
-At the default 10% step, fully vested opportunities reproduce:
+At the default 5% step, fully vested opportunities reproduce:
 
 ```text
-5,000 -> 4,500 -> 4,050 -> 3,645 remaining
+20,000 -> 19,000 -> 18,050 -> 17,147.5 remaining
 ```
 
 Unused inventory remains in the base reward reserve for later rounds; it is not
 transferred to Recovery or Treasury or awarded to the winner. Every round starts
 from its own configured budget. At the default, actual round rewards are at most
-5,000 POTATO. Base reserve accounting excludes Recovery escrow and reserved or
+20,000 POTATO. Base reserve accounting excludes Recovery escrow and reserved or
 unreserved Treasury inventory; there is no separate reserve vault.
 
 ## Recovery
@@ -226,7 +227,7 @@ into the next round; unused POTATO emission never does.
 
 Fresh deployments start with zero POTATO supply. `wrap(amount)` deposits the
 caller's STATICS and mints equal POTATO to that caller. The initial public cap
-is 2,000,000 POTATO:
+is zero, so public wrapping remains disabled until the authority raises it:
 
 ```text
 availableCapacity = max(publicWrapCap - publicWrapOutstanding, 0)
@@ -242,8 +243,10 @@ STATICS balance >= totalSupply
 ```
 
 Capacity reopening is independent of token origin, so redeeming reserve-origin
-rewards can reopen public capacity. Lowering the cap below outstanding usage
-blocks additional public wrapping but never redemption. Unsolicited STATICS
+rewards can reopen public capacity only within the configured cap. Redemption
+never changes the cap; at a zero cap, available capacity stays zero. Lowering
+the cap below outstanding usage blocks additional public wrapping but never
+redemption. Unsolicited STATICS
 creates surplus without changing the 1:1 redemption rate. Exact token balance
 checks reject transfer-fee behavior and failures revert the complete operation.
 

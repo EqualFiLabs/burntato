@@ -34,6 +34,9 @@ contract WrapperBackingTest is DiamondTestSetup {
         _deployCore();
         potato = IPotatoToken(address(diamond));
         game = IGame(address(diamond));
+        assertEq(potato.publicWrapCap(), 0);
+        vm.prank(authority);
+        potato.setPublicWrapCap(2_000_000 ether);
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
     }
@@ -100,6 +103,20 @@ contract WrapperBackingTest is DiamondTestSetup {
         vm.prank(authority);
         potato.setPublicWrapCap(3_000_000 ether);
         assertEq(potato.availablePublicWrapCapacity(), 3_000_000 ether - 1);
+    }
+
+    function test_ZeroCapStaysClosedWhenOutstandingWrapsAreRedeemed() public {
+        _wrap(alice, 10 ether);
+        vm.prank(authority);
+        potato.setPublicWrapCap(0);
+        vm.prank(alice);
+        potato.unwrap(10 ether);
+        assertEq(potato.publicWrapOutstanding(), 0);
+        assertEq(potato.publicWrapCap(), 0);
+        assertEq(potato.availablePublicWrapCapacity(), 0);
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(Errors.PublicWrapCapacityExceeded.selector, 0, 1));
+        potato.wrap(1);
     }
 
     function test_ReserveFundingAbovePublicCapAndRewardRedemptionReopensCapacity() public {

@@ -63,19 +63,19 @@ The local-fork entrypoint checks historical hashes through Anvil RPC instead.
 | Setting | Default |
 | --- | --- |
 | Final admin | Explicit deployment input |
-| Starting Hot Potato price | 0.01 ETH |
+| Starting Hot Potato price | 0.003 ETH |
 | Price increase | 1,000 BPS |
 | Round timeout | 1 hour |
 | Round timeout decay | 5 minutes |
 | Minimum round timeout | 5 minutes |
-| Round emission budget | 5,000 POTATO |
-| Emission step | 1,000 BPS |
+| Round emission budget | 20,000 POTATO |
+| Emission step | 500 BPS |
 | Emission vesting | 4 minutes |
 | Purchase split from Grab 2 | 2,500 Winner / 500 next Winner / 3,000 Recovery / 1,500 Treasury / 1,000 buyback / 1,500 Operator BPS |
 | First Grab | 100% to the next round Winner reserve |
-| Initial Winner reserve | 0.0105 ETH |
+| Initial Winner reserve | 0.00315 ETH |
 | Recovery settlement | 100% of committed POTATO redeemed to STATICS for Treasury |
-| Public wrap cap | 2,000,000 POTATO |
+| Public wrap cap | 0 POTATO (public wrapping disabled at launch) |
 | Buyback cap / reward / delay | 1 ETH / 50 BPS / 1 block |
 | Initial POTATO supply | Zero |
 | Reward allocator | Explicit deployment input |
