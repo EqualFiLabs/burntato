@@ -69,7 +69,7 @@ contract TreasuryRewardsLifecycleTest is DiamondTestSetup {
         assertEq(baseEarned, 10_000 ether);
         assertEq(treasuryEarned, 30 ether);
         assertEq(potato.balanceOf(alice), 10_030 ether);
-        assertEq(potato.totalSupply(), supplyBefore + baseEarned);
+        assertEq(potato.totalSupply(), supplyBefore);
         assertEq(rewards.treasuryRewardsReserved(), 870 ether);
         vm.prank(alice);
         recovery.commitRecovery(treasuryEarned);
@@ -116,7 +116,7 @@ contract TreasuryRewardsLifecycleTest is DiamondTestSetup {
         assertEq(round.treasuryEmittedPotato, 36.75 ether);
         assertEq(round.treasuryReleasedPotato, 263.25 ether);
         assertEq(round.treasuryEmissionBudget, round.treasuryEmittedPotato + round.treasuryReleasedPotato);
-        assertEq(potato.totalSupply(), supplyBefore + 12_250 ether);
+        assertEq(potato.totalSupply(), supplyBefore);
         assertEq(rewards.treasuryRewardsReserved(), 0);
         assertEq(claims.treasuryPotatoAvailable(), 263.25 ether);
     }
@@ -147,6 +147,50 @@ contract TreasuryRewardsLifecycleTest is DiamondTestSetup {
         uint256 before = potato.balanceOf(treasury);
         assertEq(claims.claimTreasuryPotato(), 600 ether);
         assertEq(potato.balanceOf(treasury) - before, 600 ether);
+    }
+
+    function test_ClaimsPreserveOverlappingSchedulesBaseReserveAndRecoveryEscrow() public {
+        _fundTreasury();
+        vm.startPrank(treasury);
+        uint256 scheduleId = rewards.allocateTreasuryRewards(600 ether, 4, 2);
+        rewards.allocateTreasuryRewards(400 ether, 4, 2);
+        vm.stopPrank();
+        _advanceEmptyRound();
+
+        vm.prank(treasury);
+        assertEq(rewards.cancelTreasuryRewards(scheduleId), 300 ether);
+        assertEq(claims.claimTreasuryPotato(), 300 ether);
+        assertEq(rewards.treasuryRewardsReserved(), 700 ether);
+        vm.expectRevert(Errors.NothingToClaim.selector);
+        claims.claimTreasuryPotato();
+
+        _buy(alice);
+        vm.warp(block.timestamp + 30);
+        _buy(bob);
+        assertEq(potato.balanceOf(alice), 2_512.5 ether);
+        vm.prank(alice);
+        recovery.commitRecovery(100 ether);
+        uint256 reserveBefore = potato.rewardReserve();
+        _expireAndSettle();
+
+        // Round 4 pays 12.5 + 48.75; only its unused 438.75 becomes claimable.
+        assertEq(claims.treasuryPotatoAvailable(), 438.75 ether);
+        assertEq(rewards.treasuryRewardsReserved(), 200 ether);
+        assertEq(claims.claimTreasuryPotato(), 438.75 ether);
+        assertEq(claims.treasuryPotatoAvailable(), 0);
+        assertEq(recovery.recoveryCommitment(5, alice), 100 ether);
+        assertEq(potato.rewardReserve(), reserveBefore - 9_750 ether);
+        assertEq(potato.balanceOf(address(diamond)), potato.rewardReserve() + 200 ether + 100 ether);
+        vm.expectRevert(Errors.NothingToClaim.selector);
+        claims.claimTreasuryPotato();
+
+        _buy(carol);
+        _expireAndSettle();
+        assertEq(rewards.treasuryRewardsReserved(), 0);
+        assertEq(claims.claimTreasuryPotato(), 180 ether);
+        assertEq(potato.balanceOf(address(diamond)), potato.rewardReserve());
+        assertEq(statics.balanceOf(treasury), 9_100 ether);
+        assertEq(potato.backingBalance(), potato.totalSupply());
     }
 
     function test_OverlappingSchedulesAndRemainderComposeExactly() public {
@@ -213,7 +257,11 @@ contract TreasuryRewardsLifecycleTest is DiamondTestSetup {
 
         _buy(bob);
         _expireAndSettle();
-        assertEq(claims.claimTreasuryPotato(), 1_000 ether);
+        assertEq(statics.balanceOf(treasury), 10_000 ether);
+        vm.startPrank(treasury);
+        statics.approve(address(diamond), 1_000 ether);
+        potato.wrap(1_000 ether);
+        vm.stopPrank();
         assertEq(potato.balanceOf(treasury), 1_000 ether);
         assertEq(game.currentRoundId(), 3);
     }

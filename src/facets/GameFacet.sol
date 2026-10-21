@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================
@@ -13,19 +13,24 @@ import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
+import {LibGuard} from "../libraries/LibGuard.sol";
 import {Errors} from "../shared/Errors.sol";
 import {PurchaseAllocation, Round} from "../shared/Types.sol";
 
-contract GameFacet is IGame {
+contract GameFacet is IGame, LibGuard {
     function buyPotato() external payable {
         if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         if (!gs.initialized) revert Errors.PurchasesNotInitialized();
-        LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
-        if (rs.status == 2) revert Errors.Reentrancy();
-        rs.status = 2;
+        _enterReentrancyGuard();
 
         Round storage round = _currentOrStartRound(gs);
+        if (round.purchaseIndex == 0) {
+            uint256 reserve = LibProtocolStorage.wrapper().rewardReserve;
+            if (reserve < round.config.roundEmissionBudget) {
+                revert Errors.InsufficientRewardReserve(reserve, round.config.roundEmissionBudget);
+            }
+        }
         if (round.currentHolder != address(0) && block.timestamp >= round.deadline) revert Errors.RoundExpired();
         if (msg.value != round.nextPrice) revert Errors.IncorrectPayment(round.nextPrice, msg.value);
 
@@ -82,7 +87,7 @@ contract GameFacet is IGame {
             (bool success,) = router.call{value: operatorShare}("");
             if (!success) revert Errors.OperatorRevenueTransferFailed(router, operatorShare);
         }
-        rs.status = 1;
+        _exitReentrancyGuard();
     }
 
     function fundWinnerReserve(uint256 targetRoundId) external payable {
@@ -90,11 +95,9 @@ contract GameFacet is IGame {
         if (msg.value == 0) revert Errors.ZeroAmount();
         LibGame.enforceFutureRound(targetRoundId);
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
-        LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
-        if (rs.status == 2) revert Errors.Reentrancy();
-        rs.status = 2;
+        _enterReentrancyGuard();
         _fundWinnerReserve(gs, msg.sender, targetRoundId, msg.value, true);
-        rs.status = 1;
+        _exitReentrancyGuard();
     }
 
     function fundRoundReserves(uint256 targetRoundId, uint256 winnerAmount, uint256 recoveryAmount) external payable {
@@ -106,9 +109,7 @@ contract GameFacet is IGame {
             revert Errors.IncorrectPayment(expected, msg.value);
         }
         LibGame.enforceFutureRound(targetRoundId);
-        LibProtocolStorage.ReentrancyStorage storage guard = LibProtocolStorage.reentrancy();
-        if (guard.status == 2) revert Errors.Reentrancy();
-        guard.status = 2;
+        _enterReentrancyGuard();
 
         if (winnerAmount != 0) {
             _fundWinnerReserve(LibProtocolStorage.game(), msg.sender, targetRoundId, winnerAmount, true);
@@ -118,10 +119,9 @@ contract GameFacet is IGame {
             recovery.recoveryReserveEth += recoveryAmount;
             uint256 roundRecoveryReserve = recovery.recoveryReserveByRound[targetRoundId] + recoveryAmount;
             recovery.recoveryReserveByRound[targetRoundId] = roundRecoveryReserve;
-            recovery.recoverySponsoredByRound[targetRoundId] += recoveryAmount;
             emit IRecovery.RecoveryReserveFunded(msg.sender, targetRoundId, recoveryAmount, roundRecoveryReserve);
         }
-        guard.status = 1;
+        _exitReentrancyGuard();
     }
 
     function winnerReserveEth() external view returns (uint256) {
@@ -148,7 +148,7 @@ contract GameFacet is IGame {
         winnerReserve = gs.winnerReserveByRound[roundId];
         recoveryReserve = rs.recoveryReserveByRound[roundId];
         winnerSponsoredEth = gs.winnerSponsoredByRound[roundId];
-        recoverySponsoredEth = rs.recoverySponsoredByRound[roundId];
+        recoverySponsoredEth = recoveryReserve;
     }
 
     function materializeMaturedEmission() external returns (uint256 baseEarned, uint256 treasuryEarned) {

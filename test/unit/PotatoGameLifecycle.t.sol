@@ -165,7 +165,7 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(roundTwo.deadline - roundTwo.holderSince, 1 hours);
     }
 
-    function test_MaterializedRewardCannotMintTwice() public {
+    function test_MaterializedRewardCannotPayTwice() public {
         _buy(alice, 0.01 ether);
         vm.warp(block.timestamp + 120);
         vm.prank(keeper);
@@ -176,7 +176,7 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
 
         _buy(bob, 0.011 ether);
         assertEq(potato.balanceOf(alice), 10_000 ether);
-        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 10_000 ether);
+        assertEq(potato.totalSupply(), INITIAL_REWARD_INVENTORY);
     }
 
     function test_RewardNeverExceedsSnapshot() public {
@@ -190,14 +190,14 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(potato.balanceOf(alice), 10_000 ether);
     }
 
-    function test_ApprovalDoesNotBypassTransferRestrictionAndSelfBurnWorks() public {
+    function test_ApprovalDoesNotBypassTransferRestrictionAndRedemptionWorks() public {
         _earnForAlice();
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, address(0)));
         potato.transfer(address(0), 1 ether);
         assertEq(potato.balanceOf(address(0)), 0);
-        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 10_000 ether);
+        assertEq(potato.totalSupply(), INITIAL_REWARD_INVENTORY);
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(Errors.TransferRestricted.selector, alice, bob));
@@ -216,9 +216,9 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         assertEq(potato.allowance(alice, bob), 1 ether);
 
         vm.prank(alice);
-        potato.burn(1 ether);
+        potato.unwrap(1 ether);
         assertEq(potato.balanceOf(alice), 9_999 ether);
-        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 9_999 ether);
+        assertEq(potato.totalSupply(), INITIAL_REWARD_INVENTORY - 1 ether);
     }
 
     function test_PermitSetsAllowanceButDoesNotBypassTransferRestriction() public {
@@ -318,21 +318,21 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
 
     function test_ProtocolTokenEndpointsRejectExternalCallers() public {
         vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
-        potato.protocolMint(alice, 1 ether);
+        potato.protocolCreditRewardReserve(1 ether, 0);
         vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
-        potato.protocolBurn(alice, 1 ether);
+        potato.protocolRedeemRecovery(1 ether);
         vm.expectRevert(abi.encodeWithSelector(Errors.NotProtocol.selector, address(this)));
         potato.protocolTransfer(alice, bob, 1 ether);
     }
 
-    function test_GlobalPauseBlocksProtocolMintWithoutChangingSupply() public {
+    function test_GlobalPauseBlocksPublicWrappingWithoutChangingSupply() public {
         vm.prank(guardian);
         IGovernance(address(diamond)).setPaused(true);
         uint256 supplyBefore = potato.totalSupply();
 
-        vm.prank(address(diamond));
+        vm.prank(alice);
         vm.expectRevert(Errors.ProtocolPaused.selector);
-        potato.protocolMint(alice, 1 ether);
+        potato.wrap(1 ether);
 
         assertEq(potato.totalSupply(), supplyBefore);
         assertEq(potato.balanceOf(alice), 0);
@@ -426,7 +426,7 @@ contract PotatoGameLifecycleTest is DiamondTestSetup {
         _buy(bob, 0.01 ether);
         vm.warp(block.timestamp + 5);
         game.materializeMaturedEmission();
-        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY);
+        assertEq(potato.totalSupply(), INITIAL_REWARD_INVENTORY);
     }
 
     function _earnForAlice() internal {

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {MockStatics} from "../mocks/MockStatics.sol";
+
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
@@ -318,6 +320,7 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
         DiamondCutFacet cutFacet = new DiamondCutFacet();
         BurntatoDiamond candidate = new BurntatoDiamond(authority, address(cutFacet));
         FoundationInit initializer = new FoundationInit();
+        MockStatics backing = new MockStatics();
         FacetCut[] memory noCuts = new FacetCut[](0);
 
         vm.prank(authority);
@@ -328,7 +331,9 @@ contract OperatorPurchaseRevenueTest is DiamondTestSetup {
             .diamondCut(
                 noCuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (config, candidateTreasury, candidateRouter, 1 ether, 0))
+                abi.encodeCall(
+                    FoundationInit.initialize, (config, candidateTreasury, candidateRouter, address(backing), 0)
+                )
             );
     }
 }

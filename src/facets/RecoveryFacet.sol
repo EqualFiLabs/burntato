@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================
@@ -13,10 +13,11 @@ import {LibDiamond} from "../libraries/LibDiamond.sol";
 import {LibGame} from "../libraries/LibGame.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {Constants} from "../shared/Constants.sol";
+import {LibGuard} from "../libraries/LibGuard.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
-contract RecoveryFacet is IRecovery {
+contract RecoveryFacet is IRecovery, LibGuard {
     function commitRecovery(uint256 amount) external {
         if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         if (amount == 0) revert Errors.ZeroAmount();
@@ -43,16 +44,13 @@ contract RecoveryFacet is IRecovery {
         if (LibDiamond.diamondStorage().selectorData[msg.sig].facet == address(0)) revert Errors.InvalidAddress();
         if (msg.value == 0) revert Errors.ZeroAmount();
         LibGame.enforceFutureRound(targetRoundId);
-        LibProtocolStorage.ReentrancyStorage storage guard = LibProtocolStorage.reentrancy();
-        if (guard.status == 2) revert Errors.Reentrancy();
-        guard.status = 2;
+        _enterReentrancyGuard();
         LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
         rs.recoveryReserveEth += msg.value;
         uint256 roundRecoveryReserve = rs.recoveryReserveByRound[targetRoundId] + msg.value;
         rs.recoveryReserveByRound[targetRoundId] = roundRecoveryReserve;
-        rs.recoverySponsoredByRound[targetRoundId] += msg.value;
         emit RecoveryReserveFunded(msg.sender, targetRoundId, msg.value, roundRecoveryReserve);
-        guard.status = 1;
+        _exitReentrancyGuard();
     }
 
     function recoveryReserveEth() external view returns (uint256) {

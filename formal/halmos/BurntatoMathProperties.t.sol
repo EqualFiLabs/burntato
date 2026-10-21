@@ -23,35 +23,28 @@ contract BurntatoMathProperties is Test {
         assertLe(duration, initialTimeout);
     }
 
-    function check_zeroDecayKeepsInitialTimeout(
-        uint64 initialTimeout,
-        uint64 minimumTimeout,
-        uint64 priorPurchases
-    ) public pure {
+    function check_zeroDecayKeepsInitialTimeout(uint64 initialTimeout, uint64 minimumTimeout, uint64 priorPurchases)
+        public
+        pure
+    {
         vm.assume(initialTimeout != 0);
         vm.assume(minimumTimeout != 0 && minimumTimeout <= initialTimeout);
         assertEq(LibMath.diminishingTimeout(initialTimeout, 0, minimumTimeout, priorPurchases), initialTimeout);
     }
 
-    function check_zeroPriorPurchasesKeepsInitialTimeout(
-        uint64 initialTimeout,
-        uint64 decay,
-        uint64 minimumTimeout
-    ) public pure {
+    function check_zeroPriorPurchasesKeepsInitialTimeout(uint64 initialTimeout, uint64 decay, uint64 minimumTimeout)
+        public
+        pure
+    {
         vm.assume(initialTimeout != 0);
         vm.assume(minimumTimeout != 0 && minimumTimeout <= initialTimeout);
         vm.assume(decay <= initialTimeout);
         assertEq(LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, 0), initialTimeout);
     }
 
-    function check_equalTimeoutBoundsStayFixed(uint64 initialTimeout, uint64 decay, uint64 priorPurchases)
-        public
-        pure
-    {
+    function check_equalTimeoutBoundsStayFixed(uint64 initialTimeout, uint64 decay, uint64 priorPurchases) public pure {
         vm.assume(initialTimeout != 0);
         vm.assume(decay <= initialTimeout);
-        assertEq(
-            LibMath.diminishingTimeout(initialTimeout, decay, initialTimeout, priorPurchases), initialTimeout
-        );
+        assertEq(LibMath.diminishingTimeout(initialTimeout, decay, initialTimeout, priorPurchases), initialTimeout);
     }
 }

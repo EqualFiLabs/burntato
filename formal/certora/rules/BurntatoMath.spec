@@ -3,7 +3,6 @@ methods {
     function mulBpsUp(uint256, uint256) external returns (uint256) envfree;
     function linearEarned(uint256, uint256, uint256) external returns (uint256) envfree;
     function diminishingTimeout(uint256, uint256, uint256, uint256) external returns (uint256) envfree;
-    function splitRecovery(uint256, uint256) external returns (uint256, uint256) envfree;
     function purchaseSplit(uint256, uint256, uint256, uint256, uint256, uint256)
         external returns (uint256, uint256, uint256, uint256, uint256, uint256) envfree;
     function buybackQuote(uint256, uint256, uint256) external returns (uint256, uint256, uint256) envfree;
@@ -152,18 +151,6 @@ rule diminishingTimeoutIsMonotonic(
         "timeout increases with purchase count";
 }
 
-rule recoverySplitConserves(uint256 amount, uint256 treasuryBps) {
-    require amount <= max_uint128;
-    require treasuryBps <= 10000;
-
-    uint256 burned;
-    uint256 treasury;
-    burned, treasury = splitRecovery(amount, treasuryBps);
-
-    assert burned + treasury == amount, "Recovery split loses or creates POTATO";
-    assert burned <= amount, "burn exceeds commitment";
-    assert treasury <= amount, "Treasury inventory exceeds commitment";
-}
 
 rule buybackQuoteConservesGrossSlice(uint256 reserve, uint256 maxSpend, uint256 callerRewardBps) {
     require reserve <= max_uint128;

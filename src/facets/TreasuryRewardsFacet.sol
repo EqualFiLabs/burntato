@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================
@@ -47,7 +47,6 @@ contract TreasuryRewardsFacet is ITreasuryRewards {
         IPotatoToken(address(this)).protocolTransfer(msg.sender, address(this), amount);
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         ts.potatoInventory += amount;
-        ts.reservedPotato += amount;
         trs.escrowedPotato += amount;
 
         if (perRound != 0) {
@@ -99,7 +98,6 @@ contract TreasuryRewardsFacet is ITreasuryRewards {
         schedule.canceledFromRound = cancelFrom;
         schedule.canceledAmount = amountReleased;
         trs.escrowedPotato -= amountReleased;
-        LibProtocolStorage.treasury().reservedPotato -= amountReleased;
         emit TreasuryRewardsCanceled(scheduleId, cancelFrom, amountReleased);
     }
 

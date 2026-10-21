@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
+// ============================================================================
+//                                BURNTATO
+//                                Grab it.
+//                          https://burntato.fun
+//                              EqualFi Labs
+// ============================================================================
 pragma solidity 0.8.26;
 
 enum FacetCutAction {
@@ -29,8 +35,6 @@ struct ProtocolConfig {
     uint16 nextRoundWinnerBps;
     uint16 recoveryBps;
     uint16 treasuryBps;
-    uint16 recoveryBurnBps;
-    uint16 recoveryTreasuryBps;
     uint16 buybackBps;
     uint16 operatorPurchaseBps;
     uint256 roundTimeoutDecay;
@@ -48,8 +52,6 @@ struct RoundConfig {
     uint16 nextRoundWinnerBps;
     uint16 recoveryBps;
     uint16 treasuryBps;
-    uint16 recoveryBurnBps;
-    uint16 recoveryTreasuryBps;
     uint16 buybackBps;
     uint16 operatorPurchaseBps;
     uint256 roundTimeoutDecay;

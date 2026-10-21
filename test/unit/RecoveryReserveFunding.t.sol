@@ -46,6 +46,34 @@ contract RecoveryReserveFundingTest is DiamondTestSetup {
         assertEq(address(diamond).balance, 3 ether);
     }
 
+    function test_MixedFundingKeepsSponsorshipViewsAndActivationConsistent() public {
+        IGame game = IGame(address(diamond));
+        vm.deal(funder, 10 ether);
+        vm.startPrank(funder);
+        recovery.fundRecoveryReserve{value: 1 ether}(1);
+        game.fundRoundReserves{value: 1.5 ether}(1, 0.5 ether, 1 ether);
+        recovery.fundRecoveryReserve{value: 0.5 ether}(3);
+        vm.stopPrank();
+        (uint256 winner, uint256 reserve, uint256 winnerSponsored, uint256 recoverySponsored) = game.roundFunding(1);
+        assertEq(winner, 0.5 ether);
+        assertEq(winnerSponsored, 0.5 ether);
+        assertEq(reserve, 2 ether);
+        assertEq(recoverySponsored, 2 ether);
+
+        vm.prank(authority);
+        IGovernance(address(diamond)).initializePurchases();
+        vm.prank(funder);
+        game.buyPotato{value: 0.01 ether}();
+        assertEq(game.getRound(1).recoveryPool, 2 ether);
+        assertEq(game.getRound(1).winnerPool, 0.5 ether);
+        assertEq(recovery.recoveryReserveEth(), 0.5 ether);
+        (winner, reserve, winnerSponsored, recoverySponsored) = game.roundFunding(1);
+        assertEq(winner + reserve + winnerSponsored + recoverySponsored, 0);
+        (, reserve,, recoverySponsored) = game.roundFunding(3);
+        assertEq(reserve, 0.5 ether);
+        assertEq(recoverySponsored, 0.5 ether);
+    }
+
     function test_ZeroFundingRevertsWithoutMutation() public {
         vm.prank(funder);
         vm.expectRevert(Errors.ZeroAmount.selector);

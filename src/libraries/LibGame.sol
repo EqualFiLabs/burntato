@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
+// ============================================================================
+//                                BURNTATO
+//                                Grab it.
+//                          https://burntato.fun
+//                              EqualFi Labs
+// ============================================================================
 pragma solidity 0.8.26;
 
 import {IGame} from "../interfaces/IGame.sol";
@@ -44,7 +50,6 @@ library LibGame {
         uint256 recoveryReserve = rs.recoveryReserveByRound[roundId];
         if (recoveryReserve != 0) {
             delete rs.recoveryReserveByRound[roundId];
-            delete rs.recoverySponsoredByRound[roundId];
             rs.recoveryReserveEth -= recoveryReserve;
             round.recoveryPool += recoveryReserve;
             emit IRecovery.RecoveryReserveApplied(roundId, recoveryReserve, round.recoveryPool);
@@ -75,12 +80,14 @@ library LibGame {
         round.emittedPotato += baseEarned;
         round.remainingTreasuryEmission -= treasuryEarned;
         round.treasuryEmittedPotato += treasuryEarned;
-        if (baseEarned != 0) IPotatoToken(address(this)).protocolMint(round.currentHolder, baseEarned);
+        if (baseEarned != 0) {
+            LibProtocolStorage.wrapper().rewardReserve -= baseEarned;
+            IPotatoToken(address(this)).protocolTransfer(address(this), round.currentHolder, baseEarned);
+        }
         if (treasuryEarned != 0) {
             LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
             LibProtocolStorage.TreasuryRewardsStorage storage trs = LibProtocolStorage.treasuryRewards();
             ts.potatoInventory -= treasuryEarned;
-            ts.reservedPotato -= treasuryEarned;
             trs.escrowedPotato -= treasuryEarned;
             IPotatoToken(address(this)).protocolTransfer(address(this), round.currentHolder, treasuryEarned);
         }
@@ -97,7 +104,6 @@ library LibGame {
         round.treasuryReleasedPotato += released;
         LibProtocolStorage.TreasuryRewardsStorage storage trs = LibProtocolStorage.treasuryRewards();
         trs.escrowedPotato -= released;
-        LibProtocolStorage.treasury().reservedPotato -= released;
         emit ITreasuryRewards.TreasuryRewardReleased(round.roundId, released, trs.escrowedPotato);
     }
 }
