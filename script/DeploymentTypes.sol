@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
+
 import {BuybackConfig, ProtocolConfig} from "../src/shared/Types.sol";
 
 struct GenesisConfig {
@@ -9,16 +11,11 @@ struct GenesisConfig {
     address guardian;
     address treasuryRecipient;
     address rewardAllocator;
+    address statics;
     ProtocolConfig protocol;
     uint256 initialWinnerReserve;
     BuybackConfig buyback;
-    uint16 hookFeeBps;
-    uint16 operatorRewardShareBps;
-    int24 initialTick;
-    int24 tickSpacing;
-    int24 tickLower;
-    int24 tickUpper;
-    uint256 potatoSeed;
+    uint256 publicWrapCap;
 }
 
 struct StaticsOperatorDependencies {
@@ -31,36 +28,11 @@ struct StaticsOperatorDependencies {
     bytes32 activationRegistryCodeHash;
 }
 
-struct CanonicalV4Dependencies {
-    uint256 chainId;
-    uint256 forkBlock;
-    bytes32 forkBlockHash;
-    address poolManager;
-    bytes32 poolManagerCodeHash;
-    address positionDescriptor;
-    bytes32 positionDescriptorCodeHash;
-    address positionManager;
-    bytes32 positionManagerCodeHash;
-    address quoter;
-    bytes32 quoterCodeHash;
-    address stateView;
-    bytes32 stateViewCodeHash;
-    address reservesLens;
-    bytes32 reservesLensCodeHash;
-    address universalRouter;
-    bytes32 universalRouterCodeHash;
-    address permit2;
-    bytes32 permit2CodeHash;
-    address weth;
-    bytes32 wethCodeHash;
-}
-
 struct BurntatoDeployment {
     address diamond;
     address diamondCutFacet;
     address diamondLoupeFacet;
     address governanceFacet;
-    address marketFacet;
     address buybackFacet;
     address potatoTokenFacet;
     address gameFacet;
@@ -70,16 +42,23 @@ struct BurntatoDeployment {
     address treasuryRewardsFacet;
     address foundationInit;
     address admin;
+    address statics;
     address poolManager;
-    address permit2;
     address weth9;
-    address positionDescriptor;
-    address positionManager;
-    address hookDeployer;
-    address hook;
     address operatorRewardsRouter;
-    address quoter;
-    address stateView;
-    address reservesLens;
-    address universalRouter;
+}
+
+struct StaticsMarketDependencies {
+    uint256 chainId;
+    uint256 forkBlock;
+    bytes32 forkBlockHash;
+    address statics;
+    bytes32 staticsCodeHash;
+    address weth;
+    bytes32 wethCodeHash;
+    address poolManager;
+    bytes32 poolManagerCodeHash;
+    bytes32 hookCodeHash;
+    bytes32 poolId;
+    PoolKey key;
 }

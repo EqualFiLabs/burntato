@@ -3,7 +3,8 @@
 ## Diamond interfaces
 
 Integrators use the `BurntatoDiamond` address for gameplay, POTATO ERC-20 and
-Permit operations, Recovery, settlement, claims, market views, and governance.
+Permit operations, wrapping, Recovery, settlement, claims, reserve views, and
+governance.
 Use the EIP-2535 loupe to resolve the installed facet for each selector.
 
 Important state reads include:
@@ -16,13 +17,13 @@ Important state reads include:
   `recoveryReserveEth()`, and `stalledRecoveryWithdrawalAt()`;
 - `IClaims.winnerClaimed()`, `recoveryClaimed()`, and
   `claimableRecovery()` for account claim state;
-- Treasury claimable ETH and POTATO views; and
-- `IMarket.marketConfig()`, `marketCurves()`, `marketCurveHash()`,
-  `canonicalPoolKey()`, `marketState()`, and `marketReady()`;
-- `IPotatoToken.isDistributor(account)`, `canonicalHook()`, and
-  `tokenPoolManager()` for the governed transfer and market bindings; and
-- `IBuyback.buybackConfig()`, `buybackReserveEth()`, and `lastBuybackBlock()`;
-  and
+- Treasury claimable ETH and POTATO views;
+- `IPotatoToken.underlying()`, `backingBalance()`, `publicWrapCap()`,
+  `publicWrapOutstanding()`, `availablePublicWrapCapacity()`, `rewardReserve()`,
+  `availableRewardInventory()`, `nextRoundFundingStatus()`, and
+  `isDistributor(account)`; and
+- `IBuyback.buybackMarket()`, `buybackConfig()`, `buybackReserveEth()`, and
+  `lastBuybackBlock()`; and
 - `ITreasuryRewards.rewardAllocator()`, `treasuryRewardsReserved()`,
   `rewardSchedule()`, and `nextTreasuryRewardBudget()`.
 
@@ -33,11 +34,6 @@ purchase sets it from that purchase's timestamp using the round's snapshotted
 reconstructing it from transaction ordering. A new round restarts at the
 initial timeout; after the configured floor is reached, later purchases keep
 resetting to that floor.
-
-The canonical hook is a separate administered contract. Read `owner()`,
-`token()`, `poolManager()`, `tickSpacing()`, `feeAddress()`, `feeBps()`,
-`operatorRewardsRouter()`, `operatorRewardShareBps()`, `deploymentBlock()`, and
-`externalBuysEnabled()` from the hook itself.
 
 `fundWinnerReserve(targetRoundId)` and
 `fundRecoveryReserve(targetRoundId)` permissionlessly add positive native value
@@ -59,34 +55,56 @@ and does not snapshot a distant round's configuration.
 
 The first Grab of every round contributes its complete price to the following
 round's Winner reserve. The configured Winner, next-Winner, Recovery, Treasury,
-buyback, and Operator BPS split applies only from the second Grab onward.
+buyback, and Operator BPS split applies only from the second Grab onward:
+25% / 5% / 30% / 15% / 10% / 15%. Before the first Grab, check purchase
+initialization, pause and `nextRoundFundingStatus()`. The complete snapshotted
+base reward budget must be funded; an insufficient reserve reverts payment.
 
-The combined funding and per-round funding views expand the ABI, selector
-manifest, and Diamond storage. Integrators must update their ABI before
-connecting to this fresh-deployment package; it is not an in-place upgrade.
+Holder rewards transfer existing base and Treasury inventory. The next purchase
+finalizes the outgoing opportunity; after full vesting, anyone may call
+`materializeMaturedEmission()`. `currentEarnedEmission()` includes already
+materialized earnings, so check `holderEmissionFinalized` for payment state.
+
+The wrapper interfaces and removal of market/Recovery-ratio fields change the
+ABI, selector manifest, and Diamond storage. Integrators must update their ABI
+before connecting to this fresh-deployment package; it is not an in-place upgrade.
 
 ## POTATO behavior
 
 POTATO is Solady ERC-20 plus EIP-2612 Permit behind the Diamond. `name`, `symbol`,
 `decimals`, balances, supply, approvals, `permit`, nonces, and domain separator
-follow the Solady implementation. The token exposes `burn(amount)` for voluntary
-self-burning.
+follow the Solady implementation. `wrap(amount)` pulls the caller's exact
+STATICS deposit and mints equal POTATO to that caller; approve STATICS to the
+Diamond first. `unwrap(amount)` burns caller POTATO and returns equal STATICS
+without requiring approval, including during pause. Public `burn(amount)` and
+unbacked mint selectors are removed.
+
+The initial public wrap cap is 2,000,000 POTATO. Wrapping increases
+`publicWrapOutstanding`; every public or Recovery redemption reduces it by
+`min(amount, publicWrapOutstanding)` regardless of token origin. Lowering the
+cap below outstanding usage blocks new wraps without preventing redemption.
+`fundRewardReserve(amount)` accepts the caller's approved STATICS and mints
+equal POTATO only into the accounted Diamond reserve, outside public capacity.
+Buybacks fund that same reserve. Backing must cover total supply; unsolicited
+STATICS creates surplus without changing redemption value. Index `Wrapped`,
+`Unwrapped`, `RewardReserveFunded` and `PublicWrapCapSet`.
+
+`availableRewardInventory()` deducts the occupied unsettled round's remaining
+base budget. `nextRoundFundingStatus()` returns the current holderless round
+or queued next round, its required budget, available inventory and funding
+status. Reserve accounting excludes Recovery escrow and Treasury inventory.
 
 An ERC-20 approval or Permit does not make ordinary transfers valid. The
 transfer hook permits only:
 
-1. minting and burning;
+1. minting and burning within backed issuance and redemption;
 2. transfers where either endpoint is an administered distributor;
 3. transfers where either endpoint is the current protocol authority;
-4. an exact protocol transfer authorized and consumed during a Diamond self-call;
-5. a transfer to or from the configured PoolManager covered by the exact
-   transient allowance opened by the canonical hook.
+4. an exact protocol transfer authorized and consumed during a Diamond self-call.
 
-All other underlying POTATO movements revert. The transient PoolManager
-allowance expires with the transaction and is observable through
-`transientPoolManagerAllowance()` for integration testing.
-Public transfers to or from `address(0)` also revert. `burn(amount)` is the
-supported voluntary destruction path and reduces `totalSupply()` exactly.
+All other underlying POTATO movements revert. Public transfers to or from
+`address(0)` also revert. Protocol transfer, reserve-credit and Recovery-redemption
+entrypoints are Diamond-self-call-only.
 The authority administers distributors through `setDistributor(account,
 allowed)`. The initial Treasury recipient is explicitly enabled at deployment.
 Changing the Treasury recipient does not implicitly enable the replacement or
@@ -105,71 +123,24 @@ v4 ERC-6909 currency claims and third-party wrappers are different assets whose
 transfers do not invoke POTATO. They can represent POTATO exposure, but they are
 not underlying POTATO balances and cannot be intercepted by its transfer hook.
 
-## Canonical v4 pool and hook
+## Configured STATICS/WETH market
 
-The PoolKey is native ETH as currency0, the Burntato Diamond as currency1, zero
-native LP fee, the configured tick spacing, and the exact hook. The hook binds
-immutably to that POTATO address, PoolManager, and tick spacing. It rejects
-foreign initialization, foreign PoolKeys, exact-output and zero-amount swaps,
-and unauthorized liquidity addition.
-
-Market infrastructure and the reserved seed can be corrected through
-`configureMarket` before launch. The six canonical bands, spacing, initial
-tick, and outer bounds are fixed by the reviewed launch profile. After launch,
-reconfiguration and a second launch revert. All 56 initial position NFTs are
-held by `0x000000000000000000000000000000000000dEaD`.
-
-Genesis reserves the configured POTATO allocation in Diamond custody. The
-initial square-root price must equal `TickMath.getSqrtPriceAtTick(tickUpper)`,
-making every locked launch position entirely POTATO-sided; `launchMarket()` is
-nonpayable and does not consume Treasury ETH. The local default allocation is
-100 million POTATO. Configuration rejects allocations that exceed the
-aggregate amount domain or produce a zero/overflowed per-position amount or
-liquidity value. `marketCurves()` and `marketCurveHash()` expose the immutable
-profile, while `launchMarket()` returns the pool ID, position count, and actual
-POTATO consumed after v4 rounding.
-Because external buys start closed, the first protocol
-buybacks add ETH-side pool inventory before ordinary users may buy, while POTATO
-holders may sell whenever the pool has ETH available.
-
-The hook follows FWA.fun's bilateral revenue-capture path:
-
-- [FWA hook fee mechanics](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol#L205-L302)
-- [FWA initialization-squatting regression](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/test/FWATokenHookSquat.t.sol)
-
-Buy fees are taken in POTATO and internally converted once; sell fees are taken
-in ETH. Both realized native fees are split between the standalone Operator
-router and `feeAddress`, with division dust assigned to `feeAddress`. `HookFee`,
-`HookFeeAllocated`, and `Trade` are hook events. There is no Diamond hook-fee
-claim.
-
-Hook ownership may update `feeAddress`, `feeBps`, and the atomic Operator router
-and share configuration before or after launch and Diamond finalization. The
-total fee is bounded to 200 BPS. The Operator share is independently bounded to
-10,000 BPS of that fee, allowing all hook revenue to go to Operators without
-increasing the trader fee. The Operator path is disabled only as `(address(0),
-0)`; an enabled router must be deployed and distinct from known system and
-Treasury destinations.
-
-`feeAddress` also cannot be Burntato's purchase rewards router, including after
-the hook Operator share is disabled, so purchase-only routing cannot be
-accidentally widened to swap fees through Treasury configuration.
-
-External buys are disabled by default. `setExternalBuysEnabled(bool)` is an
-owner-only hook control that remains repeatable after launch and Diamond
-finalization. Disabling buys does not disable exact-input POTATO sells. The
-Diamond's canonical buyback is the sole privileged buy path and pays no hook
-fee.
+`IBuyback.buybackMarket()` reports the external PoolManager, WETH and exact
+PoolKey. Chain-specific `statics-market-*.json` manifests pin STATICS, WETH,
+PoolManager, hook runtimes, provenance and currency ordering. No POTATO pool,
+hook, LP, gauge, market seed or launch selector is installed. Normal external
+STATICS pool fees apply; no Burntato hook exemption is needed.
 
 ## Statics Operator rewards router
 
 `BurntatoOperatorRewardsRouter` is a standalone, immutable integration contract;
-it does not modify or custody funds inside Statics. Its fixed Robinhood
+it does not modify or custody funds inside Statics. Its fixed Robinhood Mainnet
 dependencies are the Operators NFT
 `0xad5E9F96A91D1A6F550580b157af2068A0e8F0BE` and Activation Registry
-`0xfC62e99CaE93878f83801f3d6Bb4f1762E720B30`.
+`0xfC62e99CaE93878f83801f3d6Bb4f1762E720B30`. Chain-specific bindings, including
+testnet, are pinned in `statics-operators-robinhood-*.json`.
 
-Both the hook and `buyPotato()` send native revenue to this one router. Clients
+`buyPotato()` sends its later-Grab Operator revenue to this router. Clients
 can read the fixed Diamond binding through `purchaseOperatorRewardsRouter()`;
 purchase routing emits `OperatorPurchaseRevenueQueued` after the internal
 Winner, Recovery, Treasury, and buyback obligations have been recorded.
@@ -202,61 +173,38 @@ lazy, transfer away and back to the original owner followed by restoration of
 the exact stored tier before any router read cannot be distinguished from no
 transfer; Statics' transfer reset and reactivation cost bound this edge case.
 
-### Robinhood production-compatible routing
-
-For the persistent fork, consume
-`artifacts/robinhood-local/deployment.json`. The committed manifest pins the
-canonical Universal Router at `0x8876789976dEcBfCbBbe364623C63652db8C0904`
-and Permit2 at `0x000000000022D473030F116dDEE9F6B43aC78BA3`.
-
-External buys remain closed after deployment. Once hook governance enables
-them, native ETH-to-POTATO exact-input buys use the Universal Router `V4_SWAP`
-command with `SWAP_EXACT_IN_SINGLE`, `SETTLE_ALL`, and `TAKE_ALL`. POTATO sells
-prepend an exact-amount Permit2 `PermitSingle` using `PERMIT2_PERMIT` with the
-Universal Router allow-revert flag (`0x8a`), followed by `V4_SWAP`. If another
-caller submits the public Permit2 signature first, the duplicate permit may
-revert without blocking the swap, which consumes the already-installed exact
-allowance. Robinhood's pinned Router single-hop payload includes
-`minHopPriceX36`; do not
-
-For router traffic, `HookFee.sender` and `Trade.sender` are the Universal Router,
-not the user's wallet. User identity comes from the submitted transaction and
-Permit2 owner. Successful transactions must leave the Permit2 exact allowance
-and POTATO transient PoolManager allowance at zero.
-
 ## Permissionless buyback
 
 Call payable `IBuyback.fundBuybackReserve()` to add a positive native amount to
 the tracked reserve. Any address may fund it. The call emits
 `BuybackReserveFunded(funder, amount, reserveEth)`, adds the exact amount, and
 does not execute a swap or change `lastBuybackBlock`. Purchase initialization,
-the global protocol pause, market launch, and Diamond finalization do not gate
-funding. A zero-value call reverts. Sending native ETH to the Diamond's
-plain receive function does not credit the reserve.
+the global protocol pause and Diamond finalization do not gate funding. A
+zero-value call reverts. Sending native ETH to the Diamond's plain receive function does not credit the reserve.
 
 Calling the standalone facet implementation directly also reverts, preventing
 native funds from being stranded outside Diamond accounting.
 
 Call `IBuyback.buyback()` without parameters while the protocol is unpaused and
-after market launch. It selects the governed gross slice from
-`buybackReserveEth`, derives a swap budget that leaves
-room for the configured reward, and swaps exact-input native ETH for POTATO at
-the extreme Uniswap price limit. The canonical swap must spend the complete
-requested input, and the reward is calculated from that exact spend. There is
+with a configured STATICS/WETH market. It selects the governed gross slice
+from `buybackReserveEth`, derives a swap budget that leaves room for the
+configured reward, wraps ETH into WETH and swaps exact-input WETH for STATICS
+at the extreme Uniswap price limit in the configured currency direction.
+The swap must spend the complete requested input, and the reward is calculated from that exact spend. There is
 intentionally no caller-provided quote, slippage, deadline, or recipient
 parameter.
 
-PoolManager sends output directly to the current `IClaims.treasuryRecipient()`.
-The hook exact-authorizes that transfer even when the current recipient is not a
-distributor, and the buyback leaves `externalBuysEnabled` unchanged. Observe
-`BuybackExecuted` for gross slice, actual ETH spent, POTATO bought, caller
-reward, and final reserve. The default cap, reward, and delay are 1 ETH, 50 BPS,
-and one block. The reward rate cannot exceed 100 BPS.
+The Diamond settles real WETH with PoolManager and measures received STATICS.
+Exactly equal backed POTATO is minted into its base reward reserve, outside
+public capacity. Observe `BuybackExecuted` for gross slice, actual ETH spent,
+STATICS acquired, POTATO reserve funded, caller reward, and final ETH reserve.
+The default cap, reward, and delay are 1 ETH, 50 BPS, and one block. The reward rate cannot exceed 100 BPS.
 
-If the canonical swap partially fills, spends zero ETH, or returns zero POTATO,
+If the swap partially fills, spends zero ETH, or returns zero STATICS,
 the complete call reverts: PoolManager changes roll back, no reward is paid,
-reserve is unchanged, and the cooldown is not consumed. The global pause also
-blocks `buyback()` before market or reserve validation. Integrators should
+reserve is unchanged, and the cooldown is not consumed. Backing mismatch,
+reserve-credit failure or rejected tip payment likewise reverts all effects.
+The global pause also blocks `buyback()` before market or reserve validation. Integrators should
 expose the current cap, reward, delay, reserve, and pause state; no new user
 input is required.
 
@@ -264,17 +212,24 @@ input is required.
 helper: it funds the reserve and then calls `buyback()`. It accepts the Diamond,
 funding amount in wei, and broadcaster key through
 `BURNTATO_DIAMOND`, `BURNTATO_BOOTSTRAP_BUYBACK_WEI`, and `PRIVATE_KEY`. It
-requires a launched market, inactive game purchases, no prior buyback, and a
+requires a configured market, inactive game purchases, no prior buyback, and a
 positive complete-reserve amount that may exceed `maxSpend`. If the funding
 transaction succeeded but the buyback transaction did not, rerunning resumes
 only when the tracked reserve still equals the exact requested amount. The
-helper never enables external buys. `ExecuteBurntatoBuyback.s.sol` performs one
-later execution without funding and rejects an unlaunched, paused, or
+helper does not activate purchases. `ExecuteBurntatoBuyback.s.sol` performs one
+later execution without funding and rejects an unconfigured, paused, or
 empty-reserve state.
 
 - [FWA permissionless buyback and callback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
 
 ## Stalled Recovery withdrawal
+
+`commitRecovery(amount)` moves caller POTATO into escrow for
+`currentRoundId + 1` through the exact protocol-transfer path without approval.
+At target settlement, all commitments are burned and equal STATICS goes to the
+current Treasury. `RoundSettled` distinguishes POTATO burned and STATICS
+recovered; an underlying transfer failure rolls back settlement and successor
+setup. Successor underfunding does not block settlement or existing claims.
 
 Recovery normally needs no additional UI beyond commitment and later claim.
 For the exceptional holderless-predecessor state,
@@ -318,9 +273,10 @@ budget. `TreasuryRewardsAllocated`, `TreasuryRewardsCanceled`,
 Winner and Recovery claims accept an explicit external recipient and are
 pull-based. Treasury ETH and POTATO claims always use the configured Diamond
 Treasury recipient. Protocol custody addresses are rejected as external claim
-recipients. Hook revenue bypasses these claims and arrives directly at the
-hook's configured Treasury wallet. `winnerClaimed(roundId)` and
-`recoveryClaimed(roundId, account)` report completion status.
+recipients: zero, the Diamond, bound Operator router, STATICS, configured
+PoolManager/WETH and configured pool hook. Recovery STATICS reaches Treasury
+at settlement, independently of Treasury ETH and POTATO claims.
+`winnerClaimed(roundId)` and `recoveryClaimed(roundId, account)` report completion status.
 
 `claimableRecovery(roundId, account)` is intentionally order- and
 state-dependent. Before the final outstanding commitment, it returns the

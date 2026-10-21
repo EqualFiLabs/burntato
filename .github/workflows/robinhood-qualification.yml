@@ -29,3 +29,4 @@ jobs:
       - run: forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1
       - run: forge test --match-path 'test/invariant/*.t.sol' -j 1
       - run: forge test --match-path 'test/deployment/*.t.sol' -j 1
+      - run: python3 -m unittest discover -s test/tooling -v

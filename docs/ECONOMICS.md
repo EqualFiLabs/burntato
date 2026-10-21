@@ -14,15 +14,13 @@ roundEmissionBudget
 emissionStepBps
 emissionVestingDuration
 winnerBps / nextRoundWinnerBps / recoveryBps / treasuryBps / buybackBps / operatorPurchaseBps
-recoveryBurnBps / recoveryTreasuryBps
 ```
 
 The six configured purchase shares must sum to 10,000 BPS and apply from the
-second purchase of each round onward. The two Recovery shares must sum to
-10,000 BPS. Every `ProtocolConfig` BPS value is bounded by 10,000;
-the separate hook fee and installed buyback facet use narrower ceilings
-described below. The latter becomes immutable only after Diamond cuts are
-finalized.
+second purchase of each round onward. Every `ProtocolConfig` BPS value is
+bounded by 10,000; the installed buyback facet uses the narrower caller-reward
+ceiling described below. That ceiling becomes immutable when upgrades are
+removed or Diamond cuts are finalized.
 Starting price, round timeout, minimum round timeout, and emission vesting
 duration must be nonzero. Minimum round timeout cannot exceed the initial round
 timeout, and timeout decay cannot exceed the initial timeout. Round timeout is
@@ -45,14 +43,14 @@ The canonical launch profile is:
 | Round timeout | 1 hour |
 | Timeout decay per purchase | 5 minutes |
 | Minimum round timeout | 5 minutes |
-| Round emission budget | 10,000 POTATO |
+| Round emission budget | 5,000 POTATO |
 | Emission opportunity | 10% of remaining budget |
 | Emission vesting duration | 4 minutes |
-| Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 2% / 40% / 5% / 13% / 15% |
+| Winner / next Winner / Recovery / Treasury / buyback / Operator split | 25% / 5% / 30% / 15% / 10% / 15% |
 | Initial Winner reserve | 0.0105 ETH; opens Round 1 at 105% of its first-Grab price |
-| Recovery burn / Treasury POTATO split | 90% / 10% |
-| Bilateral hook fee | 1% |
-| Operator share of hook fee | 40% of the existing fee |
+| Public wrap cap | 2,000,000 POTATO |
+| Backing and redemption | 1 STATICS per POTATO |
+| Recovery settlement | 100% redeemed to STATICS for Treasury |
 | Maximum buyback slice | 1 ETH |
 | Buyback caller reward | 0.5% |
 | Buyback delay | 1 block |
@@ -61,8 +59,10 @@ The canonical launch profile is:
 
 A successful purchase pays exactly `nextPrice`, finalizes the outgoing holder's
 emission, allocates ETH, installs the new holder, resets the deadline, and
-calculates the next price. The first purchase of every round funds the next
-round's Winner reserve in full:
+calculates the next price. The first purchase requires enough accounted base
+reward reserve to cover that round's complete snapshotted emission budget;
+insufficient funding reverts the purchase and payment. The first purchase of
+every round funds the next round's Winner reserve in full:
 
 ```text
 if purchaseIndex == 0:
@@ -117,8 +117,8 @@ Round 1 opens with a Winner pool above its first-Grab price before any purchase.
 At 0.01 ETH the default seed is 0.0105 ETH; at 0.003 ETH it is 0.00315 ETH.
 With an unchanged next-round starting price, a one-Grab round funds the next
 opening Winner pool exactly 1:1; later Grabs or direct sponsorship increase it.
-Buyback ETH remains separate from Winner, Recovery, Treasury-claim, and
-launch-seed accounting.
+Buyback ETH remains separate from Winner, Recovery, and Treasury-claim
+accounting.
 
 ## Holder-time emission budget
 
@@ -140,12 +140,13 @@ earned = floor(
 ```
 
 Multiplication occurs before division in POTATO base units. Only `earned` is
-deducted. An unearned portion remains unissued inside the same round budget and
-informs the next holder's opportunity. Same-timestamp cycling earns zero and
-does not advance the curve.
+deducted from both the round budget and the accounted base reward reserve.
+Rewards transfer existing backed POTATO. An unearned portion remains available
+inside the same round budget and informs the next holder's opportunity.
+Same-timestamp cycling earns zero and does not advance the curve.
 
-At the default four-minute vesting duration, a first holder earns 500 POTATO
-after two minutes and reaches the same 1,000 POTATO maximum after four minutes.
+At the default four-minute vesting duration, a first holder earns 250 POTATO
+after two minutes and reaches the same 500 POTATO maximum after four minutes.
 An uninterrupted holder can fully vest one minute before the five-minute
 minimum round deadline. The duration is governed and snapshotted per round;
 changing deployment defaults does not alter an existing deployment.
@@ -153,19 +154,21 @@ changing deployment defaults does not alter an existing deployment.
 The next successful purchase finalizes the outgoing opportunity. After full
 vesting, anyone may materialize it while the round is active and the protocol is
 unpaused. Unpaused settlement finalizes any unresolved final holder. The
-per-opportunity finalized flag prevents double minting and no holder can exceed
+per-opportunity finalized flag prevents double payment and no holder can exceed
 their snapshotted maximum. During an emergency pause neither entry point may
-materialize holder emission or reach the central protocol-mint path.
+materialize holder emission.
 
 At the default 10% step, fully vested opportunities reproduce:
 
 ```text
-10,000 -> 9,000 -> 8,100 -> 7,290 remaining
+5,000 -> 4,500 -> 4,050 -> 3,645 remaining
 ```
 
-Unused budget is never force-minted, rolled forward, transferred to Recovery or
-Treasury, or awarded to the winner. Every round starts from its own configured
-budget. At the default, actual round emission is at most 10,000 POTATO.
+Unused inventory remains in the base reward reserve for later rounds; it is not
+transferred to Recovery or Treasury or awarded to the winner. Every round starts
+from its own configured budget. At the default, actual round rewards are at most
+5,000 POTATO. Base reserve accounting excludes Recovery escrow and reserved or
+unreserved Treasury inventory; there is no separate reserve vault.
 
 ## Recovery
 
@@ -198,13 +201,19 @@ commitments exactly as before.
 At target-round settlement:
 
 ```text
-treasuryPotato = floor(totalCommitted * recoveryTreasuryBps / 10_000)
-burnedPotato   = totalCommitted - treasuryPotato
+burnedPotato     = totalCommitted
+staticsToTreasury = totalCommitted
 ```
 
-The burn-as-remainder rule consumes every committed POTATO base unit exactly
-once. Recovery ETH claims are executable only while the protocol is unpaused
-and remain state-dependent. Each ordinary claimant receives
+Settlement burns every committed POTATO base unit and transfers exactly equal
+STATICS to the current Treasury recipient. It uses the same capacity-reopening
+rule as public redemption. No configurable Recovery ratio remains. A failed
+underlying transfer reverts the complete settlement. Settlement still sets up
+the next round when its reserve is underfunded; funding is checked at its first
+purchase, independently of settlement and existing claims.
+
+Recovery ETH claims are executable only while the protocol is unpaused and
+remain state-dependent. Each ordinary claimant receives
 `floor(recoveryPool * commitment / totalCommitted)`. The claimant whose weight
 completes `totalCommitted` receives the exact remaining
 `recoveryPool - recoveryPaid`, assigning all accumulated division dust to the
@@ -213,63 +222,40 @@ it still consumes its full weight so the eventual final claimant can close the
 pool exactly. If the target round has zero commitments, its Recovery ETH rolls
 into the next round; unused POTATO emission never does.
 
-## Treasury and canonical market
+## STATICS-backed POTATO and Treasury
 
-Genesis mints a separately reserved market allocation into Diamond custody; the
-local default is 100 million POTATO. It is not holder-time emission and cannot
-be claimed before launch. Governance may resize the allocation before launch,
-subject to the Diamond's available POTATO inventory and every derived position
-remaining valid.
-
-The fixed aggressive profile opens at tick 170,280 and divides the allocation
-across 56 nested positions in six overlapping bands. The bands receive 2.5%,
-7.5%, 12.5%, 20%, 42.5%, and 15% of inventory. With the default 100 million
-POTATO allocation, an otherwise untouched pool, and a 2 ETH gross bootstrap
-across two capped calls, the protocol acquires approximately 6.7 million
-POTATO. At the resulting pool state, selling a fully vested first-holder
-emission of 1,000 POTATO returns approximately 0.000642 ETH after the default
-bilateral hook fee.
-That is below the 0.001 ETH the corresponding 0.01 ETH game purchase contributes
-to the buyback reserve. These figures describe the deterministic default
-bootstrap path, not a minimum-output or market-price guarantee; prior pool
-activity, configuration changes, and transaction ordering change the realized
-result.
-
-Anyone may launch the exact canonical native ETH/POTATO v4 pool once the token
-reservation is available. The initial price equals the highest position upper
-tick, so launch supplies POTATO only and consumes no Treasury ETH. All 56
-position NFTs are sent permanently to the dead address and the native LP fee is
-fixed at zero. `marketCurves()` exposes the canonical ETH/POTATO bands and
-`marketCurveHash()` provides a compact deployment identity.
-Buybacks subsequently supply ETH-side demand while external buys remain closed;
-POTATO holders can sell into that liquidity immediately after ETH has entered
-the pool.
-
-The hook's governed `feeBps` applies bilaterally. Its separately governed
-`operatorRewardShareBps` splits that existing fee without increasing it:
+Fresh deployments start with zero POTATO supply. `wrap(amount)` deposits the
+caller's STATICS and mints equal POTATO to that caller. The initial public cap
+is 2,000,000 POTATO:
 
 ```text
-operatorAmount = floor(realizedNativeFee * operatorRewardShareBps / 10_000)
-treasuryAmount = realizedNativeFee - operatorAmount
+availableCapacity = max(publicWrapCap - publicWrapOutstanding, 0)
+publicWrapOutstanding += publicWrapAmount
 ```
 
-- buys retain the configured fraction of gross POTATO output, sell it once to
-  ETH without recursively charging the internal conversion, and split the
-  realized ETH; and
-- sells retain the configured fraction of gross ETH output and split that ETH
-  identically.
+`unwrap(amount)` burns the caller's POTATO and returns equal STATICS. Public
+and Recovery redemption share the same accounting:
 
-Hook revenue never enters the Diamond, is not launch reserve accounting, and is
-not auto-compounded. The Treasury remainder, including split dust, goes to
-`feeAddress`; the Operator portion goes to the standalone rewards router. The
-default fee is 1%, while 0% through 2% are valid. The Operator share remains
-valid from 0% through 100% of that already-capped fee.
+```text
+publicWrapOutstanding -= min(amount, publicWrapOutstanding)
+STATICS balance >= totalSupply
+```
 
-The Robinhood launch profile uses a 25/2/40/5/13/15 purchase split for Winner,
-next-round Winner, Recovery, nominal Treasury, buyback, and Operators. It also
-routes 40% of the existing 1% hook fee to Operators, equal to 0.4% of swap
-volume; Treasury receives the other 0.6% of volume. Both Operator revenue
-sources enter the same router.
+Capacity reopening is independent of token origin, so redeeming reserve-origin
+rewards can reopen public capacity. Lowering the cap below outstanding usage
+blocks additional public wrapping but never redemption. Unsolicited STATICS
+creates surplus without changing the 1:1 redemption rate. Exact token balance
+checks reject transfer-fee behavior and failures revert the complete operation.
+
+Anyone may `fundRewardReserve(amount)` with their own STATICS, minting equal
+backed POTATO only into the Diamond's base reward reserve. This funding and
+buyback reserve credits do not consume public capacity. There is no unbacked
+mint, standalone public burn, administrator backing withdrawal or base reserve
+withdrawal. Treasury schedules remain separate inventory accounting.
+
+No POTATO AMM, market seed, hook, launch curve or LP allocation is installed.
+The 15% later-purchase Operator allocation continues to enter the standalone
+rewards router.
 
 Registered Statics Operators share router revenue by their stored activation
 multiplier. Registration and higher-tier synchronization are prospective.
@@ -279,57 +265,52 @@ remaining registered weight. With no remaining weight, or when revenue arrives
 with no registrations, the amount is claimable by Burntato's current Treasury
 recipient. A new owner must register explicitly.
 
-## Treasury buybacks and external-buy gate
+## Treasury buybacks
 
-The buyback reserve accumulates from every purchase, including before launch.
+The buyback reserve accumulates from the second purchase of each round onward.
 Anyone may also call payable `fundBuybackReserve()` with a positive amount.
 Direct funding increases the tracked reserve exactly and does not execute a
 buyback or change its cooldown. It remains available before purchase
-initialization and regardless of the global protocol pause, market launch, or
-Diamond finalization. Plain native transfers to the Diamond increase its balance
+initialization and regardless of the global protocol pause or Diamond
+finalization. Plain native transfers to the Diamond increase its balance
 but do not enter reserve accounting.
 
-After launch, anyone may call parameterless `buyback()`. The governed defaults
-select at most 1 ETH gross, reward the caller at 50 BPS of actual ETH spent, and
+With a configured STATICS/WETH market, anyone may call parameterless
+`buyback()`. The governed defaults select at most 1 ETH gross, reward the caller at 50 BPS of actual ETH spent, and
 enforce a one-block delay. The caller-reward rate may be configured from 0
 through 100 BPS:
 
 ```text
 grossSlice = min(buybackReserveEth, maxSpend)
 requestedInput = floor(grossSlice * 10_000 / (10_000 + callerRewardBps))
-(ethSpent, potatoBought) = canonicalSwap(requestedInput)
-require ethSpent == requestedInput and potatoBought > 0
+(ethSpent, staticsBought) = staticsSwap(requestedInput)
+require ethSpent == requestedInput and staticsBought > 0
+potatoReserveCredit = staticsBought
 callerReward = floor(ethSpent * callerRewardBps / 10_000)
 reserveRestored = grossSlice - ethSpent - callerReward
 ```
 
-The Diamond executes an exact-input native-ETH-to-POTATO swap against only the
-canonical pool with `sqrtPriceLimitX96 = MIN_SQRT_PRICE + 1`. A partial fill,
-zero spend, or zero output reverts atomically, preserving the PoolManager state,
-reserve, caller balance, Treasury balance, and cooldown. The extreme
-terminal-price path therefore also reverts atomically. The global emergency
-pause blocks execution while leaving direct reserve funding live.
+The Diamond wraps ETH into WETH and executes an exact-input WETH-to-STATICS
+swap through the configured PoolManager. Direction follows the sorted pool
+currencies; the price limit is `MIN_SQRT_PRICE + 1` or `MAX_SQRT_PRICE - 1`
+accordingly. Normal market fees apply. Received STATICS is measured and backs
+an exactly equal POTATO mint into the base reward reserve, outside public
+capacity. The caller receives the tip in the same transaction.
 
-Buyback swaps bypass the bilateral hook fee and send purchased POTATO directly
-from PoolManager to the current Diamond Treasury recipient. Treasury may hold,
-burn, distribute, sell, or commit that POTATO under the normal token and
-Recovery rules. No purchased POTATO is automatically burned.
+A partial fill, zero spend, zero output, backing/reserve-credit failure or
+rejected tip reverts atomically, preserving the PoolManager state, reserve,
+caller balance and cooldown. The global emergency pause blocks execution while
+leaving direct reserve funding live. There is no caller-provided quote,
+slippage, deadline or recipient, and no additional oracle/minimum-price policy.
 
-External ETH-to-POTATO pool buys start disabled. While disabled, exact-input
-sells remain available and only the Diamond buyback may buy. Hook ownership may
-enable, disable, or re-enable external buys at any time, including after launch
-and Diamond finalization.
-
-An initial demand bootstrap can therefore launch the token-only pool, fund the
-reserve directly, and execute one buyback while game purchases and external
-pool buys remain closed. The resulting pool inventory supports POTATO sells
-without pre-minting a fixed circulating supply. The funding amount is an
-explicit deployment input and remains subject to the governed buyback cap.
+An initial reserve contribution and buybacks may fund rewards while game
+purchases remain inactive. Funding must be measured in actual reserve POTATO;
+there is no fixed ETH bootstrap target or call count.
 
 ## Treasury-funded round rewards
 
-The configured reward allocator, initially the Treasury Safe, may move existing
-POTATO into a schedule for future unactivated rounds:
+The configured reward allocator may move existing POTATO into a schedule for
+future unactivated rounds:
 
 ```text
 perRound = floor(amount / roundCount)
@@ -340,7 +321,7 @@ Every target round receives `perRound`; the first also receives the exact
 base-unit remainder. Start/end rate deltas make allocation, cancellation, and
 round activation constant-time even when schedules overlap. Funding increases
 Diamond POTATO inventory and reservation together, so scheduled tokens are not
-Treasury-claimable and cannot be spent by the market reservation.
+Treasury-claimable and cannot be spent by the base reward reserve.
 
 At activation the scheduled amount becomes a separate Treasury reward budget.
 Each holder snapshots:
@@ -354,10 +335,11 @@ treasuryEarned = floor(
 )
 ```
 
-Base and Treasury rewards finalize together. Base reward is minted; Treasury
-reward transfers existing escrowed POTATO. The transfer is normal POTATO, so it
-can be self-burned, sold, distributed through an allowed endpoint, or committed
-to the immediately next Recovery market. It never increases total supply.
+Base and Treasury rewards finalize together. Both transfer existing backed
+POTATO from their separately accounted inventory. The transfer is normal
+POTATO, so it can be unwrapped, distributed through an allowed endpoint, or
+committed to the immediately next Recovery market. It never increases total
+supply.
 
 Settlement releases every unearned Treasury reward base unit into unreserved,
 claimable Treasury inventory instead of rolling it forward. The current reward
@@ -369,4 +351,3 @@ distributor administration, including after Diamond finalization.
 Reference precedent:
 
 - [FWA permissionless buyback](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWAToken.sol#L310-L383)
-- [FWA external-buy gate](https://github.com/token-works/fwa-relaunch/blob/1085bf6ee255d6d4d13c374a66110bb25229dc76/src/FWATokenHook.sol)

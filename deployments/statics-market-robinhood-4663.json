@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "chainId": 4663,
+  "forkBlock": 47690599,
+  "forkBlockHash": "0x4ca3ce6b00d4603804be596b721c738caf54c2a08515f84a8ca020f33613837b",
+  "source": {
+    "repository": "https://github.com/EqualFiLabs/statics",
+    "launchSourceCommit": "43018f109006aa2c2eef2808adc2aa74dfc9a6d4",
+    "launchConfigHash": "0xa56443c159762b4470695ee98bd1681fb38202129dbcf474cbffae936b82ce22",
+    "artifactHash": "0x62b18ac6f391ffc9f0bae7c17309994db5b918e2c7c02f64c6a2e4a3ce92e10b",
+    "createCalldataHash": "0x6b7ace963970bac4d7b38460af84b0fcd9152a850a3f558970f445725622df62",
+    "referenceManifest": "deployments/robinhood-mainnet-genesis.json"
+  },
+  "contracts": {
+    "statics": {
+      "address": "0x2d8d6F4A93AcD7a916A5a654ec8b690bA3B3EAdd",
+      "runtimeCodeHash": "0xf10f86b05965a827a332e6c73086f18026fbe3917f4bffbec3f938b3b5397b56"
+    },
+    "weth": {
+      "address": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+      "runtimeCodeHash": "0x5706be52f64875fee65a2cec0d80e47a23d8793cbe85d214b48445e2d05f5353"
+    },
+    "poolManager": {
+      "address": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "runtimeCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626"
+    },
+    "hook": {
+      "address": "0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544",
+      "runtimeCodeHash": "0xc41a91106002f15bf70ae266824317f3f3ac638ac72ca5253bae395fa47ee631"
+    }
+  },
+  "poolId": "0xe79228d6cae086a58bf5b22220b454e5d1ca4f13da767ea5bbe032d5a1e82e8a",
+  "poolKey": {
+    "currency0": "0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73",
+    "currency1": "0x2d8d6F4A93AcD7a916A5a654ec8b690bA3B3EAdd",
+    "fee": 15000,
+    "tickSpacing": 100,
+    "hooks": "0x4e3468951D49f2EEa976eD0D6e75fFCb44a9a544"
+  }
+}

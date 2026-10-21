@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "chainId": 46630,
+  "forkBlock": 112319205,
+  "forkBlockHash": "0xb83b43789675c524ae7b199d0db335fe747ac1c9c01337d35234ece4e711984b",
+  "source": {
+    "repository": "https://github.com/EqualFiLabs/statics",
+    "launchSourceCommit": "43018f109006aa2c2eef2808adc2aa74dfc9a6d4",
+    "referenceManifest": "artifacts/genesis-testnet/20260903T140518Z-1803/genesis.json"
+  },
+  "contracts": {
+    "statics": {
+      "address": "0xcDe1F22F70DB6C42c7C0050e6F3B53d03a2006eD",
+      "runtimeCodeHash": "0xddfe3ed72f5e82db14b2e3d85222a4191afe06ae4a12b5416bd68b8d0ebe9690"
+    },
+    "weth": {
+      "address": "0x33e4191705c386532ba27cBF171Db86919200B94",
+      "runtimeCodeHash": "0x55f8ac53c64450f01880d8249fc5cb0c69c064e4bcb097ea80a02fff40485a7c"
+    },
+    "poolManager": {
+      "address": "0x8366a39CC670B4001A1121B8F6A443A643e40951",
+      "runtimeCodeHash": "0xbd3881180b547f5fe817545743cfb4343e96b1bc6640dcd70c106b0066e95626"
+    },
+    "hook": {
+      "address": "0xddB0569eEf9b404c68d6A7BE69e57e98F4a2E544",
+      "runtimeCodeHash": "0xf9b99b3d66498be03cff422d2825d822c5ef0a2cb48156f161008ef19c1adf43"
+    }
+  },
+  "poolId": "0xf31e4b5ca452b221f9fb5f3aff4b1b0c178e37cf179db73fe521ef59a55ae625",
+  "poolKey": {
+    "currency0": "0x33e4191705c386532ba27cBF171Db86919200B94",
+    "currency1": "0xcDe1F22F70DB6C42c7C0050e6F3B53d03a2006eD",
+    "fee": 15000,
+    "tickSpacing": 100,
+    "hooks": "0xddB0569eEf9b404c68d6A7BE69e57e98F4a2E544"
+  }
+}

@@ -1,479 +1,270 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
-
 import {Script, console2} from "forge-std/Script.sol";
-
-import {Hooks} from "@uniswap/v4-core/src/libraries/Hooks.sol";
-import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {PoolManager} from "@uniswap/v4-core/src/PoolManager.sol";
-import {IPoolManager} from "@uniswap/v4-core/src/interfaces/IPoolManager.sol";
-import {IAllowanceTransfer} from "@uniswap/v4-periphery/lib/permit2/src/interfaces/IAllowanceTransfer.sol";
-import {PositionDescriptor} from "@uniswap/v4-periphery/src/PositionDescriptor.sol";
-import {PositionManager} from "@uniswap/v4-periphery/src/PositionManager.sol";
-import {IPositionDescriptor} from "@uniswap/v4-periphery/src/interfaces/IPositionDescriptor.sol";
-import {IWETH9} from "@uniswap/v4-periphery/src/interfaces/external/IWETH9.sol";
-import {HookMiner} from "@uniswap/v4-periphery/src/utils/HookMiner.sol";
-
 import {BurntatoDiamond} from "../src/BurntatoDiamond.sol";
-import {ClaimsFacet} from "../src/facets/ClaimsFacet.sol";
-import {BuybackFacet} from "../src/facets/BuybackFacet.sol";
 import {DiamondCutFacet} from "../src/facets/DiamondCutFacet.sol";
 import {DiamondLoupeFacet} from "../src/facets/DiamondLoupeFacet.sol";
-import {GameFacet} from "../src/facets/GameFacet.sol";
 import {GovernanceFacet} from "../src/facets/GovernanceFacet.sol";
-import {MarketFacet} from "../src/facets/MarketFacet.sol";
 import {PotatoTokenFacet} from "../src/facets/PotatoTokenFacet.sol";
+import {BuybackFacet} from "../src/facets/BuybackFacet.sol";
+import {GameFacet} from "../src/facets/GameFacet.sol";
 import {RecoveryFacet} from "../src/facets/RecoveryFacet.sol";
 import {SettlementFacet} from "../src/facets/SettlementFacet.sol";
+import {ClaimsFacet} from "../src/facets/ClaimsFacet.sol";
 import {TreasuryRewardsFacet} from "../src/facets/TreasuryRewardsFacet.sol";
-import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
 import {BurntatoOperatorRewardsRouter} from "../src/rewards/BurntatoOperatorRewardsRouter.sol";
 import {FoundationInit} from "../src/initializers/FoundationInit.sol";
 import {IDiamondCut} from "../src/interfaces/IDiamondCut.sol";
-import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {IGovernance} from "../src/interfaces/IGovernance.sol";
-import {IMarket} from "../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../src/interfaces/IPotatoToken.sol";
+import {IBuyback} from "../src/interfaces/IBuyback.sol";
 import {ITreasuryRewards} from "../src/interfaces/ITreasuryRewards.sol";
-import {FacetCut, FacetCutAction, ProtocolConfig} from "../src/shared/Types.sol";
-import {Constants} from "../src/shared/Constants.sol";
-import {BurntatoLaunchCurves} from "../src/libraries/BurntatoLaunchCurves.sol";
+import {FacetCut, FacetCutAction} from "../src/shared/Types.sol";
+import {LibConfig} from "../src/libraries/LibConfig.sol";
 import {
     BurntatoDeployment,
-    CanonicalV4Dependencies,
     GenesisConfig,
+    StaticsMarketDependencies,
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
-import {BurntatoHookDeployer} from "./helpers/BurntatoHookDeployer.sol";
-import {LocalPermit2} from "./helpers/LocalPermit2.sol";
-import {LocalWETH9} from "./helpers/LocalWETH9.sol";
 import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
 import {BurntatoSelectors} from "./libraries/BurntatoSelectors.sol";
-import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
+import {StaticsMarketDeploymentConfig} from "./libraries/StaticsMarketDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
+/// @notice Fresh zero-supply wrapper deployment. Funding and activation are separate actions.
 contract DeployBurntato is Script {
     error InvalidGenesisConfiguration();
-    error UnexpectedHookAddress(address expected, address actual);
+    error UnexpectedDeployer(address expected, address actual);
 
-    uint256 internal constant POSITION_MANAGER_UNSUBSCRIBE_GAS_LIMIT = 100_000;
-    bytes32 internal constant NATIVE_CURRENCY_LABEL = "ETH";
-
-    function run() external virtual returns (BurntatoDeployment memory deployment) {
+    function run() public virtual returns (BurntatoDeployment memory deployment) {
         GenesisConfig memory config = _environmentConfig();
-        vm.startBroadcast(config.deployer);
-        deployment = deploy(config, config.deployer);
+        StaticsMarketDependencies memory market = StaticsMarketDeploymentConfig.load();
+        StaticsOperatorDependencies memory operators = _operatorDependencies();
+        _validateMarket(market);
+        _validateOperators(operators);
+        config.statics = market.statics;
+        _validateConfig(config, config.deployer);
+        require(config.deployer.balance >= config.initialWinnerReserve, "initial Winner reserve not funded");
+        uint256 key = vm.envUint("PRIVATE_KEY");
+        if (key == 0 || vm.addr(key) != config.deployer) revert UnexpectedDeployer(config.deployer, vm.addr(key));
+        vm.startBroadcast(key);
+        deployment = deployWithDependencies(config, config.deployer, market, operators);
         vm.stopBroadcast();
+        _writeDeployment(deployment, config, market, operators, _outputDirectory());
         _log(deployment);
     }
 
-    function deploy(GenesisConfig memory config, address bootstrapAuthority)
-        public
-        returns (BurntatoDeployment memory deployment)
-    {
-        _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0) {
-            revert InvalidGenesisConfiguration();
-        }
-        deployment.admin = config.finalAdmin;
-        _deployUniswap(config.finalAdmin, deployment);
-        StaticsOperatorDependencies memory operatorDependencies;
-        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
-    }
-
+    /// @dev Production entrypoints additionally enforce the committed manifests before signing.
     function deployWithDependencies(
         GenesisConfig memory config,
         address bootstrapAuthority,
-        CanonicalV4Dependencies memory dependencies
-    ) public returns (BurntatoDeployment memory deployment) {
+        StaticsMarketDependencies memory market,
+        StaticsOperatorDependencies memory operators
+    ) public returns (BurntatoDeployment memory d) {
         _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps != 0 || config.protocol.operatorPurchaseBps != 0) {
-            revert InvalidGenesisConfiguration();
+        if (config.statics != market.statics) revert InvalidGenesisConfiguration();
+        StaticsMarketDeploymentConfig.validateRuntime(market);
+        if (config.protocol.operatorPurchaseBps != 0) {
+            _validateOperators(operators);
         }
-        RobinhoodDeploymentConfig.validate(dependencies);
-        _populateCanonicalDependencies(dependencies, deployment);
-        deployment.admin = config.finalAdmin;
-        StaticsOperatorDependencies memory operatorDependencies;
-        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
-    }
-
-    function deployWithLocalReplicaDependencies(
-        GenesisConfig memory config,
-        address bootstrapAuthority,
-        CanonicalV4Dependencies memory dependencies,
-        StaticsOperatorDependencies memory operatorDependencies
-    ) public returns (BurntatoDeployment memory deployment) {
-        _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
-            revert InvalidGenesisConfiguration();
+        d.admin = config.finalAdmin;
+        d.statics = market.statics;
+        d.weth9 = market.weth;
+        d.poolManager = market.poolManager;
+        d.diamondCutFacet = address(new DiamondCutFacet());
+        d.diamond =
+            address(new BurntatoDiamond{value: config.initialWinnerReserve}(bootstrapAuthority, d.diamondCutFacet));
+        d.diamondLoupeFacet = address(new DiamondLoupeFacet());
+        d.governanceFacet = address(new GovernanceFacet());
+        d.potatoTokenFacet = address(new PotatoTokenFacet());
+        d.buybackFacet = address(new BuybackFacet());
+        d.gameFacet = address(new GameFacet());
+        d.recoveryFacet = address(new RecoveryFacet());
+        d.settlementFacet = address(new SettlementFacet());
+        d.claimsFacet = address(new ClaimsFacet());
+        d.treasuryRewardsFacet = address(new TreasuryRewardsFacet());
+        d.foundationInit = address(new FoundationInit());
+        if (config.protocol.operatorPurchaseBps != 0) {
+            d.operatorRewardsRouter = address(
+                new BurntatoOperatorRewardsRouter(d.diamond, operators.operatorsNft, operators.activationRegistry)
+            );
         }
-        RobinhoodDeploymentConfig.validate(dependencies);
-        StaticsOperatorDeploymentConfig.validateLocalReplica(operatorDependencies);
-        _populateCanonicalDependencies(dependencies, deployment);
-        deployment.admin = config.finalAdmin;
-        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
-    }
-
-    function deployWithDependencies(
-        GenesisConfig memory config,
-        address bootstrapAuthority,
-        CanonicalV4Dependencies memory dependencies,
-        StaticsOperatorDependencies memory operatorDependencies
-    ) public returns (BurntatoDeployment memory deployment) {
-        _validateConfig(config, bootstrapAuthority);
-        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) {
-            revert InvalidGenesisConfiguration();
-        }
-        RobinhoodDeploymentConfig.validate(dependencies);
-        StaticsOperatorDeploymentConfig.validate(operatorDependencies);
-        _populateCanonicalDependencies(dependencies, deployment);
-        deployment.admin = config.finalAdmin;
-        _deployOwnedContracts(config, bootstrapAuthority, deployment, operatorDependencies);
-    }
-
-    function _deployOwnedContracts(
-        GenesisConfig memory config,
-        address bootstrapAuthority,
-        BurntatoDeployment memory deployment,
-        StaticsOperatorDependencies memory operatorDependencies
-    ) private {
-        _deployDiamondShellAndFacets(config, bootstrapAuthority, deployment);
-        _deployOperatorRewards(config, deployment, operatorDependencies);
-        _initializeDiamond(config, deployment);
-        _deployHook(config, deployment);
-        _configureProtocol(config, deployment);
-    }
-
-    function _deployOperatorRewards(
-        GenesisConfig memory config,
-        BurntatoDeployment memory deployment,
-        StaticsOperatorDependencies memory operatorDependencies
-    ) private {
-        if (config.operatorRewardShareBps == 0 && config.protocol.operatorPurchaseBps == 0) return;
-        deployment.operatorRewardsRouter = address(
-            new BurntatoOperatorRewardsRouter(
-                deployment.diamond, operatorDependencies.operatorsNft, operatorDependencies.activationRegistry
-            )
-        );
-    }
-
-    function _deployUniswap(address finalAdmin, BurntatoDeployment memory deployment) private {
-        deployment.poolManager = address(new PoolManager(finalAdmin));
-        deployment.permit2 = address(new LocalPermit2());
-        deployment.weth9 = address(new LocalWETH9());
-        deployment.positionDescriptor = address(
-            new PositionDescriptor(IPoolManager(deployment.poolManager), deployment.weth9, NATIVE_CURRENCY_LABEL)
-        );
-        deployment.positionManager = address(
-            new PositionManager(
-                IPoolManager(deployment.poolManager),
-                IAllowanceTransfer(deployment.permit2),
-                POSITION_MANAGER_UNSUBSCRIBE_GAS_LIMIT,
-                IPositionDescriptor(deployment.positionDescriptor),
-                IWETH9(deployment.weth9)
-            )
-        );
-    }
-
-    function _populateCanonicalDependencies(
-        CanonicalV4Dependencies memory dependencies,
-        BurntatoDeployment memory deployment
-    ) private pure {
-        deployment.poolManager = dependencies.poolManager;
-        deployment.permit2 = dependencies.permit2;
-        deployment.weth9 = dependencies.weth;
-        deployment.positionDescriptor = dependencies.positionDescriptor;
-        deployment.positionManager = dependencies.positionManager;
-        deployment.quoter = dependencies.quoter;
-        deployment.stateView = dependencies.stateView;
-        deployment.reservesLens = dependencies.reservesLens;
-        deployment.universalRouter = dependencies.universalRouter;
-    }
-
-    function _deployDiamondShellAndFacets(
-        GenesisConfig memory config,
-        address bootstrapAuthority,
-        BurntatoDeployment memory deployment
-    ) private {
-        deployment.diamondCutFacet = address(new DiamondCutFacet());
-        deployment.diamond = address(
-            new BurntatoDiamond{value: config.initialWinnerReserve}(bootstrapAuthority, deployment.diamondCutFacet)
-        );
-        deployment.diamondLoupeFacet = address(new DiamondLoupeFacet());
-        deployment.governanceFacet = address(new GovernanceFacet());
-        deployment.marketFacet = address(new MarketFacet());
-        deployment.buybackFacet = address(new BuybackFacet());
-        deployment.potatoTokenFacet = address(new PotatoTokenFacet());
-        deployment.gameFacet = address(new GameFacet());
-        deployment.recoveryFacet = address(new RecoveryFacet());
-        deployment.settlementFacet = address(new SettlementFacet());
-        deployment.claimsFacet = address(new ClaimsFacet());
-        deployment.treasuryRewardsFacet = address(new TreasuryRewardsFacet());
-        deployment.foundationInit = address(new FoundationInit());
-    }
-
-    function _initializeDiamond(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
-        IDiamondCut(deployment.diamond)
+        FacetCut[] memory cuts = new FacetCut[](9);
+        cuts[0] = FacetCut(d.diamondLoupeFacet, FacetCutAction.Add, BurntatoSelectors.loupe());
+        cuts[1] = FacetCut(d.governanceFacet, FacetCutAction.Add, BurntatoSelectors.governance());
+        cuts[2] = FacetCut(d.potatoTokenFacet, FacetCutAction.Add, BurntatoSelectors.token());
+        cuts[3] = FacetCut(d.buybackFacet, FacetCutAction.Add, BurntatoSelectors.buyback());
+        cuts[4] = FacetCut(d.gameFacet, FacetCutAction.Add, BurntatoSelectors.game());
+        cuts[5] = FacetCut(d.recoveryFacet, FacetCutAction.Add, BurntatoSelectors.recovery());
+        cuts[6] = FacetCut(d.settlementFacet, FacetCutAction.Add, BurntatoSelectors.settlement());
+        cuts[7] = FacetCut(d.claimsFacet, FacetCutAction.Add, BurntatoSelectors.claims());
+        cuts[8] = FacetCut(d.treasuryRewardsFacet, FacetCutAction.Add, BurntatoSelectors.treasuryRewards());
+        IDiamondCut(d.diamond)
             .diamondCut(
-                _initialCut(deployment),
-                deployment.foundationInit,
+                cuts,
+                d.foundationInit,
                 abi.encodeCall(
                     FoundationInit.initialize,
                     (
                         config.protocol,
                         config.treasuryRecipient,
-                        deployment.operatorRewardsRouter,
-                        config.potatoSeed,
+                        d.operatorRewardsRouter,
+                        config.statics,
                         config.initialWinnerReserve
                     )
                 )
             );
+        IGovernance(d.diamond).setGuardian(config.guardian);
+        IPotatoToken(d.diamond).setDistributor(config.treasuryRecipient, true);
+        IPotatoToken(d.diamond).setPublicWrapCap(config.publicWrapCap);
+        IBuyback(d.diamond).setBuybackConfig(config.buyback);
+        IBuyback(d.diamond).setBuybackMarket(market.poolManager, market.weth, market.key);
+        ITreasuryRewards(d.diamond).setRewardAllocator(config.rewardAllocator);
+        IGovernance(d.diamond).setAuthority(config.finalAdmin);
     }
 
-    function _deployHook(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
-        deployment.hookDeployer = address(new BurntatoHookDeployer());
-        address hookOperatorRewardsRouter = BurntatoDeploymentConfig.hookOperatorRewardsRouter(
-            config.operatorRewardShareBps, deployment.operatorRewardsRouter
-        );
-        bytes memory constructorArgs = abi.encode(
-            IPoolManager(deployment.poolManager),
-            config.finalAdmin,
-            deployment.diamond,
-            config.treasuryRecipient,
-            config.hookFeeBps,
-            hookOperatorRewardsRouter,
-            config.operatorRewardShareBps,
-            config.tickSpacing
-        );
-        (address expectedHook, bytes32 salt) = HookMiner.find(
-            deployment.hookDeployer, _hookFlags(), type(BurntatoSwapFeeHook).creationCode, constructorArgs
-        );
-        deployment.hook = address(
-            BurntatoHookDeployer(deployment.hookDeployer)
-                .deploy(
-                    salt,
-                    IPoolManager(deployment.poolManager),
-                    config.finalAdmin,
-                    deployment.diamond,
-                    config.treasuryRecipient,
-                    config.hookFeeBps,
-                    hookOperatorRewardsRouter,
-                    config.operatorRewardShareBps,
-                    config.tickSpacing
-                )
-        );
-        if (deployment.hook != expectedHook) revert UnexpectedHookAddress(expectedHook, deployment.hook);
+    function _operatorDependencies() internal view virtual returns (StaticsOperatorDependencies memory) {
+        return StaticsOperatorDeploymentConfig.load();
     }
 
-    function _configureProtocol(GenesisConfig memory config, BurntatoDeployment memory deployment) private {
-        IGovernance(deployment.diamond).setGuardian(config.guardian);
-        IPotatoToken(deployment.diamond).setDistributor(config.treasuryRecipient, true);
-        IBuyback(deployment.diamond).setBuybackConfig(config.buyback);
-        IMarket(deployment.diamond)
-            .configureMarket(
-                IMarket.MarketConfig({
-                    hook: deployment.hook,
-                    poolManager: deployment.poolManager,
-                    positionManager: deployment.positionManager,
-                    permit2: deployment.permit2,
-                    sqrtPriceX96: TickMath.getSqrtPriceAtTick(config.initialTick),
-                    tickLower: config.tickLower,
-                    tickUpper: config.tickUpper,
-                    tickSpacing: config.tickSpacing,
-                    potatoSeed: config.potatoSeed
-                })
-            );
-        ITreasuryRewards(deployment.diamond).setRewardAllocator(config.rewardAllocator);
-        IGovernance(deployment.diamond).setAuthority(config.finalAdmin);
+    function _validateMarket(StaticsMarketDependencies memory market) internal virtual {
+        StaticsMarketDeploymentConfig.validate(market);
     }
 
-    function localDefaults() external pure returns (GenesisConfig memory config) {
+    function _validateOperators(StaticsOperatorDependencies memory operators) internal virtual {
+        StaticsOperatorDeploymentConfig.validate(operators);
+    }
+
+    function localDefaults() external pure returns (GenesisConfig memory) {
         return BurntatoDeploymentConfig.localDefaults();
     }
 
-    function environmentConfig() external view returns (GenesisConfig memory config) {
+    function environmentConfig() external view returns (GenesisConfig memory) {
         return _environmentConfig();
     }
 
-    function _environmentConfig() internal view returns (GenesisConfig memory config) {
-        config = BurntatoDeploymentConfig.localDefaults();
-        return _environmentConfig(config);
+    function _environmentConfig() internal view virtual returns (GenesisConfig memory c) {
+        c = BurntatoDeploymentConfig.launchDefaults();
+        c.deployer = vm.envAddress("BURNTATO_DEPLOYER");
+        c.finalAdmin = vm.envAddress("BURNTATO_FINAL_ADMIN");
+        c.guardian = vm.envAddress("BURNTATO_GUARDIAN");
+        c.treasuryRecipient = vm.envAddress("BURNTATO_TREASURY");
+        c.rewardAllocator = vm.envAddress("BURNTATO_REWARD_ALLOCATOR");
     }
 
-    function _environmentConfig(GenesisConfig memory config) internal view returns (GenesisConfig memory) {
-        config.deployer = vm.envOr("BURNTATO_DEPLOYER", config.deployer);
-        config.finalAdmin = vm.envOr("BURNTATO_FINAL_ADMIN", config.finalAdmin);
-        config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
-        config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
-        config.rewardAllocator = vm.envOr("BURNTATO_REWARD_ALLOCATOR", config.rewardAllocator);
-        config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
-        config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
-        );
-        config.protocol.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.protocol.roundTimeout);
-        config.protocol.roundTimeoutDecay = vm.envOr("BURNTATO_ROUND_TIMEOUT_DECAY", config.protocol.roundTimeoutDecay);
-        config.protocol.minimumRoundTimeout =
-            vm.envOr("BURNTATO_MINIMUM_ROUND_TIMEOUT", config.protocol.minimumRoundTimeout);
-        config.protocol.roundEmissionBudget =
-            vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.protocol.roundEmissionBudget);
-        config.protocol.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_EMISSION_STEP_BPS", uint256(config.protocol.emissionStepBps))
-        );
-        config.protocol.emissionVestingDuration =
-            vm.envOr("BURNTATO_EMISSION_VESTING_DURATION", config.protocol.emissionVestingDuration);
-        config.protocol.winnerBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_WINNER_BPS", uint256(config.protocol.winnerBps)));
-        config.protocol.nextRoundWinnerBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_NEXT_ROUND_WINNER_BPS", uint256(config.protocol.nextRoundWinnerBps))
-        );
-        config.protocol.recoveryBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_RECOVERY_BPS", uint256(config.protocol.recoveryBps))
-        );
-        config.protocol.treasuryBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.protocol.treasuryBps))
-        );
-        config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
-        );
-        config.protocol.operatorPurchaseBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_OPERATOR_PURCHASE_BPS", uint256(config.protocol.operatorPurchaseBps))
-        );
-        config.protocol.recoveryBurnBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_RECOVERY_BURN_BPS", uint256(config.protocol.recoveryBurnBps))
-        );
-        config.protocol.recoveryTreasuryBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_RECOVERY_TREASURY_BPS", uint256(config.protocol.recoveryTreasuryBps))
-        );
-        config.initialWinnerReserve = vm.envOr(
-            "BURNTATO_INITIAL_WINNER_RESERVE", BurntatoDeploymentConfig.defaultInitialWinnerReserve(config.protocol)
-        );
-        config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
-        config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_BUYBACK_CALLER_REWARD_BPS", uint256(config.buyback.callerRewardBps))
-        );
-        config.buyback.delayBlocks = vm.envOr("BURNTATO_BUYBACK_DELAY_BLOCKS", config.buyback.delayBlocks);
-        config.hookFeeBps =
-            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_HOOK_FEE_BPS", uint256(config.hookFeeBps)));
-        config.operatorRewardShareBps = BurntatoDeploymentConfig.checkedUint16(
-            vm.envOr("BURNTATO_OPERATOR_REWARD_SHARE_BPS", uint256(config.operatorRewardShareBps))
-        );
-        return config;
-    }
-
-    function _initialCut(BurntatoDeployment memory deployment) private pure returns (FacetCut[] memory cuts) {
-        cuts = new FacetCut[](10);
-        cuts[0] = FacetCut({
-            facetAddress: deployment.diamondLoupeFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.loupe()
-        });
-        cuts[1] = FacetCut({
-            facetAddress: deployment.governanceFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.governance()
-        });
-        cuts[2] = FacetCut({
-            facetAddress: deployment.marketFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.market()
-        });
-        cuts[3] = FacetCut({
-            facetAddress: deployment.potatoTokenFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.token()
-        });
-        cuts[4] = FacetCut({
-            facetAddress: deployment.buybackFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.buyback()
-        });
-        cuts[5] = FacetCut({
-            facetAddress: deployment.gameFacet, action: FacetCutAction.Add, functionSelectors: BurntatoSelectors.game()
-        });
-        cuts[6] = FacetCut({
-            facetAddress: deployment.recoveryFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.recovery()
-        });
-        cuts[7] = FacetCut({
-            facetAddress: deployment.settlementFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.settlement()
-        });
-        cuts[8] = FacetCut({
-            facetAddress: deployment.claimsFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.claims()
-        });
-        cuts[9] = FacetCut({
-            facetAddress: deployment.treasuryRewardsFacet,
-            action: FacetCutAction.Add,
-            functionSelectors: BurntatoSelectors.treasuryRewards()
-        });
-    }
-
-    function _hookFlags() private pure returns (uint160) {
-        return uint160(
-            Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_ADD_LIQUIDITY_FLAG | Hooks.AFTER_SWAP_FLAG
-                | Hooks.AFTER_SWAP_RETURNS_DELTA_FLAG
-        );
-    }
-
-    function _validateConfig(GenesisConfig memory config, address bootstrapAuthority) private pure {
-        ProtocolConfig memory protocol = config.protocol;
+    function _validateConfig(GenesisConfig memory c, address bootstrapAuthority) internal pure {
+        LibConfig.validate(c.protocol);
         if (
-            bootstrapAuthority == address(0) || config.deployer == address(0) || config.finalAdmin == address(0)
-                || config.treasuryRecipient == address(0) || config.rewardAllocator == address(0)
-                || protocol.startingPrice == 0 || protocol.roundTimeout == 0 || protocol.roundTimeout > type(uint64).max
-                || protocol.minimumRoundTimeout == 0 || protocol.minimumRoundTimeout > protocol.roundTimeout
-                || protocol.roundTimeoutDecay > protocol.roundTimeout || protocol.emissionVestingDuration == 0
-                || protocol.priceIncreaseBps > Constants.BPS || protocol.emissionStepBps > Constants.BPS
-                || protocol.winnerBps > Constants.BPS || protocol.nextRoundWinnerBps > Constants.BPS
-                || protocol.recoveryBps > Constants.BPS || protocol.treasuryBps > Constants.BPS
-                || protocol.buybackBps > Constants.BPS || protocol.operatorPurchaseBps > Constants.BPS
-                || protocol.recoveryBurnBps > Constants.BPS || protocol.recoveryTreasuryBps > Constants.BPS
-                || config.hookFeeBps > Constants.MAX_HOOK_FEE_BPS || config.operatorRewardShareBps > Constants.BPS
-                || config.buyback.callerRewardBps > Constants.MAX_BUYBACK_CALLER_REWARD_BPS
-                || uint256(protocol.winnerBps) + protocol.nextRoundWinnerBps + protocol.recoveryBps
-                        + protocol.treasuryBps + protocol.buybackBps + protocol.operatorPurchaseBps != Constants.BPS
-                || uint256(protocol.recoveryBurnBps) + protocol.recoveryTreasuryBps != Constants.BPS
-                || config.initialTick != BurntatoLaunchCurves.initialTick()
-                || config.tickSpacing != BurntatoLaunchCurves.tickSpacing()
-                || config.tickLower != BurntatoLaunchCurves.tickLower()
-                || config.tickUpper != BurntatoLaunchCurves.tickUpper() || config.potatoSeed == 0
-                || config.potatoSeed > type(uint128).max
+            bootstrapAuthority == address(0) || bootstrapAuthority != c.deployer || c.finalAdmin == address(0)
+                || c.treasuryRecipient == address(0) || c.rewardAllocator == address(0)
+                || c.buyback.callerRewardBps > 100 || c.statics == address(0)
         ) revert InvalidGenesisConfiguration();
-        BurntatoLaunchCurves.buildPositions(config.potatoSeed);
     }
 
-    function _log(BurntatoDeployment memory deployment) internal pure {
-        console2.log("BurntatoDiamond", deployment.diamond);
-        console2.log("BurntatoAdmin", deployment.admin);
-        console2.log("PoolManager", deployment.poolManager);
-        console2.log("Permit2", deployment.permit2);
-        console2.log("WETH9", deployment.weth9);
-        console2.log("PositionDescriptor", deployment.positionDescriptor);
-        console2.log("PositionManager", deployment.positionManager);
-        if (deployment.quoter != address(0)) console2.log("Quoter", deployment.quoter);
-        if (deployment.stateView != address(0)) console2.log("StateView", deployment.stateView);
-        if (deployment.reservesLens != address(0)) console2.log("ReservesLens", deployment.reservesLens);
-        if (deployment.universalRouter != address(0)) console2.log("UniversalRouter", deployment.universalRouter);
-        console2.log("BurntatoHookDeployer", deployment.hookDeployer);
-        console2.log("BurntatoSwapFeeHook", deployment.hook);
-        if (deployment.operatorRewardsRouter != address(0)) {
-            console2.log("BurntatoOperatorRewardsRouter", deployment.operatorRewardsRouter);
-        }
-        console2.log("DiamondCutFacet", deployment.diamondCutFacet);
-        console2.log("DiamondLoupeFacet", deployment.diamondLoupeFacet);
-        console2.log("GovernanceFacet", deployment.governanceFacet);
-        console2.log("MarketFacet", deployment.marketFacet);
-        console2.log("BuybackFacet", deployment.buybackFacet);
-        console2.log("PotatoTokenFacet", deployment.potatoTokenFacet);
-        console2.log("GameFacet", deployment.gameFacet);
-        console2.log("RecoveryFacet", deployment.recoveryFacet);
-        console2.log("SettlementFacet", deployment.settlementFacet);
-        console2.log("ClaimsFacet", deployment.claimsFacet);
-        console2.log("TreasuryRewardsFacet", deployment.treasuryRewardsFacet);
-        console2.log("FoundationInit", deployment.foundationInit);
+    function _deploymentMode() internal view virtual returns (string memory) {
+        return "production";
+    }
+
+    function _outputDirectory() internal view virtual returns (string memory) {
+        if (block.chainid == 4663) return "artifacts/robinhood-mainnet";
+        if (block.chainid == 46630) return "artifacts/robinhood-testnet";
+        revert InvalidGenesisConfiguration();
+    }
+
+    function _writeDeployment(
+        BurntatoDeployment memory d,
+        GenesisConfig memory c,
+        StaticsMarketDependencies memory market,
+        StaticsOperatorDependencies memory operators,
+        string memory directory
+    ) internal {
+        string memory object = "backedBurntato";
+        vm.createDir(directory, true);
+        vm.serializeUint(object, "schemaVersion", 4);
+        vm.serializeString(object, "deploymentMode", _deploymentMode());
+        vm.serializeUint(object, "deploymentBlock", block.number);
+        vm.serializeUint(object, "marketManifestBlock", market.forkBlock);
+        vm.serializeBytes32(object, "marketManifestBlockHash", market.forkBlockHash);
+        vm.serializeUint(object, "staticsFinalizedBlock", operators.finalizedBlock);
+        vm.serializeBytes32(object, "staticsFinalizedBlockHash", operators.finalizedBlockHash);
+        vm.serializeAddress(object, "operatorsNft", operators.operatorsNft);
+        vm.serializeAddress(object, "activationRegistry", operators.activationRegistry);
+        _serializeEconomics(object, c);
+        vm.serializeUint(object, "chainId", block.chainid);
+        vm.serializeString(object, "sourceCommit", vm.envString("BURNTATO_SOURCE_COMMIT"));
+        vm.serializeBytes(object, "deployment", abi.encode(d));
+        vm.serializeBytes(object, "genesisConfig", abi.encode(c));
+        vm.serializeBytes(object, "marketDependencies", abi.encode(market));
+        vm.serializeBytes(object, "operatorDependencies", abi.encode(operators));
+        vm.serializeBytes32(object, "poolId", market.poolId);
+        vm.serializeAddress(object, "deployer", c.deployer);
+        vm.serializeAddress(object, "guardian", c.guardian);
+        vm.serializeAddress(object, "treasuryRecipient", c.treasuryRecipient);
+        vm.serializeAddress(object, "rewardAllocator", c.rewardAllocator);
+        vm.serializeAddress(object, "diamond", d.diamond);
+        vm.serializeBytes32(object, "diamondRuntimeCodeHash", d.diamond.codehash);
+        vm.serializeAddress(object, "diamondCutFacet", d.diamondCutFacet);
+        vm.serializeBytes32(object, "diamondCutFacetRuntimeCodeHash", d.diamondCutFacet.codehash);
+        vm.serializeAddress(object, "diamondLoupeFacet", d.diamondLoupeFacet);
+        vm.serializeBytes32(object, "diamondLoupeFacetRuntimeCodeHash", d.diamondLoupeFacet.codehash);
+        vm.serializeAddress(object, "governanceFacet", d.governanceFacet);
+        vm.serializeBytes32(object, "governanceFacetRuntimeCodeHash", d.governanceFacet.codehash);
+        vm.serializeAddress(object, "buybackFacet", d.buybackFacet);
+        vm.serializeBytes32(object, "buybackFacetRuntimeCodeHash", d.buybackFacet.codehash);
+        vm.serializeAddress(object, "potatoTokenFacet", d.potatoTokenFacet);
+        vm.serializeBytes32(object, "potatoTokenFacetRuntimeCodeHash", d.potatoTokenFacet.codehash);
+        vm.serializeAddress(object, "gameFacet", d.gameFacet);
+        vm.serializeBytes32(object, "gameFacetRuntimeCodeHash", d.gameFacet.codehash);
+        vm.serializeAddress(object, "recoveryFacet", d.recoveryFacet);
+        vm.serializeBytes32(object, "recoveryFacetRuntimeCodeHash", d.recoveryFacet.codehash);
+        vm.serializeAddress(object, "settlementFacet", d.settlementFacet);
+        vm.serializeBytes32(object, "settlementFacetRuntimeCodeHash", d.settlementFacet.codehash);
+        vm.serializeAddress(object, "claimsFacet", d.claimsFacet);
+        vm.serializeBytes32(object, "claimsFacetRuntimeCodeHash", d.claimsFacet.codehash);
+        vm.serializeAddress(object, "treasuryRewardsFacet", d.treasuryRewardsFacet);
+        vm.serializeBytes32(object, "treasuryRewardsFacetRuntimeCodeHash", d.treasuryRewardsFacet.codehash);
+        vm.serializeAddress(object, "foundationInit", d.foundationInit);
+        vm.serializeBytes32(object, "foundationInitRuntimeCodeHash", d.foundationInit.codehash);
+        vm.serializeAddress(object, "admin", d.admin);
+        vm.serializeBytes32(object, "adminRuntimeCodeHash", d.admin.codehash);
+        vm.serializeAddress(object, "statics", d.statics);
+        vm.serializeBytes32(object, "staticsRuntimeCodeHash", d.statics.codehash);
+        vm.serializeAddress(object, "poolManager", d.poolManager);
+        vm.serializeBytes32(object, "poolManagerRuntimeCodeHash", d.poolManager.codehash);
+        vm.serializeAddress(object, "weth9", d.weth9);
+        vm.serializeBytes32(object, "weth9RuntimeCodeHash", d.weth9.codehash);
+        vm.serializeAddress(object, "operatorRewardsRouter", d.operatorRewardsRouter);
+        vm.serializeBytes32(object, "operatorRewardsRouterRuntimeCodeHash", d.operatorRewardsRouter.codehash);
+        string memory json = vm.serializeBytes32(object, "configHash", keccak256(abi.encode(c, market, operators)));
+        vm.writeJson(json, string.concat(directory, "/deployment.json"));
+    }
+
+    function _serializeEconomics(string memory object, GenesisConfig memory c) private {
+        vm.serializeUint(object, "startingPrice", c.protocol.startingPrice);
+        vm.serializeUint(object, "priceIncreaseBps", c.protocol.priceIncreaseBps);
+        vm.serializeUint(object, "roundTimeout", c.protocol.roundTimeout);
+        vm.serializeUint(object, "roundTimeoutDecay", c.protocol.roundTimeoutDecay);
+        vm.serializeUint(object, "minimumRoundTimeout", c.protocol.minimumRoundTimeout);
+        vm.serializeUint(object, "roundEmissionBudget", c.protocol.roundEmissionBudget);
+        vm.serializeUint(object, "emissionStepBps", c.protocol.emissionStepBps);
+        vm.serializeUint(object, "emissionVestingDuration", c.protocol.emissionVestingDuration);
+        vm.serializeUint(object, "winnerBps", c.protocol.winnerBps);
+        vm.serializeUint(object, "nextRoundWinnerBps", c.protocol.nextRoundWinnerBps);
+        vm.serializeUint(object, "recoveryBps", c.protocol.recoveryBps);
+        vm.serializeUint(object, "treasuryBps", c.protocol.treasuryBps);
+        vm.serializeUint(object, "buybackBps", c.protocol.buybackBps);
+        vm.serializeUint(object, "operatorPurchaseBps", c.protocol.operatorPurchaseBps);
+        vm.serializeUint(object, "initialWinnerReserve", c.initialWinnerReserve);
+        vm.serializeUint(object, "buybackMaxSpend", c.buyback.maxSpend);
+        vm.serializeUint(object, "buybackCallerRewardBps", c.buyback.callerRewardBps);
+        vm.serializeUint(object, "buybackDelayBlocks", c.buyback.delayBlocks);
+        vm.serializeUint(object, "publicWrapCap", c.publicWrapCap);
+    }
+
+    function _log(BurntatoDeployment memory d) internal pure {
+        console2.log("BurntatoDiamond", d.diamond);
+        console2.log("STATICS backing", d.statics);
+        console2.log("OperatorRewardsRouter", d.operatorRewardsRouter);
     }
 }

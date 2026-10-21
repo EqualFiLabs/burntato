@@ -1,110 +1,99 @@
 # Deployment
 
-`DeployBurntato.s.sol` deploys a complete local system in this order: a
-final-admin-owned PoolManager, local Permit2 and WETH9, PositionDescriptor,
-PositionManager, Diamond shell and facets, optional immutable Operator rewards
-router, initializer, CREATE2 hook deployer, and mined-address canonical hook. It
-installs the selector manifest, configures the market, enables the initial
-Treasury distributor, configures buybacks, appoints the reward allocator and
-guardian, and transfers Diamond authority to the configured `finalAdmin`.
-The payable Diamond creation also funds the configured initial Winner reserve,
-which foundation initialization records before purchases can be enabled.
+`DeployBurntato.s.sol` deploys the Diamond shell and facets, immutable Operator
+rewards router and initializer. It installs the selector manifest, configures
+the existing STATICS/WETH buyback market, enables the initial Treasury
+distributor, configures buybacks and public wrap capacity, appoints the reward
+allocator and guardian, and transfers Diamond authority to the configured
+`finalAdmin`. The payable Diamond creation also funds the configured initial
+Winner reserve, which foundation initialization records before purchases can
+be enabled.
 
 No `TimelockController` is deployed automatically. `finalAdmin` may be an EOA,
-Safe, or governance contract. The hook and self-contained PoolManager are
-independently owned by that address. Deployment does not renounce either owner
-and does not disable the PoolManager protocol-fee controller surface. The hook
-starts with the configured Treasury fee recipient and bilateral fee.
-Self-contained local deployment keeps Operator rewards disabled. Robinhood
-deployment requires an explicit nonzero Operator share. External buys start
-disabled.
+Safe, or governance contract. STATICS, WETH, PoolManager and the external pool
+hook retain their existing governance. Burntato creates no POTATO pool, LP,
+hook, Permit2 deployment or token seed. Initial POTATO supply, backing, reward
+reserve and public outstanding are zero.
 
 Deployment completes fully configured with `paused()` false while
 `purchasesInitialized()` remains false. Only `buyPotato()` is gated by this
 one-shot state. The current Diamond authority calls `initializePurchases()`
-directly after verification; no delay is imposed by Burntato. Market launch,
-Recovery, claims, settlement, and all other selectors are not gated by purchase
-initialization. They remain subject to their ordinary lifecycle checks,
-including the global emergency pause where applicable.
+directly after verification and actual reserve funding; no delay is imposed by
+Burntato. Wrapping, buybacks, Recovery, claims, settlement, and all other
+selectors are not gated by purchase initialization. They remain subject to
+their ordinary lifecycle checks, including the global emergency pause where applicable.
 
 ## Deployment modes
 
 | Mode | Dependencies | Swap proof | Ownership boundary |
 | --- | --- | --- | --- |
-| Self-contained local | Newly deployed PoolManager, Permit2, WETH, descriptor, and PositionManager | Fast `PoolSwapTest` regression | `finalAdmin` owns the local PoolManager, hook, and Diamond authority |
-| Robinhood fork | Pinned v4 and Statics contracts from both chain-4663 manifests | Canonical Universal Router and Permit2 | `finalAdmin` owns the Diamond authority and Burntato hook only |
-| Robinhood testnet | Pinned chain-46630 v4 contracts plus a standalone Statics Genesis replica | Live market launch against the canonical PoolManager and PositionManager | Profile deployer is `finalAdmin`; canonical PoolManager ownership is external |
+| Standalone Anvil | Local STATICS/WETH and PoolManager fixtures, chain 31337 | Real local pool swap | Operator-free local profile; disposable development only |
+| Robinhood fork | Pinned chain-4663 STATICS market and Operator manifests | Real WETH settlement and STATICS swap | `finalAdmin` holds Diamond authority; market governance is external |
+| Robinhood testnet | Pinned chain-46630 STATICS market and Operator manifests | Existing STATICS/WETH pool | Explicit `finalAdmin`; market governance is external |
+| Robinhood mainnet | Pinned chain-4663 STATICS market and Operator manifests | Existing STATICS/WETH pool | Explicit `finalAdmin`; market governance is external |
 
-The Robinhood testnet deployment is a two-repository ceremony. A fresh Statics
-Genesis replica must be finalized first. The read-only
-`PrepareBurntatoRobinhoodTestnet` script validates its source revision, active
-epoch, reciprocal Genesis NFT and Activation Registry bindings, finalized
-launch state, the live Genesis vault epoch, runtime hashes, and Robinhood block
-provenance. It writes a public handoff artifact from which
-`scripts/deploy-robinhood-testnet.sh
---prepare-statics` regenerates the committed Operator dependency manifest.
-That manifest must be reviewed and committed before the Burntato deployment
-preflight can pass.
+The read-only `PrepareBurntatoRobinhoodTestnet` script validates a Statics
+Genesis replica's source revision, active epoch, reciprocal Genesis NFT and
+Activation Registry bindings, finalized launch state, live Genesis vault epoch,
+runtime hashes, and Robinhood block provenance. Its public handoff does not
+replace the committed market and Operator dependency manifests, which must be
+reviewed before deployment preflight can pass.
 
-The testnet ceremony uses the full Robinhood launch defaults rather than the
-historical low-cost profile. After deployment it enforces four explicit states:
-deployed but unlaunched, market launched and buyback-bootstrapped while closed,
-purchases initialized while external buys remain closed, and fully open. The
-combined public release record is produced only after live receipt checks for
-the Statics deployment, Statics faucet, Burntato deployment, and every Burntato
-operation.
+Public-network deployment uses the full Robinhood launch defaults. Local Anvil
+mainnet-fork deployment also accepts the economic overrides below. Verification distinguishes
+three states: deployed with zero supply and inactive purchases; funded while
+inactive; and purchases initialized. No market-launch or external-buy-opening
+phase remains.
 
-The committed manifest pins block `45234855`, its block hash, and exact runtime
-hashes for all nine canonical dependencies. Addresses and hashes are not
-environment-overridable. Canonical deployment validates code plus PoolManager,
-Permit2, PositionDescriptor, and WETH bindings before deploying any Burntato
-contract. `deployments/statics-operators-robinhood-4663.json` separately pins
-the finalized Statics integration at block `47690599`, including the Operators
-NFT and Activation Registry hashes and their reciprocal bindings. Both
-validators read Robinhood's L2 block number and recent block hashes from the
-ArbSys precompile; Solidity's `block.number` exposes the Ethereum parent height
-on Robinhood and is not comparable to the manifest's L2 block height.
+The committed `statics-market-robinhood-4663.json` manifest pins block
+`47690599`, its block hash, STATICS, WETH, PoolManager and hook runtime hashes,
+and the exact initialized PoolKey/PoolId. Addresses and hashes are not
+environment-overridable. Canonical deployment validates code, token decimals,
+currency ordering, pool identity and initialized state before deploying any
+Burntato contract. `deployments/statics-operators-robinhood-4663.json`
+separately pins the finalized Statics integration at block `47690599`, including
+the Operators NFT and Activation Registry hashes and their reciprocal bindings.
+Both validators read Robinhood's L2 block number and recent block hashes from
+the ArbSys precompile; Solidity's `block.number` exposes the Ethereum parent
+height on Robinhood and is not comparable to the manifest's L2 block height.
+The local-fork entrypoint checks historical hashes through Anvil RPC instead.
 
-## Local defaults
+## Launch defaults
 
 | Setting | Default |
 | --- | --- |
-| Final admin | Second standard Anvil account |
+| Final admin | Explicit deployment input |
 | Starting Hot Potato price | 0.01 ETH |
 | Price increase | 1,000 BPS |
 | Round timeout | 1 hour |
 | Round timeout decay | 5 minutes |
 | Minimum round timeout | 5 minutes |
-| Round emission budget | 10,000 POTATO |
+| Round emission budget | 5,000 POTATO |
 | Emission step | 1,000 BPS |
 | Emission vesting | 4 minutes |
-| Purchase split from Grab 2 | 2,500 Winner / 200 next Winner / 4,000 Recovery / 2,300 Treasury / 1,000 buyback / 0 Operator BPS |
+| Purchase split from Grab 2 | 2,500 Winner / 500 next Winner / 3,000 Recovery / 1,500 Treasury / 1,000 buyback / 1,500 Operator BPS |
 | First Grab | 100% to the next round Winner reserve |
 | Initial Winner reserve | 0.0105 ETH |
-| Recovery split | 9,000 burn / 1,000 Treasury BPS |
-| Hook fee | 100 BPS |
-| Operator share of hook fee | Disabled locally; required Robinhood input |
+| Recovery settlement | 100% of committed POTATO redeemed to STATICS for Treasury |
+| Public wrap cap | 2,000,000 POTATO |
 | Buyback cap / reward / delay | 1 ETH / 50 BPS / 1 block |
-| Tick spacing | 60 |
-| Initial tick | 170,280 |
-| Genesis POTATO launch allocation | 100,000,000 POTATO across 56 locked positions |
-| Reward allocator | Treasury recipient |
+| Initial POTATO supply | Zero |
+| Reward allocator | Explicit deployment input |
 
+Public-network and mainnet-fork entrypoints use `launchDefaults()`. The
+standalone development profile and Operator-free unit fixture use `localDefaults()`,
+which assigns its 15% Operator allocation to Treasury instead.
 Game defaults are operational inputs, not protocol immutability claims. The final
 admin must be nonzero and may equal the bootstrap authority. Starting price,
 round timeout, minimum round timeout, and emission vesting must
 remain nonzero. Round timeout is bounded by `type(uint64).max` for deadline
 safety. Minimum timeout cannot exceed the initial timeout, and timeout decay
 cannot exceed the initial timeout. Zero timeout decay is valid and produces
-fixed resets. Protocol and Operator-share BPS values are bounded to 10,000; the
-six-way purchase split used from Grab two onward and the Recovery split must
-each sum to 10,000. The
-bilateral hook fee has the narrower 0-to-200 BPS domain, and the buyback caller reward has the
-narrower 0-to-100 BPS domain. Zero price growth, emission step, emission budget,
-or hook fee is valid. The launch uses the fixed aggressive six-band profile at
-tick spacing 60 and initial tick 170,280. The genesis allocation must fit the
-aggregate `uint128` domain, and each of its 56 derived positions must have a
-nonzero `uint128` amount maximum and liquidity value.
+fixed resets. Protocol BPS values are bounded to 10,000; the six-way purchase
+split used from Grab two onward must sum to 10,000. The buyback caller reward
+has the narrower 0-to-100 BPS domain. Zero price growth, emission step or
+emission budget is valid. Every issued POTATO requires deposited or acquired
+STATICS backing.
 
 ## Environment
 
@@ -116,6 +105,20 @@ BURNTATO_FINAL_ADMIN
 BURNTATO_GUARDIAN
 BURNTATO_TREASURY
 BURNTATO_REWARD_ALLOCATOR
+PRIVATE_KEY
+BURNTATO_SOURCE_COMMIT
+BURNTATO_DEPLOYMENT_ARTIFACT
+BURNTATO_DEPLOYMENT_PHASE
+```
+
+Mainnet requires all roles explicitly. Testnet defaults final admin, guardian,
+Treasury and reward allocator to the canonical testnet deployer, while accepting
+explicit role overrides. The local fork defaults to the standard Anvil roles and
+can derive its deployer from `PRIVATE_KEY`; explicit role overrides take precedence.
+
+Only `DeployBurntatoLocalFork` accepts these economic environment overrides:
+
+```text
 BURNTATO_STARTING_PRICE
 BURNTATO_PRICE_INCREASE_BPS
 BURNTATO_ROUND_TIMEOUT
@@ -130,87 +133,96 @@ BURNTATO_RECOVERY_BPS
 BURNTATO_TREASURY_BPS
 BURNTATO_BUYBACK_BPS
 BURNTATO_OPERATOR_PURCHASE_BPS
-BURNTATO_RECOVERY_BURN_BPS
-BURNTATO_RECOVERY_TREASURY_BPS
 BURNTATO_INITIAL_WINNER_RESERVE
 BURNTATO_BUYBACK_MAX_SPEND
 BURNTATO_BUYBACK_CALLER_REWARD_BPS
 BURNTATO_BUYBACK_DELAY_BLOCKS
-BURNTATO_HOOK_FEE_BPS
-BURNTATO_OPERATOR_REWARD_SHARE_BPS
 ```
 
-Numeric values use base units. Narrow BPS inputs are range-checked before
-conversion. Launch ticks, tick spacing, and the default 100 million POTATO seed
-are intentionally not environment inputs; they are pinned to the reviewed
-multicurve deployment profile. Deployment rejects a
-hook fee above 200 BPS or buyback caller reward above
-100 BPS. `BURNTATO_OPERATOR_REWARD_SHARE_BPS` remains independently configurable
-through 10,000 BPS because it divides the already-capped hook fee rather than
-increasing the fee charged to traders.
-
-When `BURNTATO_INITIAL_WINNER_RESERVE` is absent, deployment derives
-`ceil(startingPrice * 105%)` after the final price override so Round 1 opens
-with a Winner pool equal to 105% of its first-Grab price. The variable can
-explicitly override that funding amount. The broadcaster must hold the reserve
-in addition to gas.
-
-The CREATE2 hook helper accepts deployment only from the address that created
-it. This keeps the mined hook address available to the same local broadcast
-sequence between helper creation and hook creation.
+Testnet and mainnet use fixed deployment defaults; their authorized onchain
+configuration setters remain available. The obsolete Recovery-ratio and POTATO
+hook-fee overrides are removed. Local overrides use checked narrowing and the
+same protocol configuration validation as deployment. Numeric values use base units. The initial Winner reserve
+defaults to `ceil(startingPrice * 105%)` using the selected local starting price,
+unless explicitly overridden on the fork; the broadcaster must hold it in addition to gas.
+Shell wrappers set the source commit and artifact path. Keep signing keys and
+private RPC configuration outside the repository and load them through the
+private operations environment.
 
 ## Commands
 
-With Anvil running and the required account available:
+With the persistent Robinhood Anvil fork running, explicit roles set and an
+Anvil signing key loaded in `PRIVATE_KEY`:
 
 ```bash
-forge script script/DeployBurntato.s.sol:DeployBurntato \
-  --rpc-url http://127.0.0.1:8545 --broadcast
+export BURNTATO_SOURCE_COMMIT=$(git rev-parse HEAD)
+python3 scripts/run-private-rpc.py --network local -- \
+  forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
+  --sig 'runLocalFork()' --broadcast
 ```
 
-After inspecting the deployment, initialize purchases:
+Set `BURNTATO_LOCAL_RPC` to the loopback fork endpoint before either command.
+After inspecting the deployment, approve STATICS and call `fundRewardReserve(amount)`, or fund through
+buybacks below. Verify the dedicated reserve covers the complete first-round
+budget before activating purchases. Set `BURNTATO_DIAMOND`, then initialize:
 
 ```bash
-forge script script/InitializeBurntato.s.sol:InitializeBurntato \
-  --rpc-url http://127.0.0.1:8545 --broadcast
+python3 scripts/run-private-rpc.py --network local -- \
+  forge script script/InitializeBurntato.s.sol:InitializeBurntato --broadcast
 ```
+
+The helper checks actual reserve funding and backing before accessing the
+signing key. The first purchase of every round independently enforces the full
+snapshotted base budget. Underfunding the successor does not block settlement
+or existing claims.
+
+For a standalone development chain, start `anvil --host 127.0.0.1 --chain-id 31337`
+and run `DeployBurntatoLocal.s.sol:DeployBurntatoLocal` through the same local RPC
+runner. It creates disposable STATICS, WETH and a real PoolManager with a funded
+STATICS/WETH pool. Its Anvil broadcaster needs 100 ETH for fixture liquidity,
+the initial Winner reserve, and gas. It mints local STATICS to that broadcaster;
+POTATO still starts at zero and must be backed through wrapping or reserve funding.
+The Operator-free local economics are fixed. These fixtures cannot run on public
+network chain IDs.
 
 ## Initial buyback bootstrap
 
-After the token-only market has launched and before game purchases are
-initialized, an operator may fund the complete bootstrap reserve and execute
-the first capped permissionless buyback:
+After deployment and before game purchases are initialized, an operator may
+fund the complete bootstrap reserve and execute the first capped permissionless buyback:
 
 ```bash
 BURNTATO_DIAMOND="<diamond>" \
 BURNTATO_BOOTSTRAP_BUYBACK_WEI="<amount-in-wei>" \
-PRIVATE_KEY="<broadcaster-key>" \
-forge script script/BootstrapBurntatoBuyback.s.sol:BootstrapBurntatoBuyback \
-  --rpc-url "<rpc-url>" --broadcast
+python3 scripts/run-private-rpc.py --network mainnet -- \
+  forge script script/BootstrapBurntatoBuyback.s.sol:BootstrapBurntatoBuyback \
+  --broadcast
 ```
 
-No amount is hardcoded. The release-candidate target is approximately 5.025 ETH
-of reserve for approximately 5 ETH of pool input. The contribution may exceed
+Load `PRIVATE_KEY` privately and select `mainnet`, `testnet` or `local` as
+appropriate. No amount or call count is hardcoded; measure the actual backed
+POTATO credited to `rewardReserve()`. The contribution may exceed
 `maxSpend`; the contract limits each execution to the configured 1 ETH gross
-slice. The helper refuses an unlaunched market, initialized game purchases, a
+slice. The helper refuses an unconfigured market, initialized game purchases, a
 prior buyback, or unrelated reserve contents. Funding and execution are
 deliberately separate transactions. If execution is interrupted after funding,
 the same command resumes at the buyback only when the reserve still equals the
-requested amount. It does not change the external-buy gate.
+requested amount. It does not activate purchases.
 
 Execute each remaining slice in a later block with the execution-only helper:
 
 ```bash
 BURNTATO_DIAMOND="<diamond>" \
-PRIVATE_KEY="<broadcaster-key>" \
-forge script script/ExecuteBurntatoBuyback.s.sol:ExecuteBurntatoBuyback \
-  --rpc-url "<rpc-url>" --broadcast
+python3 scripts/run-private-rpc.py --network mainnet -- \
+  forge script script/ExecuteBurntatoBuyback.s.sol:ExecuteBurntatoBuyback \
+  --broadcast
 ```
 
-For the release-candidate reserve, run this five times after the initial helper,
-one transaction per eligible block. It never funds the reserve, and it refuses
-an unlaunched market, a global pause, or an empty reserve. Integer rounding may
-leave a negligible tracked remainder.
+Execute later slices in eligible blocks until the actual base reserve covers
+the full snapshotted budget. The helper never funds the reserve, and it refuses
+an unconfigured market, a global pause, or an empty reserve. Integer rounding
+may leave a negligible tracked remainder. Each buyback atomically swaps ETH
+through WETH to STATICS, credits backed reserve POTATO and pays the caller tip;
+funding and the first execution remain separate transactions.
 
 ## Persistent Robinhood fork
 
@@ -225,97 +237,77 @@ The process stays in the foreground and serves chain `4663` on
 at a public Robinhood endpoint; they are guarded for Anvil and intentionally
 use a localhost fork account.
 
-```bash
-PRIVATE_KEY="$ANVIL_PRIVATE_KEY" \
-BURNTATO_OPERATOR_REWARD_SHARE_BPS="<required-bps>" \
-forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
-  --sig 'runLocalFork()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
-
-RPC_URL=http://127.0.0.1:8545 \
-scripts/check-deployment.sh artifacts/robinhood-local/deployment.json
-```
-
-To bind Burntato to a freshly deployed Genesis replica on the same fork, pass
-the replica addresses logged by `DeployStaticsGenesisLocalFork` and use the
-Anvil-only replica entry point:
-
-```bash
-PRIVATE_KEY="$ANVIL_PRIVATE_KEY" \
-STATICS_GENESIS_NFT_ADDRESS="<replica-genesis>" \
-STATICS_GENESIS_ACTIVATION_REGISTRY_ADDRESS="<replica-registry>" \
-BURNTATO_OPERATOR_REWARD_SHARE_BPS="<required-bps>" \
-forge script script/DeployBurntatoLocalFork.s.sol:DeployBurntatoLocalFork \
-  --sig 'runLocalForkReplica()' --rpc-url http://127.0.0.1:8545 --broadcast -vv
-```
+Load a disposable Anvil signing key in `PRIVATE_KEY` and set the five public
+roles from the Environment section. Run `DeployBurntatoLocalFork.runLocalFork()`
+through the local command above. This entrypoint verifies Anvil support, fork
+chain ID, both historical block hashes and runtime bindings. It uses the pinned
+existing STATICS market and Operator dependencies. The initial preflight requires
+the exact pinned fork height; `preflightDeployedLocalFork()` checks the same
+provenance after local blocks have advanced. `runLocalForkReplica()` instead
+accepts `STATICS_GENESIS_NFT_ADDRESS` and
+`STATICS_GENESIS_ACTIVATION_REGISTRY_ADDRESS` for locally deployed Operator
+replicas and validates their reciprocal bindings. This exception is confined
+to chain-4663 Anvil; the STATICS market remains pinned.
 
 The public-only frontend handoff is
 `artifacts/robinhood-local/deployment.json`. It contains the fork identity,
-Diamond, final admin, hook, Operator router/share, Statics dependencies, facets,
-initializer, launch configuration, and canonical dependency addresses. It never
-contains the RPC URL or private key.
+Diamond, final admin, Operator router, Statics dependencies, facets,
+initializer, launch configuration, runtime hashes, exact PoolKey and PoolId.
+It never contains the RPC URL or private key.
 
-Both local-fork deployment entry points enable one-second interval mining after
-the deployment completes so block timestamps continue advancing for the UI.
-Set `BURNTATO_LOCAL_INTERVAL_SECONDS` to choose another Anvil interval.
+The launcher pins block `47690599`. If a UI needs advancing timestamps on an
+otherwise idle fork, deployment sets one-second interval mining by default.
+`BURNTATO_LOCAL_INTERVAL_SECONDS=0` disables timed blocks and retains automining; set another number
+of seconds to choose a different cadence.
 
 Fork tests skip when `ROBINHOOD_MAINNET` is absent. Strict release mode fails
 instead. Run archive-RPC qualification locally; it is intentionally excluded
 from CI so pull-request code never receives the RPC credential:
 
 ```bash
-REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 \
-ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
-forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv
-
-REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_MAINNET="$ROBINHOOD_MAINNET" \
-ROBINHOOD_OPERATOR_FORK_BLOCK=47690599 \
-forge test --match-path test/fork/OperatorRewardsRobinhoodFork.t.sol -j 1 -vv
+BURNTATO_STRICT_FORK=true \
+forge test --match-path test/fork/BackedStaticsFork.t.sol -j 2 -vv
 ```
+
+This pins block `47690599` and executes real WETH/STATICS buybacks, backed holder
+rewards, public redemption, Recovery-to-Treasury redemption and ETH claims.
 
 Frontends connect to chain ID `4663` at `http://127.0.0.1:8545` and read the
 persisted artifact rather than scraping script output.
 
 ## Robinhood testnet launch
 
-The chain-selected testnet manifests pin all canonical v4 bytecode and the
-fresh Statics Genesis Operator NFT plus Activation Registry. Robinhood
-testnet's PositionManager and descriptor report the absent mainnet WETH
-address; the validator pins that observed binding explicitly while separately
-validating the deployed testnet WETH. Burntato's market is native/POTATO and
-does not route through either wrapped-native address.
-
-The testnet profile is fixed in code: the deployer is final admin, guardian,
-Treasury recipient, and reward allocator; purchase revenue from Grab two onward
-is split 25% Winner, 2% next Winner, 40% Recovery, 5% Treasury, 13% buyback,
-and 15% Operators. The bilateral swap hook fee is 1%, with 40% of that fee sent
-to the same Operator rewards router (0.4% of swap volume) and 60% sent to
-Treasury.
+The chain-selected testnet manifests pin the existing STATICS/WETH market and
+Statics Operator dependencies. The testnet deployer is fixed to
+`0x6Ae2aD9905FEDC8270b828294D4b9CEC7CBBE316`; final admin, guardian, Treasury
+and reward allocator may be overridden explicitly or default to that deployer. The testnet signing key is
+restricted to testnet and is read as data only after chain verification; its derived address is checked
+before it can sign. Run preflight before choosing a state-changing phase.
 
 Use the phased wrapper so deployment inspection occurs before purchase
-initialization. The final admin calls each post-deployment action directly:
+initialization:
 
 ```bash
-export ROBINHOOD_TESTNET_RPC_URL="$ROBINHOOD_TESTNET"
-export PRIVATE_KEY="$PRIVATE_KEY"
-
-scripts/deploy-robinhood-testnet.sh --deploy
+scripts/deploy-robinhood-testnet.sh --preflight
+scripts/deploy-robinhood-testnet.sh --deploy --broadcast
 scripts/deploy-robinhood-testnet.sh --inspect
-scripts/deploy-robinhood-testnet.sh --verify
-scripts/deploy-robinhood-testnet.sh --launch
-scripts/deploy-robinhood-testnet.sh --initialize
-scripts/deploy-robinhood-testnet.sh --enable
-scripts/deploy-robinhood-testnet.sh --check
 ```
+
+Use `--prepare-statics` to validate and export a replica handoff before reviewing
+the dependency manifest. Fund the backed reserve, then run `--check-staged`.
+The final admin can use `--initialize` or export `--initialize-bundle` for a Safe;
+this does not finalize upgrades. Run `--check` after activation. The wrapper
+supports the same resume, verification and receipt-recording modes as mainnet.
 
 The ignored `artifacts/robinhood-testnet/deployment.json` file is the local
 machine-readable handoff. It contains only public addresses and launch
-configuration; deployment transaction hashes and final live readback belong in
-the checked-in testnet deployment record.
+configuration. Existing checked-in deployed-address manifests remain historical
+records of their original architecture.
 
 ## Robinhood mainnet launch
 
-Mainnet reuses the validated chain-4663 v4 and finalized Statics Operator
-manifests. It deploys only Burntato-owned contracts. The mainnet profile pins
+Mainnet reuses the validated chain-4663 STATICS market and finalized Statics
+Operator manifests. It deploys only Burntato-owned contracts. The mainnet profile pins
 the reviewed launch economics in code and requires every role explicitly:
 
 ```text
@@ -336,18 +328,14 @@ deployment inputs.
 `BURNTATO_DEPLOYER` must equal the address derived from `PRIVATE_KEY` during
 deployment. The final admin, Treasury, and reward allocator must be nonzero.
 The guardian may be the zero address. Mainnet does not accept environment
-overrides for economics, market geometry, or canonical dependencies.
+overrides for economics or canonical dependencies.
 
-To rehearse the production phases on a persistent chain-4663 Anvil fork, start
-the fork at the committed Statics finalization block and point
-`ROBINHOOD_MAINNET` at that Anvil instance. Set
-`BURNTATO_ANVIL_REHEARSAL=true` for every wrapper phase. This mode first
-requires an Anvil-only RPC method, then checks both committed historical block
-hashes through the fork RPC before running the same dependency code-hash and
-binding checks. Without the flag, production preflight continues to use
-Robinhood's ArbSys provenance. Rehearsal broadcasts use legacy transaction fee
-estimation because the pinned Anvil fork does not retain the fee-history
-metadata Foundry requests. Production broadcasts retain their normal fee mode.
+To rehearse the actual mainnet wrapper on the pinned Anvil fork, set
+`BURNTATO_ANVIL_REHEARSAL=true` and `BURNTATO_LOCAL_RPC` to the loopback endpoint.
+The rehearsal path requires chain 4663 and Anvil RPC support, then checks the
+historical manifest hashes through RPC. It retains fixed mainnet economics and
+explicit role inputs. Without that flag the wrapper targets Robinhood and uses
+ArbSys provenance. Use `DeployBurntatoLocalFork` when testing economic overrides.
 
 Load `ROBINHOOD_MAINNET` and any required signing key through the private
 operations environment. Do not put either value in a command argument. Run
@@ -355,88 +343,76 @@ each phase separately and inspect its result before continuing:
 
 ```bash
 scripts/deploy-robinhood-mainnet.sh --preflight
-scripts/deploy-robinhood-mainnet.sh --deploy
+scripts/deploy-robinhood-mainnet.sh --deploy --broadcast
 scripts/deploy-robinhood-mainnet.sh --inspect
-BLOCKSCOUT_API_URL="<explorer-api>" scripts/deploy-robinhood-mainnet.sh --verify
-scripts/deploy-robinhood-mainnet.sh --launch
-scripts/deploy-robinhood-mainnet.sh --bootstrap
-scripts/deploy-robinhood-mainnet.sh --buyback
-scripts/deploy-robinhood-mainnet.sh --buyback
-scripts/deploy-robinhood-mainnet.sh --buyback
-scripts/deploy-robinhood-mainnet.sh --buyback
-scripts/deploy-robinhood-mainnet.sh --buyback
 ```
 
-The release-candidate bootstrap uses one initial capped buyback plus five later
-executions, one transaction per eligible block. Purchase initialization remains
-false and external buys remain closed throughout the bootstrap. The readiness
-check rejects a missing buyback or more than 100 wei of tracked reserve by
-default. It also requires the Treasury to hold between 10.2 million and 10.4
-million POTATO from the reviewed bootstrap curve. The reserve threshold and
-POTATO output band are fixed in the mainnet operations script.
-
-When the final admin is an EOA controlled by the operations key, complete the
-two privileged phases directly:
+Fund the reward reserve with actual STATICS or buybacks. There is no fixed ETH
+bootstrap target, Treasury output band, required buyback count or external-buy
+gate. Confirm the entire first-round budget before activation:
 
 ```bash
-scripts/deploy-robinhood-mainnet.sh --initialize
-scripts/deploy-robinhood-mainnet.sh --enable
+scripts/deploy-robinhood-mainnet.sh --check-staged
+```
+
+When the final admin is an EOA controlled by the operations key, use
+`scripts/deploy-robinhood-mainnet.sh --initialize`. The wrapper verifies the
+recorded source, runtime, configuration, funding and authority before broadcast.
+When the final admin is a Safe or another contract, use `--initialize-bundle` and
+submit the exported zero-value `initializePurchases()` call through that authority. No second buy-opening transition is needed.
+
+After activation:
+
+```bash
 scripts/deploy-robinhood-mainnet.sh --check
-scripts/deploy-robinhood-mainnet.sh --record
 ```
 
-Both commands verify that the signing key resolves to the configured final
-admin before broadcasting. When the final admin is a Safe or another contract,
-generate the initialization call after the bootstrap instead:
+Retain the schema-4 deployment artifact, source commit, encoded configuration and
+dependencies, configuration hash, public addresses and runtime hashes. The
+bootstrap helper resumes an exact completed reserve contribution without funding
+it twice. Deployment wrappers require a clean committed candidate;
+`--deploy` refuses existing deployment, broadcast, operation-ledger, initialization
+bundle or release-record files. `--resume-deploy --broadcast` requires the original
+artifact, broadcast sequence and identical committed source. `--verify` publishes
+source to Blockscout with constructor arguments and never resumes transactions;
+set `BLOCKSCOUT_API_URL` for mainnet (testnet has its explorer default).
 
-```bash
-scripts/deploy-robinhood-mainnet.sh --initialize-bundle
-```
+`--bootstrap` requires an explicit `BURNTATO_BOOTSTRAP_BUYBACK_WEI`; `--buyback`
+executes later slices. Both append successful transaction hashes to the operation
+ledger. `--record` checks the activated deployment and successful chain receipts,
+then writes the release record without overwriting an existing one. External
+reserve funding and Safe initialization require `BURNTATO_FUNDING_TX_HASH` and
+`BURNTATO_INITIALIZE_TX_HASH` when absent from that ledger. There is no required
+buyback count. `BURNTATO_RELEASE_RECORD` chooses a new output path when a historical
+release record already exists; preserve those historical records.
 
-Submit that call as a standalone transaction. After it confirms, generate and
-submit the separately checked buy-opening call:
-
-```bash
-scripts/deploy-robinhood-mainnet.sh --enable-bundle
-```
-
-Do not batch the two privileged transitions. Each bundle command verifies the
-complete state expected immediately before its call. After the second
-transaction confirms, run `--check`. Supply the two public transaction hashes as
-`BURNTATO_INITIALIZE_TX_HASH` and `BURNTATO_ENABLE_TX_HASH` when running
-`--record`. The record command writes
-`deployments/robinhood-mainnet-4663-launch.json` only after exact deployment
-inspection and final lifecycle checks pass. Review that public record before
-committing it.
-
-If deployment submission is interrupted, `--resume-deploy` uses Foundry's
-recorded transaction sequence. The bootstrap helper separately resumes after
-an exact completed reserve contribution without funding it twice. Every
-successful launch operation is appended to the ignored public-only operations
-ledger used to construct the final release record. Every post-deployment mode
-also requires a clean checkout at the exact source commit recorded during
-deployment, so later edits cannot silently change the launch procedure.
+Artifacts include readable economic fields alongside the encoded configuration;
+the verifier rejects disagreement between them. The compiler configuration is
+Solidity 0.8.26, Cancun, optimizer 200, `via_ir = false`, and IPFS metadata hashes.
 
 ## Post-deployment inspection
 
-`scripts/check-deployment.sh` performs read-only `cast` calls and emits compact
-`PASS` or `FAIL` lines. It checks receipt status when `BROADCAST_FILE` is set,
-deployed code presence, chain ID, governance roles, pause and foundation state,
-market readiness, Treasury and reward roles, hook configuration, PositionManager
-bindings, and Statics Operator bindings. It does not compare runtime code hashes
-when the artifact omits them and does not deploy helper contracts. Mainnet
-artifacts include exact runtime code hashes for Burntato-owned and canonical
-dependencies, so those hashes are checked. Set `RPC_URL` and pass the deployment
-JSON path. Set `EXPECTED_MARKET_READY=false` only for post-launch inspection;
-the chain-specific final checker must separately prove the launched state.
+`scripts/check-deployment.sh ARTIFACT PHASE NETWORK` runs the read-only Solidity
+verifier against compiled source and the recorded deployment. It checks complete
+facet selectors, owned runtime code, roles, pause/foundation state, economics,
+backing, reserve/cap state, pool configuration and Statics Operator dependencies.
+The immutable Operator router is compared against source runtime with its
+compiler-reported immutable offsets patched to the expected bindings.
 
-The testnet wrapper's `--verify` mode uses Foundry's standard Blockscout source
-verification flow. Override `BLOCKSCOUT_API_URL` only when the explorer changes
-its API endpoint.
+Phase 0 checks zero POTATO supply/reserve/outstanding, no active round and exact
+initial Winner reserve; unsolicited STATICS surplus is allowed. Phase 1 requires
+inactive purchases, no active round and the full first budget funded. Phase 2
+requires initialized purchases and ordinary backing/reserve consistency. Before
+the first Grab it also requires the complete first-round budget; once gameplay
+has begun it does not require continued possession of that initial budget.
+Phase 3 performs general deployment inspection without assuming an activation
+phase; it is the default for `check-deployment.sh` and is used by `--inspect`. All phases expect the launch
+configuration, so later intentional governance changes need their own expected
+values. Network is `mainnet`, `testnet` or `local`; wrappers supply the appropriate
+artifact and phase. Local modes additionally require Anvil RPC support.
 
-After deployment inspection, operations should execute the one-shot purchase
-initializer from `finalAdmin`, then separately exercise an admin call to the
-Diamond and a hook fee update. A PoolManager owner function belongs only in the
-self-contained qualification path; Robinhood deployments must validate the
-external owner's published operating process separately. Diamond finalization
-should be tested only when the intent is to end all future cuts.
+After deployment inspection and reserve funding, operations should execute the
+one-shot purchase initializer from `finalAdmin`, then separately exercise an
+admin call to the Diamond. External market governance remains independent.
+Diamond finalization or removal of `diamondCut` is a later maturity decision;
+deployment performs neither.
