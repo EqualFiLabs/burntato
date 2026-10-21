@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
+// ============================================================================
+//                                BURNTATO
+//                                Grab it.
+//                          https://burntato.fun
+//                              EqualFi Labs
+// ============================================================================
 pragma solidity 0.8.26;
 
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
@@ -35,15 +41,6 @@ library LibMath {
 
         uint256 reduction = priorPurchases * decay;
         return reduction >= maximumReduction ? minimumTimeout : initialTimeout - reduction;
-    }
-
-    function splitRecovery(uint256 amount, uint256 treasuryBps)
-        internal
-        pure
-        returns (uint256 burned, uint256 treasuryPotato)
-    {
-        treasuryPotato = mulBpsDown(amount, treasuryBps);
-        burned = amount - treasuryPotato;
     }
 
     function splitPurchase(

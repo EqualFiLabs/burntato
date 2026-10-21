@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-
 import {DiamondTestSetup} from "../utils/DiamondTestSetup.sol";
 
 import {IGame} from "../../src/interfaces/IGame.sol";
@@ -11,7 +9,7 @@ import {IClaims} from "../../src/interfaces/IClaims.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {LibMath} from "../../src/libraries/LibMath.sol";
-import {ProtocolConfig, Round} from "../../src/shared/Types.sol";
+import {ProtocolConfig, Round, BuybackQuote} from "../../src/shared/Types.sol";
 
 contract EconomicFuzzTest is DiamondTestSetup {
     address internal alice = makeAddr("alice");
@@ -111,27 +109,24 @@ contract EconomicFuzzTest is DiamondTestSetup {
         assertEq(LibMath.linearEarned(maximum, duration, 120), maximum * capped / 120);
     }
 
-    function testFuzz_RecoverySplitBurnsExactRemainder(uint128 rawAmount) public pure {
-        uint256 amount = uint256(rawAmount);
-        (uint256 burned, uint256 treasuryPotato) = LibMath.splitRecovery(amount, 1_000);
-        assertEq(treasuryPotato, amount * 1_000 / 10_000);
-        assertEq(burned + treasuryPotato, amount);
-    }
-
-    function testFuzz_BuybackActualSpendAndRewardStayWithinGross(
-        uint256 rawGross,
-        uint256 rawRewardBps,
-        uint256 rawSpent
+    function testFuzz_BuybackQuoteConservesCappedGrossWithBoundedRounding(
+        uint256 rawReserve,
+        uint256 rawMaxSpend,
+        uint256 rawRewardBps
     ) public pure {
-        uint256 gross = bound(rawGross, 1, uint256(type(int256).max));
+        // Leave headroom for the independent multiplication bounds below.
+        uint256 reserve = bound(rawReserve, 0, type(uint256).max / 20_000);
+        uint256 maxSpend = bound(rawMaxSpend, 0, type(uint256).max / 20_000);
         uint256 rewardBps = bound(rawRewardBps, 0, 100);
-        uint256 requestedInput = Math.mulDiv(gross, 10_000, 10_000 + rewardBps);
-        uint256 actualSpent = bound(rawSpent, 0, requestedInput);
-        uint256 callerReward = LibMath.mulBpsDown(actualSpent, rewardBps);
-        uint256 restoredReserve = gross - actualSpent - callerReward;
-
-        assertLe(actualSpent + callerReward, gross);
-        assertEq(restoredReserve + actualSpent + callerReward, gross);
+        BuybackQuote memory quote = LibMath.quoteBuyback(reserve, maxSpend, rewardBps);
+        assertEq(quote.grossSlice, reserve < maxSpend ? reserve : maxSpend);
+        assertLe(quote.requestedInput + quote.callerReward, quote.grossSlice);
+        assertLe(quote.grossSlice - quote.requestedInput - quote.callerReward, 2);
+        // Check the floor bounds independently without reconstructing the quote.
+        assertLe(quote.requestedInput * (10_000 + rewardBps), quote.grossSlice * 10_000);
+        assertGt((quote.requestedInput + 1) * (10_000 + rewardBps), quote.grossSlice * 10_000);
+        assertLe(quote.callerReward * 10_000, quote.requestedInput * rewardBps);
+        assertGt((quote.callerReward + 1) * 10_000, quote.requestedInput * rewardBps);
     }
 
     function testFuzz_DirectBuybackFundingIsAdditiveAndExactlyBacked(uint96 rawFirst, uint96 rawSecond) public {

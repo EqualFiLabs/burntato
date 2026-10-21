@@ -3,22 +3,22 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
-import {CanonicalV4Dependencies, StaticsOperatorDependencies} from "../../script/DeploymentTypes.sol";
-import {RobinhoodDeploymentConfig} from "../../script/libraries/RobinhoodDeploymentConfig.sol";
+import {StaticsMarketDependencies, StaticsOperatorDependencies} from "../../script/DeploymentTypes.sol";
+import {StaticsMarketDeploymentConfig} from "../../script/libraries/StaticsMarketDeploymentConfig.sol";
 import {IArbSys} from "../../script/libraries/RobinhoodBlockProvenance.sol";
 import {StaticsOperatorDeploymentConfig} from "../../script/libraries/StaticsOperatorDeploymentConfig.sol";
 
 contract RobinhoodBlockValidationHarness {
-    function validateCanonical(CanonicalV4Dependencies memory dependencies) external view {
-        RobinhoodDeploymentConfig.validate(dependencies);
+    function validateMarket(StaticsMarketDependencies memory dependencies) external view {
+        StaticsMarketDeploymentConfig.validate(dependencies);
     }
 
-    function validateCanonicalAnvil(
-        CanonicalV4Dependencies memory dependencies,
+    function validateMarketAnvil(
+        StaticsMarketDependencies memory dependencies,
         uint256 currentBlock,
         bytes32 actualBlockHash
     ) external view {
-        RobinhoodDeploymentConfig.validateAnvilFork(dependencies, currentBlock, actualBlockHash);
+        StaticsMarketDeploymentConfig.validateAnvilFork(dependencies, currentBlock, actualBlockHash);
     }
 
     function validateStatics(StaticsOperatorDependencies memory dependencies) external view {
@@ -39,26 +39,26 @@ contract RobinhoodBlockProvenanceTest is Test {
     RobinhoodBlockValidationHarness private harness;
 
     function setUp() public {
-        vm.chainId(RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID);
+        vm.chainId(4663);
         harness = new RobinhoodBlockValidationHarness();
     }
 
-    function test_CanonicalValidatorUsesRobinhoodBlockNumber() public {
-        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+    function test_MarketValidatorUsesRobinhoodBlockNumber() public {
+        StaticsMarketDependencies memory dependencies = StaticsMarketDeploymentConfig.load();
         uint256 priorBlock = dependencies.forkBlock - 1;
         vm.roll(dependencies.forkBlock + 1_000);
         vm.mockCall(ARB_SYS, abi.encodeCall(IArbSys.arbBlockNumber, ()), abi.encode(priorBlock));
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RobinhoodDeploymentConfig.InvalidCanonicalBlock.selector, dependencies.forkBlock, priorBlock
+                StaticsMarketDeploymentConfig.InvalidMarketBlock.selector, dependencies.forkBlock, priorBlock
             )
         );
-        harness.validateCanonical(dependencies);
+        harness.validateMarket(dependencies);
     }
 
-    function test_CanonicalValidatorUsesRobinhoodBlockHash() public {
-        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+    function test_MarketValidatorUsesRobinhoodBlockHash() public {
+        StaticsMarketDependencies memory dependencies = StaticsMarketDeploymentConfig.load();
         uint256 currentBlock = dependencies.forkBlock + 1;
         bytes32 incorrectHash = bytes32(uint256(dependencies.forkBlockHash) ^ 1);
         vm.mockCall(ARB_SYS, abi.encodeCall(IArbSys.arbBlockNumber, ()), abi.encode(currentBlock));
@@ -66,34 +66,34 @@ contract RobinhoodBlockProvenanceTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RobinhoodDeploymentConfig.InvalidCanonicalBlockHash.selector, dependencies.forkBlockHash, incorrectHash
+                StaticsMarketDeploymentConfig.InvalidMarketBlockHash.selector, dependencies.forkBlockHash, incorrectHash
             )
         );
-        harness.validateCanonical(dependencies);
+        harness.validateMarket(dependencies);
     }
 
-    function test_AnvilCanonicalValidatorRejectsBlockBeforeManifest() public {
-        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+    function test_AnvilMarketValidatorRejectsBlockBeforeManifest() public {
+        StaticsMarketDependencies memory dependencies = StaticsMarketDeploymentConfig.load();
         uint256 priorBlock = dependencies.forkBlock - 1;
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RobinhoodDeploymentConfig.InvalidCanonicalBlock.selector, dependencies.forkBlock, priorBlock
+                StaticsMarketDeploymentConfig.InvalidMarketBlock.selector, dependencies.forkBlock, priorBlock
             )
         );
-        harness.validateCanonicalAnvil(dependencies, priorBlock, dependencies.forkBlockHash);
+        harness.validateMarketAnvil(dependencies, priorBlock, dependencies.forkBlockHash);
     }
 
-    function test_AnvilCanonicalValidatorRequiresHistoricalHash() public {
-        CanonicalV4Dependencies memory dependencies = RobinhoodDeploymentConfig.load();
+    function test_AnvilMarketValidatorRequiresHistoricalHash() public {
+        StaticsMarketDependencies memory dependencies = StaticsMarketDeploymentConfig.load();
         bytes32 incorrectHash = bytes32(uint256(dependencies.forkBlockHash) ^ 1);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                RobinhoodDeploymentConfig.InvalidCanonicalBlockHash.selector, dependencies.forkBlockHash, incorrectHash
+                StaticsMarketDeploymentConfig.InvalidMarketBlockHash.selector, dependencies.forkBlockHash, incorrectHash
             )
         );
-        harness.validateCanonicalAnvil(dependencies, dependencies.forkBlock, incorrectHash);
+        harness.validateMarketAnvil(dependencies, dependencies.forkBlock, incorrectHash);
     }
 
     function test_StaticsValidatorUsesRobinhoodBlockNumber() public {

@@ -7,7 +7,6 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
-import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
@@ -45,22 +44,8 @@ library BurntatoSelectors {
         selectors[13] = IGovernance.initializePurchases.selector;
     }
 
-    function market() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](10);
-        selectors[0] = IMarket.configureMarket.selector;
-        selectors[1] = IMarket.launchMarket.selector;
-        selectors[2] = IMarket.marketConfig.selector;
-        selectors[3] = IMarket.canonicalPoolKey.selector;
-        selectors[4] = IMarket.marketState.selector;
-        selectors[5] = IMarket.marketLaunching.selector;
-        selectors[6] = IMarket.marketReady.selector;
-        selectors[7] = IMarket.lockedLpRecipient.selector;
-        selectors[8] = IMarket.marketCurves.selector;
-        selectors[9] = IMarket.marketCurveHash.selector;
-    }
-
     function buyback() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](7);
+        selectors = new bytes4[](9);
         selectors[0] = IBuyback.setBuybackConfig.selector;
         selectors[1] = IBuyback.buybackConfig.selector;
         selectors[2] = IBuyback.fundBuybackReserve.selector;
@@ -68,10 +53,12 @@ library BurntatoSelectors {
         selectors[4] = IBuyback.lastBuybackBlock.selector;
         selectors[5] = IBuyback.buyback.selector;
         selectors[6] = IBuyback.unlockCallback.selector;
+        selectors[7] = IBuyback.setBuybackMarket.selector;
+        selectors[8] = IBuyback.buybackMarket.selector;
     }
 
     function token() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](22);
+        selectors = new bytes4[](29);
         selectors[0] = IPotatoToken.name.selector;
         selectors[1] = IPotatoToken.symbol.selector;
         selectors[2] = IPotatoToken.decimals.selector;
@@ -81,19 +68,26 @@ library BurntatoSelectors {
         selectors[6] = IPotatoToken.approve.selector;
         selectors[7] = IPotatoToken.transfer.selector;
         selectors[8] = IPotatoToken.transferFrom.selector;
-        selectors[9] = IPotatoToken.burn.selector;
-        selectors[10] = IPotatoToken.permit.selector;
-        selectors[11] = IPotatoToken.nonces.selector;
-        selectors[12] = IPotatoToken.DOMAIN_SEPARATOR.selector;
-        selectors[13] = IPotatoToken.protocolMint.selector;
-        selectors[14] = IPotatoToken.protocolBurn.selector;
-        selectors[15] = IPotatoToken.protocolTransfer.selector;
-        selectors[16] = IPotatoToken.authorizePoolManagerTransfer.selector;
-        selectors[17] = IPotatoToken.transientPoolManagerAllowance.selector;
-        selectors[18] = IPotatoToken.isDistributor.selector;
-        selectors[19] = IPotatoToken.setDistributor.selector;
-        selectors[20] = IPotatoToken.canonicalHook.selector;
-        selectors[21] = IPotatoToken.tokenPoolManager.selector;
+        selectors[9] = IPotatoToken.permit.selector;
+        selectors[10] = IPotatoToken.nonces.selector;
+        selectors[11] = IPotatoToken.DOMAIN_SEPARATOR.selector;
+        selectors[12] = IPotatoToken.isDistributor.selector;
+        selectors[13] = IPotatoToken.setDistributor.selector;
+        selectors[14] = IPotatoToken.protocolTransfer.selector;
+        selectors[15] = IPotatoToken.underlying.selector;
+        selectors[16] = IPotatoToken.backingBalance.selector;
+        selectors[17] = IPotatoToken.publicWrapCap.selector;
+        selectors[18] = IPotatoToken.publicWrapOutstanding.selector;
+        selectors[19] = IPotatoToken.availablePublicWrapCapacity.selector;
+        selectors[20] = IPotatoToken.rewardReserve.selector;
+        selectors[21] = IPotatoToken.availableRewardInventory.selector;
+        selectors[22] = IPotatoToken.nextRoundFundingStatus.selector;
+        selectors[23] = IPotatoToken.setPublicWrapCap.selector;
+        selectors[24] = IPotatoToken.wrap.selector;
+        selectors[25] = IPotatoToken.unwrap.selector;
+        selectors[26] = IPotatoToken.fundRewardReserve.selector;
+        selectors[27] = IPotatoToken.protocolCreditRewardReserve.selector;
+        selectors[28] = IPotatoToken.protocolRedeemRecovery.selector;
     }
 
     function game() internal pure returns (bytes4[] memory selectors) {

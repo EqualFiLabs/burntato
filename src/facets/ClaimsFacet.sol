@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================
@@ -12,21 +12,14 @@ import {IPotatoToken} from "../interfaces/IPotatoToken.sol";
 import {LibMath} from "../libraries/LibMath.sol";
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibRecipients} from "../libraries/LibRecipients.sol";
+import {LibGuard} from "../libraries/LibGuard.sol";
 import {Errors} from "../shared/Errors.sol";
 import {Round} from "../shared/Types.sol";
 
-contract ClaimsFacet is IClaims {
+contract ClaimsFacet is IClaims, LibGuard {
     modifier whenNotPaused() {
         if (LibProtocolStorage.governance().paused) revert Errors.ProtocolPaused();
         _;
-    }
-
-    modifier nonReentrant() {
-        LibProtocolStorage.ReentrancyStorage storage rs = LibProtocolStorage.reentrancy();
-        if (rs.status == 2) revert Errors.Reentrancy();
-        rs.status = 2;
-        _;
-        rs.status = 1;
     }
 
     function claimWinner(uint256 roundId, address recipient)
@@ -98,7 +91,7 @@ contract ClaimsFacet is IClaims {
     function claimTreasuryPotato() external whenNotPaused nonReentrant returns (uint256 amount) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         LibRecipients.enforceExternal(ts.recipient);
-        amount = ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
+        amount = _treasuryPotatoAvailable(ts);
         if (amount == 0) revert Errors.NothingToClaim();
         ts.potatoInventory -= amount;
         IPotatoToken(address(this)).protocolTransfer(address(this), ts.recipient, amount);
@@ -115,7 +108,12 @@ contract ClaimsFacet is IClaims {
 
     function treasuryPotatoAvailable() external view returns (uint256) {
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
-        return ts.potatoInventory > ts.reservedPotato ? ts.potatoInventory - ts.reservedPotato : 0;
+        return _treasuryPotatoAvailable(ts);
+    }
+
+    function _treasuryPotatoAvailable(LibProtocolStorage.TreasuryStorage storage ts) private view returns (uint256) {
+        uint256 reserved = LibProtocolStorage.treasuryRewards().escrowedPotato;
+        return ts.potatoInventory > reserved ? ts.potatoInventory - reserved : 0;
     }
 
     function _recoveryAmount(

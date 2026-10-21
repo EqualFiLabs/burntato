@@ -59,7 +59,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(round.remainingEmission, 87_750 ether);
         assertEq(round.emittedPotato, 12_250 ether);
         assertEq(round.totalCommitted, 10_000 ether);
-        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 1_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), INITIAL_REWARD_INVENTORY - 22_250 ether);
 
         uint256 aliceBefore = alice.balance;
         vm.prank(alice);
@@ -94,20 +94,20 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(game.getRound(3).totalCommitted, 0);
     }
 
-    function test_InflationaryTargetRoundIncreasesSupply() public {
+    function test_SmallRecoveryCommitmentReducesBackedSupply() public {
         (uint256 beforeSupply, uint256 afterSupply) = _settleTargetWithCommitment(1_000 ether);
-        assertEq(afterSupply, beforeSupply + 9_100 ether);
+        assertEq(afterSupply, beforeSupply - 1_000 ether);
     }
 
-    function test_SupplyNeutralTargetRoundOffsetsEmissionWithExactBurn() public {
+    function test_RecoveryRedemptionIncludesEveryRoundingUnit() public {
         uint256 commitment = 11_111_111_111_111_111_111_111;
         (uint256 beforeSupply, uint256 afterSupply) = _settleTargetWithCommitment(commitment);
-        assertEq(afterSupply, beforeSupply);
+        assertEq(afterSupply, beforeSupply - commitment);
     }
 
-    function test_DeflationaryTargetRoundReducesSupply() public {
+    function test_LargeRecoveryCommitmentReducesBackedSupply() public {
         (uint256 beforeSupply, uint256 afterSupply) = _settleTargetWithCommitment(19_000 ether);
-        assertEq(afterSupply, beforeSupply - 7_100 ether);
+        assertEq(afterSupply, beforeSupply - 19_000 ether);
     }
 
     function test_ZeroCommitmentRecoveryRollsUntilACommittedRoundConsumesIt() public {
@@ -153,8 +153,6 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         updated.recoveryBps = 2_000;
         updated.treasuryBps = 5_500;
         updated.buybackBps = 1_000;
-        updated.recoveryBurnBps = 8_000;
-        updated.recoveryTreasuryBps = 2_000;
         vm.prank(authority);
         governance.setProtocolConfig(updated);
 
@@ -177,8 +175,6 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundTwo.config.recoveryBps, 4_000);
         assertEq(roundTwo.config.treasuryBps, 2_300);
         assertEq(roundTwo.config.buybackBps, 1_000);
-        assertEq(roundTwo.config.recoveryBurnBps, 9_000);
-        assertEq(roundTwo.config.recoveryTreasuryBps, 1_000);
 
         _buy(bob);
         _advance(120);
@@ -199,8 +195,6 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         assertEq(roundThree.config.recoveryBps, 2_000);
         assertEq(roundThree.config.treasuryBps, 5_500);
         assertEq(roundThree.config.buybackBps, 1_000);
-        assertEq(roundThree.config.recoveryBurnBps, 8_000);
-        assertEq(roundThree.config.recoveryTreasuryBps, 2_000);
     }
 
     function test_GlobalPauseStopsLifecycleAndClaimsUntilAuthorityUnpauses() public {
@@ -274,7 +268,7 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         uint256 supplyBeforeBurn = potato.totalSupply();
         uint256 bobBeforeBurn = potato.balanceOf(bob);
         vm.prank(bob);
-        potato.burn(1 ether);
+        potato.unwrap(1 ether);
         assertEq(potato.totalSupply(), supplyBeforeBurn - 1 ether);
         assertEq(potato.balanceOf(bob), bobBeforeBurn - 1 ether);
 
@@ -287,7 +281,8 @@ contract IntegratedLifecycleTest is DiamondTestSetup {
         vm.prank(bob);
         assertEq(claims.claimWinner(2, bob), 0.0127 ether);
         assertEq(claims.claimTreasury(), treasuryEthBefore);
-        assertEq(claims.claimTreasuryPotato(), treasuryPotatoBefore);
+        vm.expectRevert(Errors.NothingToClaim.selector);
+        claims.claimTreasuryPotato();
 
         _buy(alice);
         vm.prank(carol);

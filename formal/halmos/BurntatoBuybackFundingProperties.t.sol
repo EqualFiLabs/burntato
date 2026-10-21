@@ -69,8 +69,7 @@ contract BurntatoBuybackFundingProperties is Test {
         uint256 balanceBefore = address(diamond).balance;
 
         vm.prank(FIRST_FUNDER);
-        (bool success, bytes memory reason) =
-            address(buybacks).call(abi.encodeCall(IBuyback.fundBuybackReserve, ()));
+        (bool success, bytes memory reason) = address(buybacks).call(abi.encodeCall(IBuyback.fundBuybackReserve, ()));
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.ZeroAmount.selector);

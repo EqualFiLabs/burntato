@@ -3,8 +3,8 @@
 ## Project Identity and Boundaries
 
 This repository is **Burntato**, a fully onchain Hot Potato game with
-holder-time POTATO emissions, a forward Recovery Market, and a canonical
-Uniswap v4 POTATO/ETH market.
+holder-time POTATO rewards, a forward Recovery Market, and a restricted
+STATICS-backed POTATO wrapper. Buybacks use an existing STATICS/WETH market.
 
 - Use **Burntato**, **POTATO**, **Hot Potato**, and **Recovery Market** in
   contracts, interfaces, events, documentation, deployment artifacts, SDKs,
@@ -39,6 +39,9 @@ writing or changing Solidity, then apply it to the change.
 
 ## Compiling and Testing
 
+- Compile contracts, scripts, tests, and formal harnesses without via IR. Resolve
+  stack-depth failures with scoped variables and helpers; do not enable IR as a
+  workaround. Retain the standard IPFS metadata bytecode hash.
 - Do not run `forge build --force`, `forge build --contracts`, or `forge clean`.
 - Prefer focused verification with
   `forge test --match-path path/to/test/File.t.sol`.

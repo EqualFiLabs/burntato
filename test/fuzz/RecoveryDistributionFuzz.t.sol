@@ -59,11 +59,11 @@ contract RecoveryDistributionFuzzTest is DiamondTestSetup {
 
         Round memory target = game.getRound(2);
         uint256 totalCommitted = aliceCommitment + bobCommitment;
-        uint256 treasuryPotato = totalCommitted * 1_000 / 10_000;
-        uint256 burned = totalCommitted - treasuryPotato;
+        uint256 burned = totalCommitted;
+        assertEq(statics.balanceOf(treasury), totalCommitted);
         assertEq(target.totalCommitted, totalCommitted);
-        assertEq(potato.totalSupply(), supplyBefore + 10_000 ether - burned);
-        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + treasuryPotato);
+        assertEq(potato.totalSupply(), supplyBefore - burned);
+        assertEq(potato.balanceOf(address(diamond)), INITIAL_REWARD_INVENTORY - 29_000 ether);
 
         uint256 ordinaryAlice = target.recoveryPool * aliceCommitment / totalCommitted;
         uint256 ordinaryBob = target.recoveryPool * bobCommitment / totalCommitted;

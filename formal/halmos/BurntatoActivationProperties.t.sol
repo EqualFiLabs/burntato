@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {MockStatics} from "../../test/mocks/MockStatics.sol";
+
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
@@ -40,11 +42,14 @@ contract BurntatoActivationProperties is Test {
         });
 
         FoundationInit foundation = new FoundationInit();
-        IDiamondCut(address(diamond)).diamondCut(
-            cuts,
-            address(foundation),
-            abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), 1 ether, 0))
-        );
+        IDiamondCut(address(diamond))
+            .diamondCut(
+                cuts,
+                address(foundation),
+                abi.encodeCall(
+                    FoundationInit.initialize, (_config(), TREASURY, address(0), address(new MockStatics()), 0)
+                )
+            );
 
         game = IGame(address(diamond));
         governance = IGovernance(address(diamond));
@@ -66,7 +71,8 @@ contract BurntatoActivationProperties is Test {
     function check_onlyCurrentAuthorityCanInitialize(address caller) public {
         vm.assume(caller != address(0) && caller != FINAL_ADMIN);
         vm.prank(caller);
-        (bool success, bytes memory reason) = address(governance).call(abi.encodeCall(IGovernance.initializePurchases, ()));
+        (bool success, bytes memory reason) =
+            address(governance).call(abi.encodeCall(IGovernance.initializePurchases, ()));
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.NotAuthority.selector);
@@ -96,7 +102,8 @@ contract BurntatoActivationProperties is Test {
         assertTrue(governance.purchasesInitialized());
 
         vm.prank(FINAL_ADMIN);
-        (bool success, bytes memory reason) = address(governance).call(abi.encodeCall(IGovernance.initializePurchases, ()));
+        (bool success, bytes memory reason) =
+            address(governance).call(abi.encodeCall(IGovernance.initializePurchases, ()));
         assertFalse(success);
         assertEq(_selector(reason), Errors.AlreadyInitialized.selector);
         assertTrue(governance.purchasesInitialized());
@@ -149,8 +156,6 @@ contract BurntatoActivationProperties is Test {
             treasuryBps: 0,
             buybackBps: 0,
             operatorPurchaseBps: 0,
-            recoveryBurnBps: 10_000,
-            recoveryTreasuryBps: 0,
             roundTimeoutDecay: 0,
             minimumRoundTimeout: 1
         });

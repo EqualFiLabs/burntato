@@ -40,7 +40,7 @@ contract ProtocolHandler is Test {
     uint256 public directRecoveryFunding;
     uint256 public directWinnerFunding;
     uint256 public forcedNative;
-    uint256 public selfBurned;
+    uint256 public unwrapped;
     mapping(uint256 => uint256) public recoveryPaid;
     mapping(uint256 => uint256) public recoveryClaimedCommitments;
     bool public transferBypass;
@@ -135,14 +135,14 @@ contract ProtocolHandler is Test {
         _observeRemaining();
     }
 
-    function burn(uint256 actorSeed, uint256 rawAmount) external {
+    function unwrap(uint256 actorSeed, uint256 rawAmount) external {
         address actor = actors[actorSeed % actors.length];
         uint256 balance = potato.balanceOf(actor);
         if (balance == 0) return;
         uint256 amount = bound(rawAmount, 1, balance);
         vm.prank(actor);
-        try potato.burn(amount) {
-            selfBurned += amount;
+        try potato.unwrap(amount) {
+            unwrapped += amount;
         } catch {}
         _observeRemaining();
     }
@@ -275,8 +275,9 @@ contract ProtocolHandler is Test {
     }
 
     function attemptRestrictedTransfer(uint256 actorSeed, uint256 rawAmount) external {
-        address from = actors[actorSeed % actors.length];
-        address to = actors[(actorSeed + 1) % actors.length];
+        uint256 actorIndex = actorSeed % actors.length;
+        address from = actors[actorIndex];
+        address to = actors[(actorIndex + 1) % actors.length];
         uint256 balance = potato.balanceOf(from);
         if (balance == 0) return;
         uint256 amount = bound(rawAmount, 1, balance);
@@ -318,6 +319,19 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         targetContract(address(handler));
     }
 
+    function test_MaximumActorSeedStillExercisesRestrictedTransfer() public {
+        handler.buy(type(uint256).max);
+        handler.advance(120);
+        handler.materialize();
+        address holder = IGame(address(diamond)).getRound(1).currentHolder;
+        uint256 balance = IPotatoToken(address(diamond)).balanceOf(holder);
+        assertGt(balance, 0);
+        vm.expectCall(address(diamond), abi.encodeWithSelector(IPotatoToken.transfer.selector));
+        handler.attemptRestrictedTransfer(type(uint256).max, balance);
+        assertFalse(handler.transferBypass());
+        assertEq(IPotatoToken(address(diamond)).balanceOf(holder), balance);
+    }
+
     function invariant_NativeAssetAccountingIsExactlyConserved() public view {
         assertEq(
             address(diamond).balance,
@@ -326,23 +340,34 @@ contract ProtocolInvariantTest is DiamondTestSetup {
         );
     }
 
-    function invariant_PotatoSupplyEqualsEmissionMinusActualBurns() public view {
+    function invariant_BackedSupplyOnlyDeclinesOnRedemption() public view {
         IGame game = IGame(address(diamond));
         uint256 current = game.currentRoundId();
-        uint256 emitted;
         uint256 recoveryBurned;
         for (uint256 roundId = 1; roundId <= current; ++roundId) {
             Round memory round = game.getRound(roundId);
-            emitted += round.emittedPotato;
             if (round.settled && round.totalCommitted != 0) {
-                uint256 treasuryPotato = round.totalCommitted * 1_000 / 10_000;
-                recoveryBurned += round.totalCommitted - treasuryPotato;
+                recoveryBurned += round.totalCommitted;
             }
         }
         assertEq(
             IPotatoToken(address(diamond)).totalSupply(),
-            GENESIS_MARKET_SUPPLY + emitted - recoveryBurned - handler.selfBurned()
+            INITIAL_REWARD_INVENTORY - recoveryBurned - handler.unwrapped()
         );
+    }
+
+    function invariant_BackingAndRewardReserveAreSeparatedFromRecoveryEscrow() public view {
+        IPotatoToken token = IPotatoToken(address(diamond));
+        IGame game = IGame(address(diamond));
+        IRecovery recovery = IRecovery(address(diamond));
+        uint256 current = game.currentRoundId();
+        uint256 escrow;
+        for (uint256 roundId = current; roundId <= current + 1; ++roundId) {
+            if (!game.getRound(roundId).settled) escrow += recovery.totalRecoveryCommitment(roundId);
+        }
+        assertEq(token.backingBalance(), token.totalSupply());
+        assertEq(token.balanceOf(address(diamond)), token.rewardReserve() + escrow);
+        assertEq(token.publicWrapOutstanding(), 0);
     }
 
     function invariant_CurrentRoundEmissionBudgetIsConserved() public view {

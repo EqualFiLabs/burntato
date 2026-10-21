@@ -1,195 +1,142 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
-
-import {LibString} from "solady/src/utils/LibString.sol";
-
+import {AnvilForkValidation} from "./libraries/AnvilForkValidation.sol";
+import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
+import {LibConfig} from "../src/libraries/LibConfig.sol";
 import {DeployBurntato} from "./DeployBurntato.s.sol";
-import {BurntatoSwapFeeHook} from "../src/hooks/BurntatoSwapFeeHook.sol";
-import {IMarket} from "../src/interfaces/IMarket.sol";
-import {BurntatoLaunchCurves} from "../src/libraries/BurntatoLaunchCurves.sol";
 import {
-    BurntatoDeployment,
-    CanonicalV4Dependencies,
     GenesisConfig,
+    BurntatoDeployment,
+    StaticsMarketDependencies,
     StaticsOperatorDependencies
 } from "./DeploymentTypes.sol";
-import {BurntatoDeploymentConfig} from "./libraries/BurntatoDeploymentConfig.sol";
-import {RobinhoodDeploymentConfig} from "./libraries/RobinhoodDeploymentConfig.sol";
+import {StaticsMarketDeploymentConfig} from "./libraries/StaticsMarketDeploymentConfig.sol";
 import {StaticsOperatorDeploymentConfig} from "./libraries/StaticsOperatorDeploymentConfig.sol";
 
 contract DeployBurntatoLocalFork is DeployBurntato {
-    error InvalidLocalForkChain(uint256 actualChainId);
-    error InvalidLocalForkRpc();
-    error InvalidLocalForkBlock(uint256 expected, uint256 actual);
-    error InvalidLocalForkBlockHash(bytes32 expected, bytes32 actual);
+    bool private localReplica;
 
-    string internal constant OUTPUT_PATH = "artifacts/robinhood-local/deployment.json";
+    function run() public override returns (BurntatoDeployment memory deployment) {
+        AnvilForkValidation.requireMainnet();
+        deployment = super.run();
+        uint256 interval = vm.envOr("BURNTATO_LOCAL_INTERVAL_SECONDS", uint256(1));
+        vm.rpc("anvil_setIntervalMining", string.concat("[", vm.toString(interval), "]"));
+        // Anvil disables automining even for interval zero; keep transaction mining live.
+        if (interval == 0) vm.rpc("anvil_setAutomine", "[true]");
+    }
 
-    function runLocalFork() external returns (BurntatoDeployment memory deployment) {
-        CanonicalV4Dependencies memory dependencies = _localForkPreflight(true);
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(privateKey);
-        GenesisConfig memory config = _environmentConfig(BurntatoDeploymentConfig.launchDefaults());
-        config.deployer = deployer;
-        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
-
-        vm.startBroadcast(privateKey);
-        deployment = deployWithDependencies(config, deployer, dependencies, operatorDependencies);
-        vm.stopBroadcast();
-
-        _writeDeployment(deployment, config, dependencies, operatorDependencies);
-        _log(deployment);
-        _enableIntervalMining();
+    function runLocalFork() external returns (BurntatoDeployment memory) {
+        preflightLocalFork();
+        return run();
     }
 
     function runLocalForkReplica() external returns (BurntatoDeployment memory deployment) {
-        CanonicalV4Dependencies memory dependencies = _localReplicaPreflight();
-        uint256 privateKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(privateKey);
-        GenesisConfig memory config = _environmentConfig(BurntatoDeploymentConfig.launchDefaults());
-        config.deployer = deployer;
-        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDependencies({
-            chainId: block.chainid,
-            finalizedBlock: block.number,
-            finalizedBlockHash: bytes32(0),
-            operatorsNft: vm.envAddress("STATICS_GENESIS_NFT_ADDRESS"),
-            operatorsNftCodeHash: bytes32(0),
-            activationRegistry: vm.envAddress("STATICS_GENESIS_ACTIVATION_REGISTRY_ADDRESS"),
-            activationRegistryCodeHash: bytes32(0)
-        });
-
-        vm.startBroadcast(privateKey);
-        deployment = deployWithLocalReplicaDependencies(config, deployer, dependencies, operatorDependencies);
-        vm.stopBroadcast();
-
-        _writeDeployment(deployment, config, dependencies, operatorDependencies);
-        _log(deployment);
-        _enableIntervalMining();
+        AnvilForkValidation.requireMainnet();
+        localReplica = true;
+        deployment = run();
+        localReplica = false;
     }
 
-    function preflightLocalFork() external returns (CanonicalV4Dependencies memory dependencies) {
-        return _localForkPreflight(true);
+    function preflightLocalFork() public returns (StaticsMarketDependencies memory m) {
+        StaticsOperatorDependencies memory o = StaticsOperatorDeploymentConfig.load();
+        require(AnvilForkValidation.height() == o.finalizedBlock, "incorrect initial fork block");
+        return preflightDeployedLocalFork();
     }
 
-    function preflightDeployedLocalFork() external returns (CanonicalV4Dependencies memory dependencies) {
-        return _localForkPreflight(false);
+    function preflightDeployedLocalFork() public returns (StaticsMarketDependencies memory m) {
+        m = StaticsMarketDeploymentConfig.load();
+        _validateMarket(m);
+        _validateOperators(_operatorDependencies());
     }
 
-    function _localReplicaPreflight() private returns (CanonicalV4Dependencies memory dependencies) {
-        if (block.chainid != RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
-            revert InvalidLocalForkChain(block.chainid);
-        }
-        bytes memory automine = vm.rpc("anvil_getAutomine", "[]");
-        if (automine.length == 0) revert InvalidLocalForkRpc();
-        dependencies = RobinhoodDeploymentConfig.load();
-        RobinhoodDeploymentConfig.validateAnvilFork(
-            dependencies, _rpcBlockNumber(), _rpcBlockHash(dependencies.forkBlock)
+    function _operatorDependencies() internal view override returns (StaticsOperatorDependencies memory o) {
+        if (!localReplica) return super._operatorDependencies();
+        o.chainId = block.chainid;
+        o.finalizedBlock = block.number;
+        o.operatorsNft = vm.envAddress("STATICS_GENESIS_NFT_ADDRESS");
+        o.activationRegistry = vm.envAddress("STATICS_GENESIS_ACTIVATION_REGISTRY_ADDRESS");
+        o.operatorsNftCodeHash = o.operatorsNft.codehash;
+        o.activationRegistryCodeHash = o.activationRegistry.codehash;
+    }
+
+    function _validateMarket(StaticsMarketDependencies memory m) internal override {
+        AnvilForkValidation.requireMainnet();
+        StaticsMarketDeploymentConfig.validateAnvilFork(
+            m, AnvilForkValidation.height(), AnvilForkValidation.blockHash(m.forkBlock)
         );
     }
 
-    function _localForkPreflight(bool requireExactBlock)
-        internal
-        virtual
-        returns (CanonicalV4Dependencies memory dependencies)
-    {
-        if (block.chainid != RobinhoodDeploymentConfig.ROBINHOOD_MAINNET_CHAIN_ID) {
-            revert InvalidLocalForkChain(block.chainid);
+    function _validateOperators(StaticsOperatorDependencies memory o) internal override {
+        AnvilForkValidation.requireMainnet();
+        if (localReplica) {
+            StaticsOperatorDeploymentConfig.validateLocalReplica(o);
+        } else {
+            StaticsOperatorDeploymentConfig.validateAnvilFork(
+                o, AnvilForkValidation.height(), AnvilForkValidation.blockHash(o.finalizedBlock)
+            );
         }
-        bytes memory automine = vm.rpc("anvil_getAutomine", "[]");
-        if (automine.length == 0) revert InvalidLocalForkRpc();
-
-        dependencies = RobinhoodDeploymentConfig.load();
-        StaticsOperatorDependencies memory operatorDependencies = StaticsOperatorDeploymentConfig.load();
-        uint256 currentBlock = _rpcBlockNumber();
-        if (
-            currentBlock < operatorDependencies.finalizedBlock
-                || (requireExactBlock && currentBlock != operatorDependencies.finalizedBlock)
-        ) {
-            revert InvalidLocalForkBlock(operatorDependencies.finalizedBlock, currentBlock);
-        }
-        bytes32 actualBlockHash = _rpcBlockHash(operatorDependencies.finalizedBlock);
-        if (actualBlockHash != operatorDependencies.finalizedBlockHash) {
-            revert InvalidLocalForkBlockHash(operatorDependencies.finalizedBlockHash, actualBlockHash);
-        }
-        RobinhoodDeploymentConfig.validateAnvilFork(dependencies, currentBlock, _rpcBlockHash(dependencies.forkBlock));
-        StaticsOperatorDeploymentConfig.validateAnvilFork(operatorDependencies, currentBlock, actualBlockHash);
     }
 
-    function _rpcBlockHash(uint256 blockNumber) private returns (bytes32) {
-        string memory blockJson = vm.rpcJson(
-            "eth_getBlockByNumber", string.concat("[\"", LibString.toMinimalHexString(blockNumber), "\",false]")
+    function _environmentConfig() internal view override returns (GenesisConfig memory config) {
+        require(block.chainid == 4663, "mainnet fork required");
+        config = BurntatoDeploymentConfig.launchDefaults();
+        uint256 key = vm.envOr("PRIVATE_KEY", uint256(0));
+        if (key != 0) config.deployer = vm.addr(key);
+        config.deployer = vm.envOr("BURNTATO_DEPLOYER", config.deployer);
+        config.finalAdmin = vm.envOr("BURNTATO_FINAL_ADMIN", config.finalAdmin);
+        config.guardian = vm.envOr("BURNTATO_GUARDIAN", config.guardian);
+        config.treasuryRecipient = vm.envOr("BURNTATO_TREASURY", config.treasuryRecipient);
+        config.rewardAllocator = vm.envOr("BURNTATO_REWARD_ALLOCATOR", config.rewardAllocator);
+        config.protocol.startingPrice = vm.envOr("BURNTATO_STARTING_PRICE", config.protocol.startingPrice);
+        config.protocol.priceIncreaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_PRICE_INCREASE_BPS", uint256(config.protocol.priceIncreaseBps))
         );
-        return vm.parseJsonBytes32(blockJson, ".hash");
+        config.protocol.roundTimeout = vm.envOr("BURNTATO_ROUND_TIMEOUT", config.protocol.roundTimeout);
+        config.protocol.roundTimeoutDecay = vm.envOr("BURNTATO_ROUND_TIMEOUT_DECAY", config.protocol.roundTimeoutDecay);
+        config.protocol.minimumRoundTimeout =
+            vm.envOr("BURNTATO_MINIMUM_ROUND_TIMEOUT", config.protocol.minimumRoundTimeout);
+        config.protocol.roundEmissionBudget =
+            vm.envOr("BURNTATO_ROUND_EMISSION_BUDGET", config.protocol.roundEmissionBudget);
+        config.protocol.emissionStepBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_EMISSION_STEP_BPS", uint256(config.protocol.emissionStepBps))
+        );
+        config.protocol.emissionVestingDuration =
+            vm.envOr("BURNTATO_EMISSION_VESTING_DURATION", config.protocol.emissionVestingDuration);
+        config.protocol.winnerBps =
+            BurntatoDeploymentConfig.checkedUint16(vm.envOr("BURNTATO_WINNER_BPS", uint256(config.protocol.winnerBps)));
+        config.protocol.nextRoundWinnerBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_NEXT_ROUND_WINNER_BPS", uint256(config.protocol.nextRoundWinnerBps))
+        );
+        config.protocol.recoveryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_RECOVERY_BPS", uint256(config.protocol.recoveryBps))
+        );
+        config.protocol.treasuryBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_TREASURY_BPS", uint256(config.protocol.treasuryBps))
+        );
+        config.protocol.buybackBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_BUYBACK_BPS", uint256(config.protocol.buybackBps))
+        );
+        config.protocol.operatorPurchaseBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_OPERATOR_PURCHASE_BPS", uint256(config.protocol.operatorPurchaseBps))
+        );
+        config.initialWinnerReserve = vm.envOr(
+            "BURNTATO_INITIAL_WINNER_RESERVE", BurntatoDeploymentConfig.defaultInitialWinnerReserve(config.protocol)
+        );
+        config.buyback.maxSpend = vm.envOr("BURNTATO_BUYBACK_MAX_SPEND", config.buyback.maxSpend);
+        config.buyback.callerRewardBps = BurntatoDeploymentConfig.checkedUint16(
+            vm.envOr("BURNTATO_BUYBACK_CALLER_REWARD_BPS", uint256(config.buyback.callerRewardBps))
+        );
+        config.buyback.delayBlocks = vm.envOr("BURNTATO_BUYBACK_DELAY_BLOCKS", config.buyback.delayBlocks);
+        LibConfig.validate(config.protocol);
+        if (config.buyback.callerRewardBps > 100) revert InvalidGenesisConfiguration();
+        return config;
     }
 
-    function _rpcBlockNumber() private returns (uint256) {
-        bytes memory encoded = vm.rpc("eth_blockNumber", "[]");
-        uint256 blockNumber;
-        for (uint256 index; index < encoded.length; ++index) {
-            blockNumber = (blockNumber << 8) | uint8(encoded[index]);
-        }
-        return blockNumber;
+    function _outputDirectory() internal pure override returns (string memory) {
+        return "artifacts/robinhood-local";
     }
 
-    function _writeDeployment(
-        BurntatoDeployment memory deployment,
-        GenesisConfig memory config,
-        CanonicalV4Dependencies memory dependencies,
-        StaticsOperatorDependencies memory operatorDependencies
-    ) internal {
-        vm.createDir("artifacts/robinhood-local", true);
-        string memory object = "robinhoodLocal";
-        vm.serializeUint(object, "schemaVersion", 3);
-        vm.serializeUint(object, "chainId", dependencies.chainId);
-        vm.serializeUint(object, "forkBlock", operatorDependencies.finalizedBlock);
-        vm.serializeAddress(object, "diamond", deployment.diamond);
-        vm.serializeAddress(object, "admin", deployment.admin);
-        vm.serializeAddress(object, "guardian", config.guardian);
-        vm.serializeAddress(object, "treasuryRecipient", config.treasuryRecipient);
-        vm.serializeAddress(object, "rewardAllocator", config.rewardAllocator);
-        vm.serializeAddress(object, "hook", deployment.hook);
-        vm.serializeAddress(object, "hookDeployer", deployment.hookDeployer);
-        vm.serializeAddress(object, "operatorRewardsRouter", deployment.operatorRewardsRouter);
-        vm.serializeUint(object, "hookFeeBps", config.hookFeeBps);
-        vm.serializeUint(object, "roundEmissionBudget", config.protocol.roundEmissionBudget);
-        vm.serializeUint(object, "potatoSeed", config.potatoSeed);
-        vm.serializeUint(object, "marketPositionCount", BurntatoLaunchCurves.positionCount());
-        vm.serializeBytes32(object, "marketCurveHash", IMarket(deployment.diamond).marketCurveHash());
-        vm.serializeUint(object, "nextRoundWinnerBps", config.protocol.nextRoundWinnerBps);
-        vm.serializeUint(object, "initialWinnerReserve", config.initialWinnerReserve);
-        vm.serializeUint(object, "operatorRewardShareBps", _operatorRewardShareBps(deployment));
-        vm.serializeAddress(object, "operatorsNft", operatorDependencies.operatorsNft);
-        vm.serializeAddress(object, "activationRegistry", operatorDependencies.activationRegistry);
-        vm.serializeAddress(object, "diamondCutFacet", deployment.diamondCutFacet);
-        vm.serializeAddress(object, "diamondLoupeFacet", deployment.diamondLoupeFacet);
-        vm.serializeAddress(object, "governanceFacet", deployment.governanceFacet);
-        vm.serializeAddress(object, "marketFacet", deployment.marketFacet);
-        vm.serializeAddress(object, "buybackFacet", deployment.buybackFacet);
-        vm.serializeAddress(object, "potatoTokenFacet", deployment.potatoTokenFacet);
-        vm.serializeAddress(object, "gameFacet", deployment.gameFacet);
-        vm.serializeAddress(object, "recoveryFacet", deployment.recoveryFacet);
-        vm.serializeAddress(object, "settlementFacet", deployment.settlementFacet);
-        vm.serializeAddress(object, "claimsFacet", deployment.claimsFacet);
-        vm.serializeAddress(object, "treasuryRewardsFacet", deployment.treasuryRewardsFacet);
-        vm.serializeAddress(object, "foundationInit", deployment.foundationInit);
-        vm.serializeAddress(object, "poolManager", deployment.poolManager);
-        vm.serializeAddress(object, "positionDescriptor", deployment.positionDescriptor);
-        vm.serializeAddress(object, "positionManager", deployment.positionManager);
-        vm.serializeAddress(object, "quoter", deployment.quoter);
-        vm.serializeAddress(object, "stateView", deployment.stateView);
-        vm.serializeAddress(object, "reservesLens", deployment.reservesLens);
-        vm.serializeAddress(object, "universalRouter", deployment.universalRouter);
-        vm.serializeAddress(object, "permit2", deployment.permit2);
-        string memory json = vm.serializeAddress(object, "weth", deployment.weth9);
-        vm.writeJson(json, OUTPUT_PATH);
-    }
-
-    function _operatorRewardShareBps(BurntatoDeployment memory deployment) private view returns (uint256) {
-        return BurntatoSwapFeeHook(payable(deployment.hook)).operatorRewardShareBps();
-    }
-
-    function _enableIntervalMining() private {
-        uint256 intervalSeconds = vm.envOr("BURNTATO_LOCAL_INTERVAL_SECONDS", uint256(1));
-        vm.rpc("anvil_setIntervalMining", string.concat("[", vm.toString(intervalSeconds), "]"));
+    function _deploymentMode() internal view override returns (string memory) {
+        return localReplica ? "local-replica" : "local-fork";
     }
 }

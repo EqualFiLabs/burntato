@@ -22,21 +22,12 @@ contract BurntatoMathHarness {
         return LibMath.linearEarned(maximum, heldSeconds, vestingDuration);
     }
 
-    function diminishingTimeout(
-        uint256 initialTimeout,
-        uint256 decay,
-        uint256 minimumTimeout,
-        uint256 priorPurchases
-    ) external pure returns (uint256) {
-        return LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
-    }
-
-    function splitRecovery(uint256 amount, uint256 treasuryBps)
+    function diminishingTimeout(uint256 initialTimeout, uint256 decay, uint256 minimumTimeout, uint256 priorPurchases)
         external
         pure
-        returns (uint256 burned, uint256 treasury)
+        returns (uint256)
     {
-        return LibMath.splitRecovery(amount, treasuryBps);
+        return LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
     }
 
     function purchaseSplit(
@@ -58,8 +49,9 @@ contract BurntatoMathHarness {
             uint256 operator
         )
     {
-        PurchaseAllocation memory allocation =
-            LibMath.splitPurchase(amount, winnerBps, nextRoundWinnerBps, recoveryBps, buybackBps, operatorBps);
+        PurchaseAllocation memory allocation = LibMath.splitPurchase(
+            amount, winnerBps, nextRoundWinnerBps, recoveryBps, buybackBps, operatorBps
+        );
         return (
             allocation.winner,
             allocation.nextRoundWinner,
@@ -86,9 +78,7 @@ contract BurntatoMathHarness {
         uint256 recoveryPaid,
         uint256 committed
     ) external pure returns (uint256 amount) {
-        return LibMath.recoveryClaimAmount(
-            recoveryPool, totalCommitted, claimedCommitments, recoveryPaid, committed
-        );
+        return LibMath.recoveryClaimAmount(recoveryPool, totalCommitted, claimedCommitments, recoveryPaid, committed);
     }
 
     function splitSchedule(uint256 amount, uint256 roundCount)

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {BurntatoSelectors} from "../../script/libraries/BurntatoSelectors.sol";
+
+import {MockStatics} from "../mocks/MockStatics.sol";
+
 import {Test} from "forge-std/Test.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
@@ -43,16 +47,17 @@ contract GovernanceAdministrationTest is Test {
         diamond = new BurntatoDiamond(bootstrap, address(cutFacet));
         governanceFacet = new GovernanceFacet();
         FoundationInit initializer = new FoundationInit();
+        MockStatics backing = new MockStatics();
 
         FacetCut[] memory cuts = new FacetCut[](1);
-        cuts[0] = FacetCut(address(governanceFacet), FacetCutAction.Add, _governanceSelectors());
+        cuts[0] = FacetCut(address(governanceFacet), FacetCutAction.Add, BurntatoSelectors.governance());
         vm.prank(bootstrap);
         IDiamondCut(address(diamond))
             .diamondCut(
                 cuts,
                 address(initializer),
                 abi.encodeCall(
-                    FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether, 0)
+                    FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), address(backing), 0)
                 )
             );
 
@@ -80,8 +85,6 @@ contract GovernanceAdministrationTest is Test {
         config.recoveryBps = 0;
         config.treasuryBps = 10_000;
         config.buybackBps = 0;
-        config.recoveryBurnBps = 0;
-        config.recoveryTreasuryBps = 10_000;
 
         vm.prank(address(timelock));
         IGovernance(address(diamond)).setProtocolConfig(config);
@@ -91,7 +94,6 @@ contract GovernanceAdministrationTest is Test {
         assertEq(actual.roundEmissionBudget, 0);
         assertEq(actual.emissionStepBps, 0);
         assertEq(actual.treasuryBps, 10_000);
-        assertEq(actual.recoveryTreasuryBps, 10_000);
     }
 
     function test_ProtocolConfigurationRejectsInvalidDomains() public {
@@ -142,7 +144,7 @@ contract GovernanceAdministrationTest is Test {
         _expectInvalidConfig(config);
 
         config = _config(0.02 ether, 1_000);
-        config.recoveryTreasuryBps = 999;
+        config.treasuryBps = 999;
         _expectInvalidConfig(config);
     }
 
@@ -317,15 +319,16 @@ contract GovernanceAdministrationTest is Test {
         candidate = new BurntatoDiamond(bootstrap, address(candidateCut));
         GovernanceFacet candidateGovernance = new GovernanceFacet();
         FoundationInit initializer = new FoundationInit();
+        MockStatics backing = new MockStatics();
         FacetCut[] memory cuts = new FacetCut[](1);
-        cuts[0] = FacetCut(address(candidateGovernance), FacetCutAction.Add, _governanceSelectors());
+        cuts[0] = FacetCut(address(candidateGovernance), FacetCutAction.Add, BurntatoSelectors.governance());
         vm.prank(bootstrap);
         IDiamondCut(address(candidate))
             .diamondCut(
                 cuts,
                 address(initializer),
                 abi.encodeCall(
-                    FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), 1 ether, 0)
+                    FoundationInit.initialize, (_config(0.01 ether, 1_000), treasury, address(0), address(backing), 0)
                 )
             );
     }
@@ -344,28 +347,8 @@ contract GovernanceAdministrationTest is Test {
             treasuryBps: 2_300,
             buybackBps: 1_000,
             operatorPurchaseBps: 0,
-            recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000,
             roundTimeoutDecay: 5 minutes,
             minimumRoundTimeout: 5 minutes
         });
-    }
-
-    function _governanceSelectors() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](14);
-        selectors[0] = IGovernance.authority.selector;
-        selectors[1] = IGovernance.guardian.selector;
-        selectors[2] = IGovernance.paused.selector;
-        selectors[3] = IGovernance.protocolFinalized.selector;
-        selectors[4] = IGovernance.protocolConfig.selector;
-        selectors[5] = IGovernance.setAuthority.selector;
-        selectors[6] = IGovernance.setGuardian.selector;
-        selectors[7] = IGovernance.setPaused.selector;
-        selectors[8] = IGovernance.setProtocolConfig.selector;
-        selectors[9] = IGovernance.setTreasuryRecipient.selector;
-        selectors[10] = IGovernance.finalizeProtocol.selector;
-        selectors[11] = IGovernance.foundationConfigured.selector;
-        selectors[12] = IGovernance.purchasesInitialized.selector;
-        selectors[13] = IGovernance.initializePurchases.selector;
     }
 }

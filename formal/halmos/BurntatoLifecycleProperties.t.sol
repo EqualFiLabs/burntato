@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {MockStatics} from "../../test/mocks/MockStatics.sol";
+
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
@@ -37,30 +39,6 @@ contract FormalLifecycleStateFacet {
         gs.rounds[gs.currentRoundId].deadline = block.timestamp;
     }
 
-    function formalProtocolMint(address recipient, uint256 amount) external {
-        IPotatoToken(address(this)).protocolMint(recipient, amount);
-    }
-
-    function formalConfigureWinnerClaim(address holder, uint256 winnerPool) external {
-        LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
-        Round storage round = gs.rounds[1];
-        round.roundId = 1;
-        round.currentHolder = holder;
-        round.winnerPool = winnerPool;
-        round.settled = true;
-    }
-
-    function formalConfigureRecoveryClaim(address account, uint256 commitment, uint256 recoveryPool) external {
-        Round storage round = LibProtocolStorage.game().rounds[1];
-        round.roundId = 1;
-        round.recoveryPool = recoveryPool;
-        round.totalCommitted = commitment;
-        round.settled = true;
-        LibProtocolStorage.RecoveryStorage storage rs = LibProtocolStorage.recovery();
-        rs.commitments[1][account] = commitment;
-        rs.totalCommitments[1] = commitment;
-    }
-
     function formalSnapshotRound(uint256 roundId) external {
         LibGame.snapshotFutureRound(roundId);
     }
@@ -95,7 +73,6 @@ contract FormalLifecycleActor {
 contract BurntatoLifecycleProperties is Test {
     uint256 private constant PRICE = 10_000;
     uint256 private constant COMMITMENT = 100;
-    uint256 private constant GENESIS_SEED = 1 ether;
     address private constant TREASURY = address(0xBEEF);
     address private constant ALLOCATOR = address(0xD00D);
 
@@ -118,14 +95,11 @@ contract BurntatoLifecycleProperties is Test {
         diamond = new BurntatoDiamond(address(this), address(cutFacet));
 
         FormalLifecycleStateFacet lifecycleStateFacet = new FormalLifecycleStateFacet();
-        bytes4[] memory lifecycleStateSelectors = new bytes4[](7);
+        bytes4[] memory lifecycleStateSelectors = new bytes4[](4);
         lifecycleStateSelectors[0] = FormalLifecycleStateFacet.formalExpireCurrentRound.selector;
-        lifecycleStateSelectors[1] = FormalLifecycleStateFacet.formalProtocolMint.selector;
-        lifecycleStateSelectors[2] = FormalLifecycleStateFacet.formalConfigureWinnerClaim.selector;
-        lifecycleStateSelectors[3] = FormalLifecycleStateFacet.formalConfigureRecoveryClaim.selector;
-        lifecycleStateSelectors[4] = FormalLifecycleStateFacet.formalSnapshotRound.selector;
-        lifecycleStateSelectors[5] = FormalLifecycleStateFacet.formalRoundStartingPrice.selector;
-        lifecycleStateSelectors[6] = FormalLifecycleStateFacet.formalRoundTimeout.selector;
+        lifecycleStateSelectors[1] = FormalLifecycleStateFacet.formalSnapshotRound.selector;
+        lifecycleStateSelectors[2] = FormalLifecycleStateFacet.formalRoundStartingPrice.selector;
+        lifecycleStateSelectors[3] = FormalLifecycleStateFacet.formalRoundTimeout.selector;
 
         FacetCut[] memory cuts = new FacetCut[](8);
         cuts[0] = FacetCut(address(new GovernanceFacet()), FacetCutAction.Add, BurntatoSelectors.governance());
@@ -142,13 +116,18 @@ contract BurntatoLifecycleProperties is Test {
             .diamondCut(
                 cuts,
                 address(foundation),
-                abi.encodeCall(FoundationInit.initialize, (_config(PRICE, 100), TREASURY, address(0), GENESIS_SEED, 0))
+                abi.encodeCall(
+                    FoundationInit.initialize,
+                    (_config(PRICE, 100), TREASURY, address(0), address(new MockStatics()), 0)
+                )
             );
 
         claims = IClaims(address(diamond));
         game = IGame(address(diamond));
         governance = IGovernance(address(diamond));
         potato = IPotatoToken(address(diamond));
+        // Lifecycle fixtures explicitly open wrapping to fund Recovery commitments.
+        potato.setPublicWrapCap(2_000_000 ether);
         recovery = IRecovery(address(diamond));
         settlement = ISettlement(address(diamond));
         rewards = ITreasuryRewards(address(diamond));
@@ -161,10 +140,18 @@ contract BurntatoLifecycleProperties is Test {
         vm.deal(address(buyerTwo), 1 ether);
         vm.deal(address(diamond), 1 ether);
         governance.initializePurchases();
+        // Prime runtime Keccak preimages before compiler-folded mapping accesses.
+        // Halmos 0.3.3 otherwise changes its storage-key normalization after the first lookup.
+        game.getRound(1);
+        game.getRound(2);
+        game.getRound(3);
     }
 
     function check_winnerClaimPaysConfiguredPoolOnce() public {
-        lifecycleState.formalConfigureWinnerClaim(address(buyerTwo), 2_500);
+        _buy(buyerOne);
+        _buy(buyerTwo);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
         uint256 winnerBefore = address(receiver).balance;
         uint256 claimed = buyerTwo.claimWinner(claims, 1, address(receiver));
 
@@ -179,15 +166,29 @@ contract BurntatoLifecycleProperties is Test {
     }
 
     function check_singleRecoveryClaimReceivesConfiguredPoolOnce() public {
-        lifecycleState.formalConfigureRecoveryClaim(address(committer), COMMITMENT, 8_000);
-        assertEq(claims.claimableRecovery(1, address(committer)), 8_000);
+        _backedTransfer(address(committer), COMMITMENT);
+        _buy(buyerOne);
+        _buy(buyerTwo);
+        committer.commit(recovery, COMMITMENT);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        _buy(buyerOne);
+        _buy(buyerTwo);
+        lifecycleState.formalExpireCurrentRound();
+        settlement.settleRound();
+        assertEq(MockStatics(potato.underlying()).balanceOf(TREASURY), COMMITMENT);
+        assertEq(claims.claimableRecovery(2, address(committer)), 8_000);
 
         uint256 committerEthBefore = address(receiver).balance;
-        uint256 claimed = committer.claimRecovery(claims, 1, address(receiver));
+        uint256 claimed = committer.claimRecovery(claims, 2, address(receiver));
         assertEq(claimed, 8_000);
         assertEq(address(receiver).balance, committerEthBefore + claimed);
-        assertEq(claims.claimableRecovery(1, address(committer)), 0);
-        assertTrue(claims.recoveryClaimed(1, address(committer)));
+        assertEq(claims.claimableRecovery(2, address(committer)), 0);
+        assertTrue(claims.recoveryClaimed(2, address(committer)));
+        (bool replayed, bytes memory reason) = address(committer)
+            .call(abi.encodeCall(FormalLifecycleActor.claimRecovery, (claims, uint256(2), address(receiver))));
+        assertFalse(replayed);
+        assertEq(_selector(reason), Errors.AlreadyClaimed.selector);
     }
 
     function check_roundSnapshotIsStableAcrossConfigChange() public {
@@ -221,7 +222,7 @@ contract BurntatoLifecycleProperties is Test {
     function check_rewardAllocationCancellationConservesInventory() public {
         uint256 amount = 101;
         uint256 inventoryBefore = claims.treasuryPotatoAvailable();
-        _protocolMint(ALLOCATOR, amount);
+        _backedTransfer(ALLOCATOR, amount);
         rewards.setRewardAllocator(ALLOCATOR);
 
         vm.prank(ALLOCATOR);
@@ -230,14 +231,14 @@ contract BurntatoLifecycleProperties is Test {
         assertEq(schedule.perRound * schedule.roundCount + schedule.firstRoundRemainder, amount);
         assertEq(rewards.treasuryRewardsReserved(), amount);
         assertEq(claims.treasuryPotatoAvailable(), inventoryBefore);
-        assertEq(potato.balanceOf(address(diamond)), GENESIS_SEED + amount);
+        assertEq(potato.balanceOf(address(diamond)), amount);
 
         vm.prank(ALLOCATOR);
         uint256 released = rewards.cancelTreasuryRewards(scheduleId);
         assertEq(released, amount);
         assertEq(rewards.treasuryRewardsReserved(), 0);
         assertEq(claims.treasuryPotatoAvailable(), inventoryBefore + amount);
-        assertEq(potato.balanceOf(address(diamond)), GENESIS_SEED + amount);
+        assertEq(potato.balanceOf(address(diamond)), amount);
     }
 
     function _foundryWinnerClaimWitness() private {
@@ -250,7 +251,7 @@ contract BurntatoLifecycleProperties is Test {
     }
 
     function _foundryRecoveryClaimWitness() private {
-        _protocolMint(address(committer), COMMITMENT);
+        _backedTransfer(address(committer), COMMITMENT);
         _buy(buyerOne);
         _buy(buyerTwo);
         committer.commit(recovery, COMMITMENT);
@@ -279,8 +280,13 @@ contract BurntatoLifecycleProperties is Test {
         buyer.buy(game, PRICE);
     }
 
-    function _protocolMint(address recipient, uint256 amount) private {
-        lifecycleState.formalProtocolMint(recipient, amount);
+    function _backedTransfer(address recipient, uint256 amount) private {
+        MockStatics backing = MockStatics(potato.underlying());
+        backing.mint(recipient, amount);
+        vm.startPrank(recipient);
+        backing.approve(address(diamond), amount);
+        potato.wrap(amount);
+        vm.stopPrank();
     }
 
     function _config(uint256 price, uint256 timeout) private pure returns (ProtocolConfig memory config) {
@@ -297,8 +303,6 @@ contract BurntatoLifecycleProperties is Test {
             treasuryBps: 2_300,
             buybackBps: 1_000,
             operatorPurchaseBps: 0,
-            recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000,
             roundTimeoutDecay: 0,
             minimumRoundTimeout: timeout
         });

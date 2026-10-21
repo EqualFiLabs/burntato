@@ -456,12 +456,30 @@ contract OperatorRewardsRouterTest is Test {
 
         assertEq(uint256(router.sync(ALICE_OPERATOR)), uint256(IOperatorRewards.SyncResult.WeightIncreased));
         assertEq(router.totalRegisteredWeight(), 22_500);
+        assertEq(uint256(router.sync(ALICE_OPERATOR)), uint256(IOperatorRewards.SyncResult.Unchanged));
         _sendRevenue(22.5 ether);
 
         vm.prank(alice);
         assertEq(router.claim(ALICE_OPERATOR, alice), 32.5 ether);
         vm.prank(bob);
         assertEq(router.claim(BOB_OPERATOR, bob), 30 ether);
+    }
+
+    function test_ZeroWeightSyncInvalidatesAndRedistributesAccruedRewards() public {
+        _register(ALICE_OPERATOR, alice);
+        _register(BOB_OPERATOR, bob);
+        _sendRevenue(2 ether);
+        registry.setWeight(ALICE_OPERATOR, 0);
+        assertEq(uint256(router.sync(ALICE_OPERATOR)), uint256(IOperatorRewards.SyncResult.Invalidated));
+        assertEq(router.registrationOf(ALICE_OPERATOR).owner, address(0));
+        assertEq(router.totalRegisteredWeight(), 10_000);
+        vm.prank(bob);
+        assertEq(router.claim(BOB_OPERATOR, bob), 2 ether);
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(BurntatoOperatorRewardsRouter.InvalidOperatorWeight.selector, ALICE_OPERATOR)
+        );
+        router.register(ALICE_OPERATOR);
     }
 
     function test_TransferInvalidatesAndRedistributesToRemainingOperators() public {

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {DeployBurntatoRobinhoodTestnet} from "../../script/DeployBurntatoRobinhoodTestnet.s.sol";
 import {Test} from "forge-std/Test.sol";
 
 import {
     PrepareBurntatoRobinhoodTestnet,
     StaticsTestnetHandoff
 } from "../../script/PrepareBurntatoRobinhoodTestnet.s.sol";
-import {DeployBurntatoRobinhoodTestnet} from "../../script/DeployBurntatoRobinhoodTestnet.s.sol";
 import {IArbSys} from "../../script/libraries/RobinhoodBlockProvenance.sol";
 
 contract HandoffOperatorCollection {
@@ -68,6 +68,32 @@ contract RobinhoodTestnetHandoffTest is Test {
         vm.mockCall(ARB_SYS, abi.encodeCall(IArbSys.arbBlockNumber, ()), abi.encode(CURRENT_BLOCK));
         vm.mockCall(
             ARB_SYS, abi.encodeCall(IArbSys.arbBlockHash, (CURRENT_BLOCK - 1)), abi.encode(FINALIZED_BLOCK_HASH)
+        );
+    }
+
+    function test_DeploymentRechecksActiveReplicaAfterHandoff() public {
+        DeployBurntatoRobinhoodTestnet deployment = new DeployBurntatoRobinhoodTestnet();
+        uint256 expiry = block.timestamp + 15 days;
+        assertTrue(
+            deployment.validateActiveStaticsReplica(address(operators), address(vault), address(vault).codehash, expiry)
+        );
+        vm.warp(expiry);
+        vm.expectRevert(
+            abi.encodeWithSelector(DeployBurntatoRobinhoodTestnet.ExpiredStaticsGenesisEpoch.selector, expiry, expiry)
+        );
+        deployment.validateActiveStaticsReplica(address(operators), address(vault), address(vault).codehash, expiry);
+    }
+
+    function test_DeploymentRejectsChangedReplicaVaultAfterHandoff() public {
+        DeployBurntatoRobinhoodTestnet deployment = new DeployBurntatoRobinhoodTestnet();
+        operators.setVault(address(123));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                DeployBurntatoRobinhoodTestnet.InvalidStaticsGenesisVault.selector, address(vault), address(123)
+            )
+        );
+        deployment.validateActiveStaticsReplica(
+            address(operators), address(vault), address(vault).codehash, block.timestamp + 15 days
         );
     }
 
@@ -173,33 +199,6 @@ contract RobinhoodTestnetHandoffTest is Test {
             )
         );
         prepare.prepareArtifact(artifact, STATICS_SOURCE_COMMIT);
-    }
-
-    function test_BurntatoPreflightRequiresMatchingActiveGenesisVault() public {
-        DeployBurntatoRobinhoodTestnet deploy = new DeployBurntatoRobinhoodTestnet();
-        uint256 epochEnd = block.timestamp + 15 days;
-        assertTrue(
-            deploy.validateActiveStaticsReplica(address(operators), address(vault), address(vault).codehash, epochEnd)
-        );
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                DeployBurntatoRobinhoodTestnet.InvalidStaticsGenesisVaultCodeHash.selector,
-                bytes32(uint256(1)),
-                address(vault).codehash
-            )
-        );
-        deploy.validateActiveStaticsReplica(address(operators), address(vault), bytes32(uint256(1)), epochEnd);
-
-        vault.setGenesisEpochEnd(block.timestamp);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                DeployBurntatoRobinhoodTestnet.ExpiredStaticsGenesisEpoch.selector, block.timestamp, block.timestamp
-            )
-        );
-        deploy.validateActiveStaticsReplica(
-            address(operators), address(vault), address(vault).codehash, block.timestamp
-        );
     }
 
     function _artifact(uint256 genesisEpochEnd, string memory genesisSourceCommit)

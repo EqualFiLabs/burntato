@@ -3,6 +3,8 @@ pragma solidity 0.8.26;
 
 import {Test} from "forge-std/Test.sol";
 
+import {PotatoTokenFacet} from "../../src/facets/PotatoTokenFacet.sol";
+import {MockStatics} from "../mocks/MockStatics.sol";
 import {BuybackFacet} from "../../src/facets/BuybackFacet.sol";
 import {IBuyback} from "../../src/interfaces/IBuyback.sol";
 import {LibProtocolStorage} from "../../src/libraries/LibProtocolStorage.sol";
@@ -14,12 +16,12 @@ contract PartialFillPoolManager {
 
     function unlock(bytes calldata data) external returns (bytes memory) {
         ++unlockCalls;
-        (uint256 amountIn,) = abi.decode(data, (uint256, address));
+        uint256 amountIn = abi.decode(data, (uint256));
         return abi.encode(amountIn - 1, uint256(1));
     }
 }
 
-contract BuybackExecutionHarness is BuybackFacet {
+contract BuybackExecutionHarness is BuybackFacet, PotatoTokenFacet {
     function configure(
         address poolManager,
         address treasury,
@@ -28,9 +30,10 @@ contract BuybackExecutionHarness is BuybackFacet {
         uint256 lastExecutionBlock,
         bool paused_
     ) external {
-        LibProtocolStorage.MarketStorage storage ms = LibProtocolStorage.market();
-        ms.poolManager = poolManager;
-        ms.launched = true;
+        LibProtocolStorage.BuybackMarketStorage storage market = LibProtocolStorage.buybackMarket();
+        market.poolManager = poolManager;
+        market.configured = true;
+        LibProtocolStorage.wrapper().underlying = address(new MockStatics());
         LibProtocolStorage.treasury().recipient = treasury;
 
         LibProtocolStorage.BuybackStorage storage bs = LibProtocolStorage.buyback();

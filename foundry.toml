@@ -8,10 +8,12 @@ auto_detect_solc = true
 evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
-bytecode_hash = "none"
-via_ir = true
+bytecode_hash = "ipfs"
+via_ir = false
 fs_permissions = [
     { access = "read", path = "./deployments" },
+    { access = "read", path = "./out" },
+    { access = "read", path = "./out-formal" },
     { access = "read-write", path = "./artifacts/robinhood-local" },
     { access = "read-write", path = "./artifacts/robinhood-testnet" },
     { access = "read-write", path = "./artifacts/robinhood-mainnet" },
@@ -41,7 +43,7 @@ fail_on_revert = true
 test = "formal/halmos"
 out = "out-formal"
 optimizer = true
-via_ir = true
+via_ir = false
 
 [rpc_endpoints]
 robinhood_mainnet = "${ROBINHOOD_MAINNET}"

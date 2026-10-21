@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================
@@ -138,7 +138,7 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
     function _syncRegistered(uint256 operatorId) private returns (SyncResult result) {
         Registration storage registration = _registrations[operatorId];
         if (registration.owner == address(0)) revert OperatorNotRegistered(operatorId);
-        (result,,) = _sync(operatorId, registration);
+        return _syncKnownOwner(operatorId, registration, operators.ownerOf(operatorId));
     }
 
     function claim(uint256 operatorId, address receiver) external nonReentrant returns (uint256 amount) {
@@ -231,35 +231,25 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
         }
     }
 
-    function _sync(uint256 operatorId, Registration storage registration)
-        private
-        returns (SyncResult result, address currentOwner, uint16 currentWeight)
-    {
-        currentOwner = operators.ownerOf(operatorId);
-        return _syncKnownOwner(operatorId, registration, currentOwner);
-    }
-
     function _syncKnownOwner(uint256 operatorId, Registration storage registration, address currentOwner)
         private
-        returns (SyncResult result, address, uint16 currentWeight)
+        returns (SyncResult result)
     {
-        currentWeight = activationRegistry.multiplierBps(operatorId);
+        uint16 currentWeight = activationRegistry.multiplierBps(operatorId);
         if (currentOwner != registration.owner || currentWeight < registration.weight) {
             _invalidate(operatorId, registration, currentOwner, currentWeight);
-            return (SyncResult.Invalidated, currentOwner, currentWeight);
+            return SyncResult.Invalidated;
         }
 
         _settle(registration);
-        if (currentWeight == registration.weight) return (SyncResult.Unchanged, currentOwner, currentWeight);
-        if (currentWeight == 0) revert InvalidOperatorWeight(operatorId);
+        if (currentWeight == registration.weight) return SyncResult.Unchanged;
 
         uint16 previousWeight = registration.weight;
         _flushGlobalRemainder();
         totalRegisteredWeight = totalRegisteredWeight - previousWeight + currentWeight;
         registration.weight = currentWeight;
-        registration.rewardIndex = rewardIndex;
         emit OperatorWeightUpdated(operatorId, previousWeight, currentWeight);
-        return (SyncResult.WeightIncreased, currentOwner, currentWeight);
+        return SyncResult.WeightIncreased;
     }
 
     function _collectOperatorReward(uint256 operatorId, address claimant)
@@ -271,7 +261,7 @@ contract BurntatoOperatorRewardsRouter is IOperatorRewards, ReentrancyGuard {
 
         address currentOwner = operators.ownerOf(operatorId);
         if (currentOwner != claimant) revert InvalidOperatorOwner(operatorId, claimant, currentOwner);
-        (SyncResult result,,) = _syncKnownOwner(operatorId, registration, currentOwner);
+        SyncResult result = _syncKnownOwner(operatorId, registration, currentOwner);
         if (result == SyncResult.Invalidated) return (0, false);
 
         amount = registration.claimable;

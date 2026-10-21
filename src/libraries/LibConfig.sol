@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: BUSL-1.1
+// ============================================================================
+//                                BURNTATO
+//                                Grab it.
+//                          https://burntato.fun
+//                              EqualFi Labs
+// ============================================================================
 pragma solidity 0.8.26;
 
 import {Constants} from "../shared/Constants.sol";
@@ -15,10 +21,8 @@ library LibConfig {
                 || config.winnerBps > Constants.BPS || config.nextRoundWinnerBps > Constants.BPS
                 || config.recoveryBps > Constants.BPS || config.treasuryBps > Constants.BPS
                 || config.buybackBps > Constants.BPS || config.operatorPurchaseBps > Constants.BPS
-                || config.recoveryBurnBps > Constants.BPS || config.recoveryTreasuryBps > Constants.BPS
                 || uint256(config.winnerBps) + config.nextRoundWinnerBps + config.recoveryBps + config.treasuryBps
                         + config.buybackBps + config.operatorPurchaseBps != Constants.BPS
-                || uint256(config.recoveryBurnBps) + config.recoveryTreasuryBps != Constants.BPS
         ) revert Errors.InvalidProtocolConfig();
     }
 
@@ -35,8 +39,6 @@ library LibConfig {
         target.treasuryBps = config.treasuryBps;
         target.buybackBps = config.buybackBps;
         target.operatorPurchaseBps = config.operatorPurchaseBps;
-        target.recoveryBurnBps = config.recoveryBurnBps;
-        target.recoveryTreasuryBps = config.recoveryTreasuryBps;
         target.roundTimeoutDecay = config.roundTimeoutDecay;
         target.minimumRoundTimeout = config.minimumRoundTimeout;
     }

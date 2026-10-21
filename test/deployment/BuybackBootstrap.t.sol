@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 
 import {BootstrapBurntatoBuyback} from "../../script/BootstrapBurntatoBuyback.s.sol";
 import {ExecuteBurntatoBuyback} from "../../script/ExecuteBurntatoBuyback.s.sol";
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 import {BuybackConfig} from "../../src/shared/Types.sol";
 
 contract BuybackBootstrapStateMock {
@@ -32,8 +33,9 @@ contract BuybackBootstrapStateMock {
         lastExecutionBlock = lastExecutionBlock_;
     }
 
-    function marketState() external view returns (bytes32, bool, bool, bool) {
-        return (bytes32(0), marketLaunched, marketLaunching, marketLaunched);
+    function buybackMarket() external view returns (address manager, address weth, PoolKey memory key) {
+        address dependency = marketLaunched && !marketLaunching ? address(this) : address(0);
+        return (dependency, dependency, key);
     }
 
     function purchasesInitialized() external view returns (bool) {
@@ -84,11 +86,11 @@ contract BuybackBootstrapTest is Test {
 
     function test_RejectsMissingOrLaunchingMarket() public {
         state.configure(false, false, false, 1 ether, 0, 0);
-        vm.expectRevert(BootstrapBurntatoBuyback.MarketNotLaunched.selector);
+        vm.expectRevert(BootstrapBurntatoBuyback.MarketDependenciesUnavailable.selector);
         bootstrap.checkBootstrapState(address(state), 1 ether);
 
         state.configure(false, true, true, 1 ether, 0, 0);
-        vm.expectRevert(BootstrapBurntatoBuyback.MarketNotLaunched.selector);
+        vm.expectRevert(BootstrapBurntatoBuyback.MarketDependenciesUnavailable.selector);
         bootstrap.checkBootstrapState(address(state), 1 ether);
     }
 
@@ -125,7 +127,7 @@ contract BuybackBootstrapTest is Test {
 
     function test_ExecutionHelperRequiresLiveMarketUnpausedProtocolAndReserve() public {
         state.configure(false, false, false, 1 ether, 1 ether, 0);
-        vm.expectRevert(ExecuteBurntatoBuyback.MarketNotLaunched.selector);
+        vm.expectRevert(ExecuteBurntatoBuyback.MarketDependenciesUnavailable.selector);
         execute.checkExecutionState(address(state));
 
         state.configure(false, false, true, 1 ether, 1 ether, 0);

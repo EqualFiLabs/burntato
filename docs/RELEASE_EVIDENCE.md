@@ -1,764 +1,126 @@
 # Release qualification evidence
 
-## Future-round sponsorship candidate
+## STATICS-backed wrapper candidate (issue #59)
 
-Date: September 12, 2026
+Date: October 21, 2026
 
-Source candidate: `7e094be` on `feat/future-round-sponsorship`, based on
-merged `main` commit `9dcc0a9`.
+Implementation branch: `feat/statics-backed-wrapper`, based on
+`28fb8336ca0186a493ac6b095bb9bca0198b79e1`. The qualified source candidate is
+`acf8d3dd50a1fd96ec15b8480dc1379921d1c2fe`. The final documentation-only amendment
+records qualification results without changing source, dependencies, compiler
+settings or proof inputs.
 
-Permissionless sponsors may fund the Winner reserve, Recovery reserve, or both
-for any future round. The combined entry point accepts one exact native payment,
-and per-round accounting ensures activation consumes only the named round's
-funds. Aggregate reserve getters continue to expose total outstanding native
-liabilities. The first Grab and configured next-round share still fund only the
-immediately following Winner reserve, while POTATO Recovery commitments remain
-limited to the immediately following round.
+The subsequent local maintenance changes are not covered by that qualification.
+This includes the subsequent launch defaults: a zero public wrap cap,
+0.003 ETH starting price, and 20,000 POTATO budget with a 5% reward step.
+Their focused tests and review are separate; remote formal proofs and complete
+CI must be renewed against the changed source before treating it as qualified.
 
-Sponsorship is irreversible, remains available while paused, and does not
-snapshot distant-round configuration. If a sponsored Recovery pool reaches
-settlement without commitments, it follows the existing carry-forward rule.
-This is a fresh-deployment storage and selector change; no in-place migration is
-included.
+The qualified source candidate starts with zero supply and purchases inactive.
+Public wrapping deposits STATICS 1:1 under a 2,000,000 POTATO capacity; permissionless backed reserve
+contributions do not consume that capacity. Base rewards transfer from the one
+accounted Diamond reserve, with the full snapshotted budget required at the
+first Grab. Settlement redeems all Recovery commitments into equal STATICS for
+the current Treasury and does not require the next round to be funded. Atomic
+buybacks acquire STATICS through the existing WETH pool and wrap it into the
+reserve. The later-Grab allocation is 25/5/30/15/10/15.
 
-Local release validation used Foundry 1.8.2-nightly with Solidity 0.8.26 and
-the Cancun EVM:
+The restoration retains those protocol decisions, restores local-fork economic
+overrides and deployment safeguards, and compiles without via IR. Public-network
+profiles retain fixed deployment economics and existing onchain administration.
 
-| Scope | Command | Result |
+### Local compilation and focused checks
+
+Foundry: 1.8.2-nightly (`bdd1162b2c24814d2424ffad4f8c587827f1a6ab`).
+Compiler: Solidity 0.8.26, Cancun, optimizer 200, `via_ir = false`, IPFS metadata
+bytecode hash. The default build and formal Foundry harness build compile with
+these settings. Compiling formal harnesses is not a proof run.
+
+| Scope | Result |
+| --- | --- |
+| Deployment, local configuration, standalone lifecycle and testnet handoff | 21 focused tests passed |
+| Local economic configuration | All 18 overrides exercised serially in one environment-isolated test; public defaults, narrowing, split, timeout and tip boundaries checked |
+| Buyback bootstrap/resume helpers | 8 tests passed, including exact existing funding, reserve conflicts and inactive-purchase requirements |
+| Buyback unit and real-pool integration | 27 tests passed, including event amounts, full-input execution, backing/reserve credit and rollback across both currency orders |
+| Deployment shell workflows | 31 isolated tests passed; stubs replace RPC/signing tools while actual wrapper dispatch, files, JSON, guards and receipt checks execute |
+| Standalone Anvil deployment | Actual local broadcast and fresh source/runtime verification passed on chain 31337 |
+
+The standalone lifecycle test uses real local WETH and PoolManager settlement,
+credits backed reserve POTATO, tops up the reserve and starts gameplay. It is a
+fixture-market test, not evidence about the external STATICS market.
+
+Logs and disposable public artifacts remain in ignored `artifacts/` storage.
+No private RPC or signing material is included in this document or the commit.
+
+### Pinned mainnet-fork deployment
+
+The local-fork smoke starts Anvil from Robinhood Mainnet block **47,690,599**,
+hash `0x4ca3ce6b00d4603804be596b721c738caf54c2a08515f84a8ca020f33613837b`.
+It deploys with a 0.02 ETH starting price and 1,000 POTATO reward budget, checks
+the derived 0.021 ETH initial Winner reserve, and verifies the recorded economic
+fields, exact source runtimes and pinned market/Operator dependencies.
+Zero-second interval mining retains automining for submitted transactions.
+
+Both strict pinned tests in `test/fork/BackedStaticsFork.t.sol` passed on the
+qualified source candidate, with zero skips. They exercise fresh initialization
+against real dependencies and source-verified Operator routing, then real-market
+buyback-funded rewards, public redemption, Recovery-to-Treasury and ETH claims.
+This is fork execution; no live transaction was sent.
+
+### Remote formal verification and CI
+
+All remote proof suites passed on the qualified source candidate:
+
+| Prover | Scope | Terminal result |
 | --- | --- | --- |
-| Format | `forge fmt --check` | Passed |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 91 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 77 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties passed at 1,000 runs each |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 15 properties passed at 256 runs and depth 50 |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 42 passed, 5 configured-RPC skips |
-| Pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | 4 passed |
-| Formal sources | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` | Compiled; Forge correctly found no `test*` functions |
-
-The changed accounting was reviewed for exact native-asset backing, target
-ordering, additive funding, overflow behavior, pause independence, Recovery
-carry-forward, selector installation, append-only Diamond storage, raw native
-transfers, and direct-facet ETH traps. No confirmed issue remained after the
-review. Halmos, Slither, and Certora were not installed, so no solver or static
-tool result is claimed. The pinned fork is read-only evidence; no live
-transaction or deployment was performed. Remote CI and an independent
-third-party audit are not yet proven.
-
-## First-Grab and sponsored round reserves candidate
-
-Date: September 11, 2026
-
-Source candidate: `f9a8019` on `feat/sponsored-round-reserves`, based on
-merged `main` commit `6c857bc`.
-
-The first Grab of every Hot Potato round now funds the following round's
-Winner reserve with its complete price. The configured six-way BPS split
-applies from Grab two onward. Fresh deployment seeds Round 1 with
-`ceil(startingPrice * 105%)`, which is 0.0105 ETH at the 0.01 ETH default.
-
-Permissionless Winner and Recovery sponsorship now requires the expected
-target round. A stale target reverts rather than silently retargeting funds
-after settlement. Recovery sponsorship is tracked separately, applied exactly
-once at activation, paid through ordinary Recovery claims, and rolled forward
-when a round has no commitments. Both funding paths remain available before
-purchase initialization and while paused; zero values, direct facet calls, and
-raw native transfers do not create reserve credit.
-
-Local release validation used Foundry 1.8.2-nightly with Solidity 0.8.26 and
-the Cancun EVM:
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Format | `forge fmt --check` | Passed |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 78 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 74 passed; one pre-existing transient-storage test failed under the local nightly and also fails on clean `main` |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties passed at 1,000 runs each |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 15 properties passed at 256 runs and depth 50 |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 38 passed, 5 configured-RPC skips |
-| Formal sources | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` | Compiled; Forge correctly found no `test*` functions |
-
-The configured Robinhood RPC returned the exact pinned block hash. The pinned
-fork test did not proceed because the installed nightly Foundry returned zero
-for the prior-block `blockhash()` after creating the fork; this same local
-toolchain also causes the unrelated transient-storage baseline failure. CI pins
-Foundry 1.7.1. Halmos, Certora, and Slither were not installed, so no solver or
-static-tool result is claimed.
-
-The changed accounting was reviewed for purchase conservation, reserve
-backing, target-round ordering, pause behavior, direct-facet ETH traps, raw ETH,
-Diamond selector installation, and append-only storage. No confirmed issue
-remained after the review. This is a fresh-deployment ABI and storage change,
-not a live Diamond migration. Frontend sponsorship controls remain separate.
-
-## Next-round Winner reserve candidate
-
-Date: September 10, 2026
-
-Source candidate: `1076a35` on `feat/next-round-winner-reserve`, based on
-merged `main` commit `8bb1ac8`.
-
-Each Hot Potato purchase now allocates a snapshotted, configurable
-`nextRoundWinnerBps` share to a dedicated ETH reserve. The complete reserve
-moves into the next round's Winner pool at activation and clears exactly once.
-Anyone may add positive ETH through `fundWinnerReserve()` before or after
-purchase initialization, including while paused; raw native transfers remain
-outside reserve accounting.
-
-Fresh deployments atomically fund and record a configurable genesis reserve.
-The default derives that reserve from the final starting price and Winner share
-so the first purchase creates a Winner pool worth 105% of its price. With the
-0.01 ETH starting price and 25% Winner share, the seed is 0.008 ETH. The local
-purchase split is now 25% Winner, 2% next Winner, 40% Recovery, 23% Treasury,
-10% buyback, and 0% Operator. The Robinhood testnet profile uses 25%, 2%, 30%,
-18%, 10%, and 15%, respectively.
-
-Execution validation used Foundry 1.7.1, the version pinned by CI, with
-Solidity 0.8.26 and the Cancun EVM. Formatting used the installed formatter:
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Format | `forge fmt --check` | Passed with the installed formatter |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 71 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 72 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties, 1,000 runs each |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 14 properties passed at 256 runs and depth 50 |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 38 passed, 5 configured-RPC skips |
-| Pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1` | 3 passed |
-| Formal sources | Focused Foundry builds | Certora harness and Halmos property sources compile |
-
-The tests cover additive direct funding, pause independence, direct-facet ETH
-trap prevention, untracked forced ETH, initializer backing, exact six-way
-purchase conservation, Treasury rounding dust, governance snapshots, reserve
-application across real rounds, claims, fresh deployment funding, and a full
-canonical Robinhood lifecycle. The invariant suite includes the reserve in
-exact native-asset accounting and proves the recorded liability remains backed
-through randomized lifecycle actions.
-
-This is intentionally a fresh-deployment change: the configuration tuples,
-initializer ABI, selectors, and Diamond storage differ from prior deployments.
-It is not an in-place upgrade package. The frontend ABI is outside this
-candidate. The formal sources compile, but the Certora and Halmos solvers were
-not installed and therefore were not executed. The pinned fork is read-only
-evidence; no live transaction or deployment was performed. Remote CI and an
-independent third-party audit are not yet proven.
-
-## Economic and Recovery safety candidate
-
-Date: September 4, 2026
-
-Source candidate: `17df073` on `fix/economic-recovery-safety`, based on merged
-`main` commit `ef96689`. Market accounting is commit `4cd45f8`; the Recovery
-escape is commit `2bf040c`.
-
-Buyback caller compensation is now calculated from actual ETH spent rather
-than the selected reserve slice. The swap budget reserves room for that
-compensation, a zero-spend or zero-output execution reverts atomically, and a
-positive partial fill restores every unspent base unit. The installed
-`BuybackFacet` rejects caller rewards above 100 BPS in both configuration and
-execution, including retained pre-cap storage. The standalone hook constructor
-and setter reject a total bilateral fee above 200 BPS. Operators may still
-receive anywhere from 0% through 100% of that already-capped fee.
-
-A target Recovery Market now gets one shared 30-day withdrawal deadline when
-its first commitment is made while the activated predecessor has never had a
-holder. Each user may withdraw only their complete commitment after that
-deadline, including while new commitments are paused. Partial exits preserve
-the original deadline; the final exit clears it so a later first commitment
-starts a new deadline. The predecessor's first purchase permanently closes the
-escape, as required by the approved policy.
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Format | `forge fmt --check` | Passed |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 55 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 67 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 10 properties, 1,000 runs each |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 13 properties, 166,400 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 21 passed, 5 configured-RPC skips |
-| Pinned Burntato fork | `REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol --chain-id 4663 -j 1` | 3 passed |
-| Pinned Operator fork | `REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/OperatorRewardsRobinhoodFork.t.sol --chain-id 4663 -j 1` | 1 passed |
-| Canonical dependency forks | Targeted RPC-enabled deployment cases | 3 mainnet and 2 testnet cases passed |
-
-The executed market flows prove actual-spend reward conservation, the 100 BPS
-and 200 BPS boundaries, positive partial fills, atomic zero execution, retained
-pre-cap configuration rejection, Treasury delivery, and terminal buy-fee
-conversion with zero hook ETH, hook POTATO, or transient allowance residue.
-Because the terminal path left no residue, no pending-fee retry mechanism was
-added. Recovery integration, fuzz, and stateful tests prove the shared clock,
-pause independence, first-purchase closure, final-exit restart, exact POTATO
-return, and aggregate commitment conservation.
-
-The changed scope received checklist-driven review for general Solidity,
-precision/math, ERC-20 behavior, Uniswap v4 and AMM integration,
-Diamond/proxy storage and selectors, denial of service, and access control. Two
-Low documentation defects were corrected: the Diamond-side 100 BPS ceiling is
-structurally permanent only after Diamond-cut finalization, and Robinhood uses
-an externally governed canonical PoolManager rather than a Burntato-owned one.
-No unresolved implementation finding remains inside the fresh-deployment scope
-and approved economic policy.
-
-The following boundaries remain deliberate and visible:
-
-- any positive partial fill consumes the governed cooldown, with no TWAP,
-  minimum output, minimum fill ratio, deadline, or caller parameter;
-- the predecessor's first purchase permanently closes the exceptional Recovery
-  exit, so the target follows normal commitment and settlement rules afterward;
-- this candidate qualifies fresh deployments only and provides no initializer
-  for commitments already present on an in-place Diamond upgrade; and
-- the 100 BPS buyback ceiling can be replaced through a Diamond cut until
-  `protocolFinalized()` is true, while the standalone hook's 200 BPS ceiling is
-  fixed in its deployed bytecode.
-
-The private RPC runs are pinned fork evidence, not live transactions. This
-candidate does not redeploy or mutate the existing Robinhood testnet instance,
-which remains on commit `07688de` and is explicitly marked incompatible with
-the new Recovery API. This evidence does not prove remote CI, a production
-deployment, or an independent third-party audit.
-
-## Statics Operator rewards router candidate
-
-Date: September 3, 2026
-
-Source candidate: `02027c9` on `feat/operator-rewards-router`, stacked on
-`test/robinhood-fork-qualification` at `597d337`.
-
-The candidate adds a standalone immutable router that reads the finalized
-Statics Operators NFT and Activation Registry without changing Statics. Owners
-opt in by token ID. Native hook revenue accrues over registered activation
-weight through a full-precision cumulative index, while registration and weight
-increases apply prospectively.
-
-An observed owner change or activation-weight decrease invalidates the
-registration and redistributes its entire unpaid whole and fractional
-entitlement over the remaining registered weight. If there is no remaining
-weight, or revenue arrives before any registration, that value becomes
-claimable by Burntato's current Treasury recipient. A new owner must register
-explicitly. Transfer away and back, followed by restoration of the exact stored
-tier before any router read, remains an explicit lazy-observation boundary.
-
-The existing bilateral hook fee is unchanged. A separately governed share
-splits each realized native fee between the rewards router and Treasury, with
-all division dust assigned to Treasury. Buyback-internal swaps remain fee-free.
-Enabled Robinhood deployments validate committed V4 and Statics manifests,
-runtime code hashes, reciprocal Statics bindings, and exact router immutables.
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Build | `forge build` | Passed; reviewed lint warnings only |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 54 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 54 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 1,000 runs each |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 13 properties, 166,400 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 18 passed, 3 archive-RPC skips |
-| Rewards security fuzz | `FOUNDRY_PROFILE=security forge test --match-path test/unit/OperatorRewardsRouter.t.sol -j 1` | 15 passed; reward conservation ran 5,000 cases |
-| Rewards security invariant | `FOUNDRY_PROFILE=security forge test --match-path test/invariant/OperatorRewardsInvariant.t.sol -j 1` | 3 properties, 98,304 calls, zero handler reverts |
-
-Focused flows cover every supported activation tier, prospective registration
-and activation, permissionless synchronization, transfer forfeiture,
-redistribution and Treasury fallback, fractional-wei conservation, forced ETH,
-reentrant and rejecting claim receivers, Treasury rotation, and a 100,000-gas
-hook payment. A real local PoolManager lifecycle routes buy and sell fees through
-the production router, exercises a 40% split and the 100% boundary, and completes
-an owner-authorized claim.
-
-The committed code received a changed-scope review using general Solidity,
-precision/math, Uniswap V4 and AMM, Diamond/proxy, ERC-721, denial-of-service,
-access-control, chain-specific, and low-level/assembly checklists. One
-Low-severity qualification defect was remediated in `02027c9`: generic verifier
-paths could accept Operator-enabled configuration without proving the pinned
-Statics dependencies. Enabled verification now requires the canonical V4 plus
-Statics path. No unresolved Critical, High, Medium, or Low finding remains in
-the reviewed scope.
-
-`OperatorRewardsRobinhoodFork.t.sol` skipped because `ROBINHOOD_MAINNET` was not
-configured. Its strict mode failed as intended with
-`ROBINHOOD_MAINNET is required`. Therefore this evidence proves local
-compilation, repository-owned execution, and internal changed-scope review. It
-does not prove the pinned historical fork, a deployed network, production
-configuration, remote CI, or an independent third-party audit.
-
-## Single-sided genesis market candidate
-
-Date: August 17, 2026
-
-Source candidate: `05aa73d` on `feat/single-sided-launch`, based on merged
-`main` commit `e42ffea`.
-
-The candidate mints and reserves the configured genesis market allocation at
-initialization. The local deployment default is 100 million POTATO. Canonical
-market launch initializes at the configured upper tick, supplies POTATO only,
-consumes no Treasury ETH, and permanently sends the position NFT to the dead
-address. External buys remain closed by default; a real lifecycle test executes
-a permissionless buyback and then sells distributed POTATO into the ETH it put
-in the pool.
-
-Qualification selected each owned test category explicitly. It did not use
-`forge clean`, a forced build, a fork, or a deployed network.
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 45 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 6 properties, 6,001 cases |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 13 passed |
-
-The deployment verifier confirms the genesis supply, Diamond balance,
-reservation-backed readiness, upper-bound initial price, disabled public-buy
-gate, and configured 100 million POTATO default. Audit remediation rejects the
-terminal v4 tick whose `MAX_SQRT_PRICE` cannot initialize, and targeted market
-and deployment suites pass with that regression.
-
-## Treasury-funded reward schedule candidate
-
-Date: August 17, 2026
-
-Source candidate: `6b371e4` on `feat/treasury-reward-schedules`, stacked on the
-single-sided launch branch at `05aa73d`. Core schedule accounting is commit
-`bf6848b`.
-
-The configured reward allocator, initially the Treasury recipient, can move
-existing POTATO into exact future-round schedules without approval or minting.
-O(1) start/end deltas compose overlapping schedules. Activated rounds apply a
-separate Treasury budget through the snapshotted holder-time curve; earned
-amount transfers escrowed POTATO while base reward remains the only mint.
-Settlement releases unearned funds and cancellation releases only unactivated
-schedule value into claimable Treasury inventory.
-
-Qualification selected each owned test category explicitly:
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 51 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 7 properties, 7,001 cases |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 13 passed |
-
-Focused schedule flows prove full and partial holds, base-unit remainder,
-overlap, future-only cancellation, single materialization, settlement release,
-Recovery commitment eligibility, no Treasury-reward minting, post-finalization
-allocator administration, insufficient-balance rejection, and aggregate
-reservation isolation. Focused lint, formatting, and diff checks passed.
-
-This remains local Foundry evidence. It does not prove a fork, testnet,
-deployed-network state, remote CI, or independent third-party review.
-
-## Final stacked audit
-
-The combined `e42ffea..0035de7` implementation received checklist-driven
-reviews for general Solidity behavior, precision and math, ERC-20 behavior,
-Uniswap v4 and AMM integration, Diamond storage and upgrades, access control,
-assembly and low-level operations, and denial of service. Reviewers reran
-focused real-flow suites and the 1,000-run Treasury schedule conservation
-property. No GitHub issues were created.
-
-One Low-severity availability defect was verified: runtime configuration,
-deployment validation, and deployment verification accepted
-`tickUpper == TickMath.MAX_TICK`, although the corresponding
-`MAX_SQRT_PRICE` is an exclusive PoolManager initialization bound. Commit
-`05aa73d` rejects that unusable terminal tick across all three validation
-surfaces and adds runtime and deterministic-deployment regressions. The
-remediated stack passed 26 canonical-market tests, 13 deployment tests, six
-Treasury-reward lifecycle tests, and 1,000 Treasury schedule fuzz runs.
-
-No unresolved Critical, High, Medium, or Low finding remains in the reviewed
-scope. The audit assumes a fresh deployment, the pinned Uniswap v4 and Solady
-dependencies, and the documented governance trust model. It is not a fork,
-testnet, live-network, remote-CI, or independent third-party audit.
-
-## Treasury buyback qualification history
-
-Date: August 17, 2026
-
-Source candidate: `32116ed` on `feat/12-treasury-buybacks`, stacked on PR 19
-commit `73a9155`. The audit reviewed the equivalent pre-remediation content at
-`db57949`; rebasing moved its exact transfer-authorization ordering into PR 19.
-
-Environment: Foundry 1.5.1-stable, Solidity 0.8.26, Cancun EVM, local Linux
-host. No fork, testnet, remote CI, or production network was used.
-
-## Candidate behavior
-
-Every Hot Potato purchase now divides native value into Winner, Recovery,
-Treasury, and dedicated buyback accounting. Local defaults are 25%, 40%, 25%,
-and 10%. The first three explicitly calculated shares round down and Treasury
-receives the exact remainder, conserving every wei.
-
-After canonical-market launch, anyone may execute a bounded, rate-limited
-native-to-POTATO buyback. The default gross cap is 2 ETH, caller reward is 50
-BPS of the gross slice, and delay is one block. The swap uses the canonical v4
-PoolKey, exact input, and the terminal Uniswap price bound; it pays no bilateral
-hook fee and sends output directly to the current Treasury. Partial-fill input
-is restored to the dedicated reserve.
-
-External pool buys start disabled while sells remain open. Only the Diamond's
-exact-input buyback path can buy while the gate is closed. Hook ownership can
-toggle the gate repeatedly before or after launch and Diamond finalization.
-All canonical buy/sell hook fees continue to route directly to the hook's
-governed Treasury recipient.
-
-## Tests
-
-Qualification selected every owned test path explicitly and used the repository
-profiles: 1,000 fuzz runs and 256 invariant runs at depth 50.
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 31 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 41 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' -j 1` | 6 properties, 6,000 cases |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 9 properties, 115,200 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 12 passed |
-
-In aggregate, 84 deterministic tests, six fuzz properties, and nine stateful
-invariants passed with no failures or skips. The executed flows include:
-
-- exact four-way purchase conservation and buyback-reserve isolation from
-  claims, Recovery rollover, and market launch;
-- real canonical v4 launch, open sells, default-closed buys, repeated gate
-  administration, and the fee-free privileged buyback while buys remain closed;
-- cap and block delay, zero and 100% caller rewards, partial-fill restoration,
-  current-Treasury rotation, unauthorized callback rejection, and a terminal
-  block delay regression;
-- Treasury receipt, distribution, self-burn, sale, and commitment-compatible
-  POTATO movement through the Solady transfer restrictions;
-- bilateral 0% and 100% fee edges with direct Treasury delivery and no Diamond
-  fee accounting; and
-- complete fresh deployment and verification of ten facets, 67 selectors,
-  configured buyback state, the external-buy gate, hook ownership, and
-  PoolManager administration.
-
-## Audit and remediation
-
-The committed pre-remediation candidate received an internal changed-scope
-review using the audit workflow's general/DoS, precision/math, ERC-20/access,
-AMM, and Diamond/proxy checklists. No Critical or High finding remained.
-
-Two actionable boundary defects were remediated:
-
-- `buybackBps` is appended after the pre-existing packed configuration fields,
-  preserving their storage offsets if PR 12 facets are installed over PR 19;
-  and
-- an unrepresentable positive-delay addition now reverts, preventing repeated
-  execution at the maximum block number.
-
-The hook's privileged sender branch was also narrowed to the sole intended
-shape: exact-input native-to-POTATO swaps. All other privileged swap shapes
-revert before transfer authorization.
-
-The reviewers confirmed no unresolved High, Medium, or Low implementation
-finding after those corrections. ERC-20/access review found no defect in the
-exact-transfer authorization order or current-Treasury output path. Precision
-review confirmed four-way rounding, signed delta handling, partial-fill reserve
-restoration, cap/reward edge cases, and aggregate ETH backing.
-
-## Superseded historical FWA-compatible boundary
-
-The following gross-slice reward decision describes only the historical
-`32116ed` candidate above. Commit `4cd45f8` supersedes it by paying from actual
-ETH spent. The separate no-TWAP and positive-partial-fill boundary remains in
-the current source.
-
-Caller reward is deliberately calculated from the selected gross slice before
-the swap, matching the pinned FWA.fun implementation. A terminal-price partial
-fill may therefore pay the configured reward when little or no native input is
-consumed. Unspent swap input returns to the reserve, but the reward does not.
-This is an explicit product decision bounded by governed cap, reward rate, and
-block delay; it is not represented as fill-proportional compensation.
-
-The buyback deliberately has no quote, TWAP, minimum output, deadline, or
-caller-provided slippage field. Public execution and MEV exposure are accepted
-properties of the approved FWA-style demand mechanism.
-
-The token restriction governs underlying POTATO ERC-20 movement. Standard v4
-ERC-6909 currency claims and third-party wrappers remain derivative assets and
-do not invoke POTATO's transfer hook. The implementation does not claim
-universal venue exclusivity for derivative exposure.
-
-## Formatting and proof boundary
-
-- `forge fmt --check` passed.
-- `git diff --check` passed before the evidence update and is rerun before push.
-- Focused `forge lint` over the changed buyback, type, and lifecycle files exited
-  successfully; its visible bounded-cast and negative-path unchecked-return
-  warnings remain review inputs rather than being globally suppressed.
-- No `forge clean` or unscoped full build was used.
-
-This evidence proves local compilation, repository-owned test execution, and
-checklist-driven internal changed-scope review against the stated commits. It
-does not prove deployed-chain state, production genesis parameters, canonical
-chain dependency addresses, fork compatibility, remote CI, or an independent
-third-party audit.
-
-## Diminishing round timer candidate
-
-Date: August 18, 2026
-
-Source candidate: `fc9d01d` on `feat/diminishing-round-timer`, based on merged
-`main` commit `4d9b7e6`. Production behavior and public documentation were
-audited at `ed0b385`; the only later delta strengthens the timer fuzz oracle.
-
-The first successful purchase in every round receives the snapshotted initial
-timeout. Each later successful purchase reduces its reset by the snapshotted
-decay until the minimum is reached. Local defaults produce 60, 55, 50, through
-5-minute resets, with the twelfth and every later purchase remaining at five
-minutes. Each deadline is anchored to its own purchase timestamp. Atomic,
-self, and contract purchases count toward urgency while holder-time emission
-continues to depend only on measurable elapsed time.
-
-The authority can govern initial timeout, decay, and floor for future
-unsnapshotted rounds. Zero decay or a floor equal to the initial timeout
-restores fixed resets. Runtime, deployment, environment, and verifier surfaces
-share the same nonzero/bounds domain.
-
-Qualification selected every owned test category explicitly and did not use
-`forge clean`, a forced build, a fork, or a deployed network:
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 39 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 51 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 8,001 cases |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 10 properties, 128,000 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 15 passed |
-
-Focused timer flows prove the exact default sequence, timestamp anchoring,
-same-timestamp zero-emission cycling, reverted-purchase rollback, self and
-contract participation, non-even floor clamping, zero-decay and equal-floor
-fixed resets, and new-round restart. Fuzzing independently calculates the exact
-duration throughout the accepted `uint64` domain. The stateful protocol suite
-retains ETH, POTATO supply, Recovery, buyback reserve, access-control, emission,
-and exact dynamic-deadline invariants.
-
-The committed candidate received checklist-driven reviews for general Solidity
-and DoS behavior, precision/math, Diamond storage and selectors, deployment,
-and access control. No verified Critical, High, Medium, Low, or Informational
-finding remained, and no GitHub issue was opened. The test-only post-audit delta
-was rechecked against the precision scope.
-
-The review assumes a fresh deployment. Expanding embedded configuration structs
-and changing the tuple-based configuration selector is not an in-place upgrade
-or migration path for a pre-change deployed Diamond. This is local Foundry and
-internal changed-scope audit evidence; it is not fork, testnet, live-network,
-remote-CI, or independent third-party proof.
-
-## Robinhood mainnet fork qualification
-
-Date: August 26, 2026
-
-Candidate before operational documentation: `a42ce1f8ae103952f3bfce76a7ecedf4ddd1c1b8`.
-The committed trust root pins chain 4663 block `45234855` with hash
-`0xd65b81057261cc49ef60573d9f500ec9563257d673e10f1ff8d3d7c6ce33670d`.
-Official Uniswap deployment documentation identified the eight v4 contracts;
-Robinhood documentation identified canonical WETH. The pinned fork validated
-all nine runtime hashes and every exposed manager/Permit2/descriptor/WETH
-binding.
-
-| Scope | Command or method | Result |
-| --- | --- | --- |
-| Optional gate | `env -u ROBINHOOD_MAINNET -u REQUIRE_ROBINHOOD_FORK forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | One setup skip, successful exit |
-| Strict missing-RPC gate | `env -u ROBINHOOD_MAINNET REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` | Failed with `Robinhood fork required` |
-| Strict pinned fork | `ROBINHOOD_FORK_BLOCK=45234855 REQUIRE_ROBINHOOD_FORK=true forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the private archive RPC | 2 passed |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 39 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 52 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 8 properties, 8,000 runs |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 10 properties, 128,000 calls |
-| Deployment | `forge test --match-path 'test/deployment/*.t.sol' -j 1` with the private archive RPC | 18 passed |
-| Persistent fork | `scripts/start-robinhood-fork.sh`, guarded `DeployBurntatoLocalFork`, and `VerifyBurntatoLocalFork` | Broadcast succeeded; verifier returned true |
-| Frontend artifact | `jq -e '.chainId == 4663 and .forkBlock == 45234855 and (.diamond | length == 42) and (.hook | length == 42)' artifacts/robinhood-local/deployment.json` | `true` |
-| EIP-1153 boundary | Hook-impersonated authorization transaction followed by a separate `transientPoolManagerAllowance()` call | Returned `0` |
-
-The fork lifecycle deployed a fresh Burntato without mutating canonical
-infrastructure; verified Diamond selectors, governance, hook permissions and
-ownership; exercised diminishing game rounds, unequal Recovery commitments and
-exact remainder payout in both orders, Treasury reward scheduling/cancellation,
-single-sided PositionManager launch, closed-gate buyback, a canonical
-Permit2-backed sell, timelock buy enablement, a Universal Router buy, and a
-second signed sell. Quoter-derived nonzero minimums, direct bilateral Treasury
-fees, router-indexed hook events, consumed Permit2 allowances, and zero POTATO
-transient allowance were observed.
-
-This is reproducible pinned-fork and local-Anvil evidence, not a Robinhood
-public-network deployment. Archive-RPC qualification remains an explicitly
-executed local release gate and is intentionally excluded from CI. Pull-request
-CI runs only the secret-free local categories.
-
-The committed candidate `df43213` received parallel checklist review across
-
-Recovery precision, general deployment safety, Diamond/proxy storage, AMM and
-router integration, Permit2 signatures/ERC-20 restrictions, Robinhood
-chain/assembly assumptions, governance/access control, and operational DoS.
-Confirmed release-scope findings were remediated before final qualification:
-
-- canonical dependency structs are now byte-for-byte bound to the committed
-  manifest before code/binding validation;
-- the broadcast entrypoint requires the exact pinned block, while the
-  post-broadcast verifier separately proves the pinned block hash through Anvil
-  RPC after deployment transactions advance the node;
-- artifact persistence creates its narrowly permitted parent directory;
-- verification reloads the same documented `BURNTATO_*` overrides as deploy;
-- local deployment tests skip RPC-dependent cases so the local CI job remains
-  self-contained;
-- the fork suite asserts live liquidity, exact buyback event accounting, sell
-  input/fee/price direction, router-indexed `Trade` events, and residual state;
-- Permit2 sells use the Router allow-revert permit command so a copied permit
-  submitted first does not block the subsequent exact-allowance swap; and
-- pull-request CI runs only secret-free local categories and never receives the
-  archive RPC.
-
-The existing permissionless buyback's lack of quote/TWAP/minimum output remains
-an explicitly accepted FWA-compatible product boundary already documented
-above. Mutable GitHub Action major tags remain the repository-standard workflow
-choice; read-only repository permissions limit their access, but this is not
-equivalent to full-SHA action pinning.
-
-## Sponsorship provenance
-
-Date: September 12, 2026
-
-Candidate: `9885980`. The change appends per-round sponsored counters, updates
-them only through permissionless direct funding, clears them with their target
-reserves at activation, and exposes the aggregate and sponsored values through
-one new view selector.
-
-| Scope | Command | Result |
-| --- | --- | --- |
-| Complete local suite | `forge test` | 227 passed, 7 environment skips |
-| Provenance invariant | `forge test --match-path test/invariant/ProtocolInvariant.t.sol -q` | Passed, including sponsored amounts bounded by aggregate reserves |
-| Strict pinned fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the private archive RPC | 4 passed |
-
-The review covered append-only namespaced storage, selector uniqueness,
-direct-versus-automatic accounting, activation deletion, ETH backing, and
-unchanged settlement custody. This is local and pinned-fork evidence, not a
-public-network deployment or independent audit.
-
-## Fixed aggressive multicurve launch
-
-Date: September 12, 2026
-
-Candidate before this evidence entry: `49f459a`. The launch profile is fixed at
-six overlapping bands and 56 nested Uniswap v4 positions. The bands allocate
-2.5%, 7.5%, 12.5%, 20%, 42.5%, and 15% of the 100 million POTATO launch seed.
-Every position NFT is minted directly to the existing locked recipient. Fresh
-deployment defaults reduce the round emission budget from 100,000 to 10,000
-POTATO, while external buys remain closed until hook governance enables them.
-
-| Scope | Command or method | Result |
-| --- | --- | --- |
-| Economics model | `node model.test.mjs` and two deterministic `node generate-report.mjs` runs | Model invariants passed; report, JSON, and CSV hashes reproduced exactly |
-| Format and diff | `forge fmt --check` and `git diff --check` | Passed |
-| Contract size | `forge build --sizes` | `MarketFacet` runtime 9,560 bytes; 15,016-byte EIP-170 margin |
-| Unit | `forge test --match-path 'test/unit/*.t.sol' -j 1` | 95 passed |
-| Integration | `forge test --match-path 'test/integration/*.t.sol' -j 1` | 81 passed |
-| Fuzz | `forge test --match-path 'test/fuzz/*.t.sol' --fuzz-runs 1000 -j 1` | 11 properties passed across 11,000 runs |
-| Invariant | `forge test --match-path 'test/invariant/*.t.sol' -j 1` | 16 properties passed across 51,200 calls |
-| Strict market invariant | `FOUNDRY_PROFILE=security forge test --match-path test/invariant/CanonicalMarketInvariant.t.sol -j 1` | 2 properties passed across 32,768 calls with zero handler reverts |
-| Deployment | strict configured fork plus `forge test --match-path 'test/deployment/*.t.sol' -j 1` | 47 passed; no skips |
-| Robinhood fork | strict configured fork plus `forge test --match-path 'test/fork/*.t.sol' -j 1` | 5 passed; no skips |
-
-The pinned Robinhood fork executed the complete game, Recovery, Treasury reward,
-market, buyback, Permit2 sell, external-buy gate, bilateral hook-fee, and
-round-sponsorship lifecycles against the committed canonical v4 dependencies.
-The permissionless market launch consumed 7,978,409 gas at the Diamond entry
-point, created 56 nonzero-liquidity positions, and left every LP NFT owned by
-the locked recipient. The local v4 execution reproduced the model's selected
-buyback milestones around 2, 5, 10, 25, and 50 ETH.
-
-Focused review covered fixed-profile identity, tick inversion and alignment,
-per-band allocation and rounding, nonzero and `uint128` liquidity domains,
-Treasury reservation conservation, complete rollback on PositionManager
-failure, transient PoolManager authorization, selector installation, deployment
-artifact identity, locked NFT ownership, and the continued Treasury-only buy
-gate. No verified release-scope security finding remained. This is model,
-local Foundry, and pinned-fork evidence; it is not a public-network deployment
-or independent third-party audit.
-
-## Frozen launch economic release candidate
-
-Date: September 16, 2026
-
-Candidate before this evidence entry: `d5dc950`. This candidate fixes the
-aggressive curve, 100,000,000 POTATO genesis market inventory, 10,000 POTATO
-round budget, 0.01 ETH starting Grab with 10% growth, and the 25/2/40/5/13/15
-later-Grab allocation. The curve profile hash is
-`0xd037842490444e3a41d16ed5fcadf9845948edcae92322472888d0e5d3d27e99`.
-
-The operating envelope modeled for qualification is 5 ETH net into the pool
-while public buys remain closed. At the 50 BPS caller reward this requires
-approximately 5.025 ETH in the buyback reserve and three calls under the 2 ETH
-gross-slice cap. Promotional funding is capped at 3 ETH, with 0.05 ETH Winner
-plus 0.05 ETH Recovery as the baseline sponsored round. These funding amounts
-are operational inputs, not new custody paths or immutable protocol constants.
-
-The checked-in model configuration SHA-256 is
-`de96dc668a8f7b787bf1f30e29c72621bf5621a753e17f66846284ff0a67aa24`;
-the generated report SHA-256 is
-`9f065ccdba37efa4c6572a7a4e43cf3e7a6690db01489fa387b736ba49a51769`.
-
-| Scope | Command or method | Result |
-| --- | --- | --- |
-| Model invariants | `node analysis/potato-market-model/model.test.mjs` | Passed with release inputs, gross-slice buyback accounting, 5 ETH net bootstrap, and 50M/75M/100M inventory coverage pinned |
-| Deterministic report | Two consecutive `node analysis/potato-market-model/generate-report.mjs` runs with report, results, and trace hashes compared | Passed; all three outputs reproduced exactly |
-| Format and diff | `forge fmt --check` and `git diff --check` | Passed |
-| Curve identity | `forge test --match-path test/unit/BurntatoLaunchCurves.t.sol -j 1` | 3 passed; canonical profile hash pinned |
-| Deployment defaults | `forge test --match-path test/deployment/DeterministicDeployment.t.sol -j 1` | 31 passed; 5 configured-RPC tests skipped in this local run |
-| Operator allocation | `forge test --match-path test/integration/OperatorPurchaseRevenue.t.sol -j 1` | 10 passed, including 1,000 fuzz cases |
-| Default launch economics | `forge test --match-path test/integration/DefaultLaunchEconomics.t.sol -j 1` | 2 passed against the real local v4 lifecycle |
-| Pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the configured private archive RPC | 4 passed; no skips |
-
-Review reconciled the model with `BurntatoDeploymentConfig.launchDefaults()`,
-corrected the buyback simulator to apply `maxSpend` to the gross reserve slice,
-started behavioral scenarios from the selected bootstrap state, and replaced
-the obsolete 5+5 ETH promotions with the 3 ETH envelope. The 100 million seed
-was retained because its modeled five-Grab buyback exceeds an immediate sale
-of all five fully vested emissions with a wider margin than the smaller seeds.
-This freezes the candidate for fork and private-testnet qualification; it is
-not a Robinhood mainnet deployment or an independent third-party audit.
-
-## FWA-aligned buyback execution
-
-Date: September 26, 2026
-
-Candidate before this evidence entry: `112c61e`. The default permissionless
-buyback now caps each gross reserve slice at 1 ETH, retains the 50 BPS caller
-reward and one-block delay, and requires the canonical pool to consume the
-complete requested ETH input. The protocol-wide pause blocks buyback execution
-before market, reserve, or cooldown validation, while direct reserve funding
-remains available during an incident. The bootstrap helper funds the complete
-approximately 5.025 ETH gross launch reserve once and executes the first slice;
-a separate execution-only helper performs each of the five later slices without
-funding again.
-
-The 5 ETH net launch bootstrap therefore requires six calls under the 1 ETH
-gross cap. Buybacks remain permissionless. The authority-controlled global
-pause can stop later execution, and the Diamond remains upgradeable until cuts
-are finalized.
-
-The checked-in model configuration SHA-256 is
-`62758b5ed63edaeb3ec2aaa42c77615a038e687ec1433f88d01e4e66e2b3903a`;
-the generated report SHA-256 is
-`73a58eaaa997963f0d147d54cd4b0aa1928bfe5378ac5e409089bc30dc1348d9`.
-
-| Scope | Command or method | Result |
-| --- | --- | --- |
-| Complete local suite | `forge test -j 1` | 238 passed, 0 failed, 7 configured-network skips |
-| Buyback execution unit | `forge test --match-path test/unit/BuybackExecution.t.sol -vv` | 2 passed, including atomic partial-fill rollback and pause precedence |
-| Canonical market lifecycle | `forge test --match-path test/integration/CanonicalMarketLifecycle.t.sol -j 1` | 36 passed, including paused funding and authority recovery |
-| Default launch economics | `forge test --match-path test/integration/DefaultLaunchEconomics.t.sol -j 1` | 2 passed across the real local v4 lifecycle |
-| Canonical market invariant | `forge test --match-path test/invariant/CanonicalMarketInvariant.t.sol -j 1` | 2 properties passed across 12,800 calls with zero handler reverts |
-| Buyback bootstrap | `forge test --match-path test/deployment/BuybackBootstrap.t.sol -vv` | 8 passed, including complete-reserve funding and resumable execution |
-| Strict pinned Robinhood fork | `REQUIRE_ROBINHOOD_FORK=true ROBINHOOD_FORK_BLOCK=45234855 forge test --match-path test/fork/RobinhoodBurntatoFork.t.sol -j 1 -vv` with the configured private archive RPC | 4 passed; no skips |
-| Model invariants | `node analysis/potato-market-model/model.test.mjs` | Passed with the six-call bootstrap pinned |
-| Format and diff | `forge fmt --check` and `git diff --check` | Passed |
-| Formal source compilation | `FOUNDRY_PROFILE=formal forge test --match-path 'formal/halmos/*.t.sol' -vv` and `forge inspect formal/certora/harness/BurntatoPauseHarness.sol:BurntatoPauseHarness abi` | Solidity properties and harness compiled successfully |
-| Halmos | `formal/scripts/run-halmos.sh` at `289dd9b` with Halmos 0.3.3, Foundry 1.7.1, and Solidity 0.8.26 | 21 properties passed, 0 failed: 6 activation, 4 buyback funding, 4 arithmetic, and 7 pause properties; no timeout or unknown result |
-| Certora | Current CVL source compilation and historical result review | Not rerun against this candidate; prior successful jobs do not prove the current buyback and pause delta |
-
-Focused review covered Diamond selector and storage compatibility, pause and
-authority boundaries, PoolManager callback settlement, POTATO movement,
-full-fill rollback, gross-to-net reward rounding, bootstrap resumability, and
-denial-of-service paths. No new release-scope finding remained.
-This is model, local Foundry, pinned-fork, and scoped Halmos evidence; it is not
-a public-network deployment, protocol-wide formal proof, current Certora rerun,
-or independent third-party audit.
+| Halmos 0.3.3 | Arithmetic, activation, funding, buyback execution, pause, Diamond, wrapper and lifecycle | 45 properties passed; 0 failed |
+| Certora CLI 8.18.0 | Arithmetic | 12 rules passed |
+| Certora CLI 8.18.0 | Activation | 5 rules passed |
+| Certora CLI 8.18.0 | Direct buyback funding | 3 rules passed |
+| Certora CLI 8.18.0 | Pause and authority | 11 rules passed |
+
+All 31 Certora rules include non-vacuity witnesses. Halmos uses 5-second branch
+and 120-second assertion solver timeouts, two solver threads and default loop
+unrolling of two. Remote tools were Foundry 1.7.1, Solidity
+0.8.26+commit.8a97fa7a and Java 21.0.12.1; both prover builds disable via IR and
+use optimizer 200/Cancun. Foundry retains IPFS metadata hashing.
+
+The durable evidence includes the source bundle, verified recursive dependency
+commits, compiler inputs, per-rule terminal results, logs, and separate production
+and Certora instrumented bytecode hashes. All 13 production runtimes have
+identical executable bytes, source hashes and compiler settings between local
+and remote builds. Full runtime hashes differ because the two Foundry versions
+serialize import remappings differently in IPFS metadata; both hashes and the
+metadata comparison are retained. These are not claimed to be byte-for-byte
+identical deployment artifacts. Certora's instrumented harness hashes are also
+recorded separately.
+
+Certora job results: [math](https://prover.certora.com/output/8471858/005761270bfc4304a7252f79aff43fb7), [activation](https://prover.certora.com/output/8471858/591728b6acb54efea470f8cfc0bec6c7), [buyback-funding](https://prover.certora.com/output/8471858/bf453e76a59a437ab5babe035fbd2814), [pause](https://prover.certora.com/output/8471858/28c3039176da4b27b3521eab62b0d1ae).
+
+Assumptions and bounds remain in `formal/README.md`, the Solidity harnesses and
+CVL rules: bounded wrapper inputs and concrete backing, modeled buyback outcomes,
+small concrete lifecycle fixtures, explicit storage-normalization assumptions,
+and idle-guard assumptions for pause checks. These are scoped properties, not a
+universal proof of the external market or every possible sequence.
+
+The complete unit, integration, fuzz, invariant, deployment and shell categories
+belong to CI. Their final-head results are reported by the
+[PR checks](https://github.com/EqualFiLabs/burntato/pull/60/checks); local execution
+and formal proofs are separate from those results.
+
+### Review and remaining evidence boundaries
+
+Independent local agent review identified missing key-address verification,
+overwrite guards, direct-activation readiness checks and first-round funding
+qualification. Those findings were corrected and regression checks passed.
+The actual fork smoke also caught zero-interval mining disabling automining;
+the entrypoint now explicitly restores automining for that setting.
+
+Independent reviews of the committed source candidate covered protocol
+accounting and deployment/configuration/documentation. No remaining confirmed
+findings were reported. This is agent review, not third-party audit assurance. Review,
+local tests, fork execution, remote formal results and CI are separate evidence.
+No migration, app/indexer work or live deployment is included. Governance and
+external dependency trust remain. Public-cap reopening intentionally does not
+track token provenance; buybacks require complete input and positive output
+without adding an oracle or minimum-price policy.

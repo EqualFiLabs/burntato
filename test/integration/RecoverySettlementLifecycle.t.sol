@@ -52,9 +52,10 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         roundTwo = game.getRound(2);
         assertTrue(roundTwo.settled);
         assertEq(roundTwo.totalCommitted, 10_000 ether);
-        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 11_000 ether);
-        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 1_000 ether);
-        assertEq(claims.treasuryPotatoAvailable(), 1_000 ether);
+        assertEq(potato.totalSupply(), INITIAL_REWARD_INVENTORY - 10_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), INITIAL_REWARD_INVENTORY - 20_000 ether);
+        assertEq(claims.treasuryPotatoAvailable(), 0);
+        assertEq(statics.balanceOf(treasury), 10_000 ether);
         assertEq(game.getRound(3).remainingEmission, 100_000 ether);
         assertEq(claims.claimableRecovery(2, alice), 0.008 ether);
         assertEq(claims.claimableRecovery(2, bob), 0);
@@ -74,8 +75,9 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
 
         assertEq(claims.treasuryEthAvailable(), 0);
 
-        assertEq(claims.claimTreasuryPotato(), 1_000 ether);
-        assertEq(potato.balanceOf(treasury), 1_000 ether);
+        vm.expectRevert(Errors.NothingToClaim.selector);
+        claims.claimTreasuryPotato();
+        assertEq(potato.balanceOf(treasury), 0);
     }
 
     function test_FinalOutstandingCommitmentReceivesExactRecoveryRemainderInEitherOrder() public {
@@ -161,10 +163,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(recovery.recoveryReserveEth(), 0);
     }
 
-    function test_ConfiguredRecoverySplitCanRouteAllCommittedPotatoToTreasury() public {
+    function test_AllCommittedPotatoRedeemsToTreasuryWithoutRatioConfiguration() public {
         ProtocolConfig memory config = _defaultConfig();
-        config.recoveryBurnBps = 0;
-        config.recoveryTreasuryBps = 10_000;
         vm.prank(authority);
         IGovernance(address(diamond)).setProtocolConfig(config);
 
@@ -174,8 +174,8 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         _expireAndSettle();
 
         assertEq(game.getRound(2).totalCommitted, 10_000 ether);
-        assertEq(claims.treasuryPotatoAvailable(), 10_000 ether);
-        assertEq(potato.totalSupply(), GENESIS_MARKET_SUPPLY + 20_000 ether);
+        assertEq(statics.balanceOf(treasury), 10_000 ether);
+        assertEq(potato.totalSupply(), INITIAL_REWARD_INVENTORY - 10_000 ether);
     }
 
     function test_CommitmentRemainsLockedOncePredecessorHasHolderAndTargetAdvancesAtRoundStart() public {
@@ -196,7 +196,7 @@ contract RecoverySettlementLifecycleTest is DiamondTestSetup {
         assertEq(recovery.recoveryCommitment(2, alice), 9_000 ether);
         assertEq(recovery.recoveryCommitment(3, alice), 1_000 ether);
         assertEq(potato.balanceOf(alice), 0);
-        assertEq(potato.balanceOf(address(diamond)), GENESIS_MARKET_SUPPLY + 10_000 ether);
+        assertEq(potato.balanceOf(address(diamond)), INITIAL_REWARD_INVENTORY);
     }
 
     function test_StalledRecoveryWithdrawsAfterThirtyDaysEvenWhenProtocolPaused() public {

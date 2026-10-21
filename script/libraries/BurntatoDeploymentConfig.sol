@@ -2,7 +2,6 @@
 pragma solidity 0.8.26;
 
 import {GenesisConfig} from "../DeploymentTypes.sol";
-import {BurntatoLaunchCurves} from "../../src/libraries/BurntatoLaunchCurves.sol";
 import {LibMath} from "../../src/libraries/LibMath.sol";
 import {BuybackConfig, ProtocolConfig} from "../../src/shared/Types.sol";
 
@@ -17,38 +16,31 @@ library BurntatoDeploymentConfig {
 
     function localDefaults() internal pure returns (GenesisConfig memory config) {
         config = GenesisConfig({
+            statics: address(0),
             deployer: ANVIL_DEPLOYER,
             finalAdmin: ANVIL_ADMIN,
             guardian: ANVIL_GUARDIAN,
             treasuryRecipient: ANVIL_TREASURY,
             rewardAllocator: ANVIL_TREASURY,
             protocol: ProtocolConfig({
-                startingPrice: 0.01 ether,
+                startingPrice: 0.003 ether,
                 priceIncreaseBps: 1_000,
                 roundTimeout: 1 hours,
-                roundEmissionBudget: 10_000 ether,
-                emissionStepBps: 1_000,
+                roundEmissionBudget: 20_000 ether,
+                emissionStepBps: 500,
                 emissionVestingDuration: 4 minutes,
                 winnerBps: 2_500,
-                nextRoundWinnerBps: 200,
-                recoveryBps: 4_000,
-                treasuryBps: 2_300,
+                nextRoundWinnerBps: 500,
+                recoveryBps: 3_000,
+                treasuryBps: 3_000,
                 buybackBps: 1_000,
                 operatorPurchaseBps: 0,
-                recoveryBurnBps: 9_000,
-                recoveryTreasuryBps: 1_000,
                 roundTimeoutDecay: 5 minutes,
                 minimumRoundTimeout: 5 minutes
             }),
             initialWinnerReserve: 0,
             buyback: BuybackConfig({maxSpend: 1 ether, callerRewardBps: 50, delayBlocks: 1}),
-            hookFeeBps: 100,
-            operatorRewardShareBps: 0,
-            initialTick: BurntatoLaunchCurves.initialTick(),
-            tickSpacing: BurntatoLaunchCurves.tickSpacing(),
-            tickLower: BurntatoLaunchCurves.tickLower(),
-            tickUpper: BurntatoLaunchCurves.tickUpper(),
-            potatoSeed: 100_000_000 ether
+            publicWrapCap: 0
         });
         config.initialWinnerReserve = defaultInitialWinnerReserve(config.protocol);
     }
@@ -56,12 +48,11 @@ library BurntatoDeploymentConfig {
     function launchDefaults() internal pure returns (GenesisConfig memory config) {
         config = localDefaults();
         config.protocol.winnerBps = 2_500;
-        config.protocol.nextRoundWinnerBps = 200;
-        config.protocol.recoveryBps = 4_000;
-        config.protocol.treasuryBps = 500;
-        config.protocol.buybackBps = 1_300;
+        config.protocol.nextRoundWinnerBps = 500;
+        config.protocol.recoveryBps = 3_000;
+        config.protocol.treasuryBps = 1_500;
+        config.protocol.buybackBps = 1_000;
         config.protocol.operatorPurchaseBps = 1_500;
-        config.operatorRewardShareBps = 4_000;
     }
 
     function defaultInitialWinnerReserve(ProtocolConfig memory protocol) internal pure returns (uint256) {
@@ -71,14 +62,5 @@ library BurntatoDeploymentConfig {
     function checkedUint16(uint256 value) internal pure returns (uint16 narrowed) {
         if (value > type(uint16).max) revert NarrowingOverflow();
         narrowed = uint16(value);
-    }
-
-    function checkedInt24(int256 value) internal pure returns (int24 narrowed) {
-        if (value < type(int24).min || value > type(int24).max) revert NarrowingOverflow();
-        narrowed = int24(value);
-    }
-
-    function hookOperatorRewardsRouter(uint16 operatorRewardShareBps, address router) internal pure returns (address) {
-        return operatorRewardShareBps == 0 ? address(0) : router;
     }
 }

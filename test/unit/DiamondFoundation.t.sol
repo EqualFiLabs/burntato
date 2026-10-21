@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {MockStatics} from "../mocks/MockStatics.sol";
+
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
@@ -50,10 +52,6 @@ contract MathHarness {
     {
         return LibMath.diminishingTimeout(initialTimeout, decay, minimumTimeout, priorPurchases);
     }
-
-    function splitRecovery(uint256 amount) external pure returns (uint256, uint256) {
-        return LibMath.splitRecovery(amount, 1_000);
-    }
 }
 
 contract DiamondFoundationTest is Test {
@@ -66,6 +64,7 @@ contract DiamondFoundationTest is Test {
     StorageFacetV1 internal storageFacet;
     FoundationInit internal initializer;
     MathHarness internal math;
+    MockStatics internal statics;
 
     function setUp() public {
         cutFacet = new DiamondCutFacet();
@@ -74,6 +73,7 @@ contract DiamondFoundationTest is Test {
         storageFacet = new StorageFacetV1();
         initializer = new FoundationInit();
         math = new MathHarness();
+        statics = new MockStatics();
 
         FacetCut[] memory cuts = new FacetCut[](2);
         bytes4[] memory loupeSelectors = new bytes4[](4);
@@ -93,7 +93,7 @@ contract DiamondFoundationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), 1 ether, 0))
+                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), address(statics), 0))
             );
     }
 
@@ -111,8 +111,6 @@ contract DiamondFoundationTest is Test {
             treasuryBps: 2_300,
             buybackBps: 1_000,
             operatorPurchaseBps: 0,
-            recoveryBurnBps: 9_000,
-            recoveryTreasuryBps: 1_000,
             roundTimeoutDecay: 5 minutes,
             minimumRoundTimeout: 5 minutes
         });
@@ -146,7 +144,7 @@ contract DiamondFoundationTest is Test {
             .diamondCut(
                 cuts,
                 address(initializer),
-                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), 1 ether, 1 wei))
+                abi.encodeCall(FoundationInit.initialize, (_config(), treasury, address(0), address(statics), 1 wei))
             );
     }
 
@@ -184,9 +182,6 @@ contract DiamondFoundationTest is Test {
         assertEq(math.mulBpsUp(101, 1_000), 11);
         assertEq(math.linearEarned(10_000 ether, 30), 2_500 ether);
         assertEq(math.linearEarned(10_000 ether, 121), 10_000 ether);
-        (uint256 burned, uint256 treasuryPotato) = math.splitRecovery(101);
-        assertEq(burned, 91);
-        assertEq(treasuryPotato, 10);
     }
 
     function test_DiminishingTimeoutSaturatesWithoutUnderflowOrOverflow() public view {
