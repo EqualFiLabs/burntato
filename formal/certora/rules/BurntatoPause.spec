@@ -2,7 +2,7 @@ methods {
     function formalConfigurePauseState(address, address, bool, bool) external envfree;
     function formalConfigureBuybackState(uint256, uint256) external envfree;
     function formalInstallBuybackFundingSelector() external envfree;
-    function formalProtocolMintResult(address, uint256) external returns (bool, uint256);
+    function formalPublicWrapResult(address, uint256) external returns (bool, uint256);
     function authority() external returns (address) envfree;
     function guardian() external returns (address) envfree;
     function paused() external returns (bool) envfree;
@@ -12,6 +12,7 @@ methods {
     function lastBuybackBlock() external returns (uint256) envfree;
     function formalUnlockCount() external returns (uint256) envfree;
     function formalBuybackResult() external returns (bool, uint256);
+    function formalManagerReachedSelector() external returns (uint256) envfree;
     function formalProtocolPausedSelector() external returns (uint256) envfree;
     function buyback() external returns (uint256);
     function _.unlock(bytes) external => DISPATCHER(false);
@@ -120,7 +121,7 @@ rule uninitializedAuthorityRenunciationReverts(address admin) {
     assert authority() == admin, "failed pre-initialization renunciation changes authority";
 }
 
-rule pausedProtocolMintRevertsWithoutSupplyChange(address admin, address recipient, uint256 amount) {
+rule pausedPublicWrapRevertsWithoutSupplyChange(address admin, address recipient, uint256 amount) {
     require admin != 0;
     require recipient != 0;
     formalConfigurePauseState(admin, 0, true, true);
@@ -131,34 +132,14 @@ rule pausedProtocolMintRevertsWithoutSupplyChange(address admin, address recipie
     require e.msg.value == 0;
     bool succeeded;
     uint256 revertSelector;
-    succeeded, revertSelector = formalProtocolMintResult(e, recipient, amount);
+    succeeded, revertSelector = formalPublicWrapResult(e, recipient, amount);
 
-    assert !succeeded, "paused protocol mint succeeds";
-    assert revertSelector == formalProtocolPausedSelector(), "paused protocol mint reverts for the wrong reason";
-    assert totalSupply() == supplyBefore, "paused mint changes total supply";
-    assert balanceOf(recipient) == balanceBefore, "paused mint changes recipient balance";
+    assert !succeeded, "paused public wrap succeeds";
+    assert revertSelector == formalProtocolPausedSelector(), "paused public wrap reverts for the wrong reason";
+    assert totalSupply() == supplyBefore, "paused wrapping changes total supply";
+    assert balanceOf(recipient) == balanceBefore, "paused wrapping changes recipient balance";
 }
 
-rule unpausedProtocolMintChangesOnlySupplyAndRecipient(address admin, address recipient, uint256 amount) {
-    require admin != 0;
-    require recipient != 0;
-    formalConfigurePauseState(admin, 0, false, true);
-    uint256 supplyBefore = totalSupply();
-    uint256 balanceBefore = balanceOf(recipient);
-    require amount <= 115792089237316195423570985008687907853269984665640564039457584007913129639935 - supplyBefore;
-    require amount <= 115792089237316195423570985008687907853269984665640564039457584007913129639935 - balanceBefore;
-
-    env e;
-    require e.msg.value == 0;
-    bool succeeded;
-    uint256 revertSelector;
-    succeeded, revertSelector = formalProtocolMintResult(e, recipient, amount);
-
-    assert succeeded, "unpaused protocol mint fails";
-    assert revertSelector == 0, "successful protocol mint reports a revert selector";
-    assert totalSupply() == supplyBefore + amount, "unpaused mint changes supply by the wrong amount";
-    assert balanceOf(recipient) == balanceBefore + amount, "unpaused mint changes recipient by the wrong amount";
-}
 
 rule pausedBuybackRevertsWithoutAccountingChange(
     address admin,
@@ -196,9 +177,10 @@ rule unpausedExecutableBuybackReachesManager(address admin, uint256 reserve) {
 
     env e;
     require e.msg.value == 0;
-    buyback(e);
-
-    assert formalUnlockCount() == 1, "unpaused buyback does not reach the PoolManager boundary exactly once";
+    bool succeeded;
+    uint256 selector;
+    succeeded, selector = formalBuybackResult(e);
+    assert !succeeded && selector == formalManagerReachedSelector(), "unpaused buyback fails before the modeled manager boundary";
 }
 
 rule pausedDirectFundingRemainsAvailable(

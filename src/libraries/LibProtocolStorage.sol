@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
+// ============================================================================
+//                                BURNTATO
+//                                Grab it.
+//                          https://burntato.fun
+//                              EqualFi Labs
+// ============================================================================
 pragma solidity 0.8.26;
+
+import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
 
 import {BuybackConfig, ProtocolConfig, RewardSchedule, Round} from "../shared/Types.sol";
 
@@ -9,16 +17,13 @@ library LibProtocolStorage {
     bytes32 internal constant RECOVERY_SLOT = keccak256("burntato.storage.recovery.v1");
     bytes32 internal constant TREASURY_SLOT = keccak256("burntato.storage.treasury.v1");
     bytes32 internal constant GOVERNANCE_SLOT = keccak256("burntato.storage.governance.v1");
-    bytes32 internal constant MARKET_SLOT = keccak256("burntato.storage.market.v1");
     bytes32 internal constant BUYBACK_SLOT = keccak256("burntato.storage.buyback.v1");
     bytes32 internal constant REENTRANCY_SLOT = keccak256("burntato.storage.reentrancy.v1");
     bytes32 internal constant TREASURY_REWARDS_SLOT = keccak256("burntato.storage.treasury-rewards.v1");
     bytes32 internal constant OPERATOR_REVENUE_SLOT = keccak256("burntato.storage.operator-revenue.v1");
     bytes32 internal constant INITIALIZATION_SLOT = keccak256("burntato.storage.initialization.v1");
 
-    bytes32 internal constant POOL_MANAGER_ALLOWANCE_SLOT = keccak256("burntato.transient.pool-manager-allowance.v1");
     bytes32 internal constant PROTOCOL_MOVEMENT_SLOT = keccak256("burntato.transient.protocol-movement.v1");
-    bytes32 internal constant MARKET_LAUNCH_SLOT = keccak256("burntato.transient.market-launch.v1");
 
     struct GameStorage {
         bool initialized;
@@ -41,8 +46,6 @@ library LibProtocolStorage {
     }
 
     struct TokenStorage {
-        address canonicalHook;
-        address poolManager;
         mapping(address => bool) distributors;
     }
 
@@ -55,14 +58,12 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) stalledWithdrawalAt;
         uint256 recoveryReserveEth;
         mapping(uint256 => uint256) recoveryReserveByRound;
-        mapping(uint256 => uint256) recoverySponsoredByRound;
     }
 
     struct TreasuryStorage {
         address recipient;
         uint256 purchaseEth;
         uint256 potatoInventory;
-        uint256 reservedPotato;
     }
 
     struct GovernanceStorage {
@@ -70,23 +71,23 @@ library LibProtocolStorage {
         bool paused;
     }
 
-    struct MarketStorage {
-        address hook;
-        address poolManager;
-        address positionManager;
-        address permit2;
-        bytes32 poolId;
-        uint256 potatoSeed;
-        uint160 sqrtPriceX96;
-        int24 tickLower;
-        int24 tickUpper;
-        int24 tickSpacing;
-        bool configured;
-        bool launched;
-    }
-
     struct ReentrancyStorage {
         uint256 status;
+    }
+
+    bytes32 internal constant BUYBACK_MARKET_SLOT = keccak256("burntato.storage.buyback-market.v1");
+
+    struct BuybackMarketStorage {
+        address poolManager;
+        address weth;
+        PoolKey key;
+        bool configured;
+        bool callbackPending;
+    }
+
+    function buybackMarket() internal pure returns (BuybackMarketStorage storage s) {
+        bytes32 slot = BUYBACK_MARKET_SLOT;
+        assembly ("memory-safe") { s.slot := slot }
     }
 
     struct BuybackStorage {
@@ -149,13 +150,6 @@ library LibProtocolStorage {
 
     function governance() internal pure returns (GovernanceStorage storage s) {
         bytes32 slot = GOVERNANCE_SLOT;
-        assembly ("memory-safe") {
-            s.slot := slot
-        }
-    }
-
-    function market() internal pure returns (MarketStorage storage s) {
-        bytes32 slot = MARKET_SLOT;
         assembly ("memory-safe") {
             s.slot := slot
         }

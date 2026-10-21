@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {MockStatics} from "../../test/mocks/MockStatics.sol";
+
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
@@ -86,7 +88,9 @@ contract BurntatoPauseProperties is Test {
             .diamondCut(
                 cuts,
                 address(foundation),
-                abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), 1 ether, 0))
+                abi.encodeCall(
+                    FoundationInit.initialize, (_config(), TREASURY, address(0), address(new MockStatics()), 0)
+                )
             );
 
         governance = IGovernance(address(diamond));
@@ -134,15 +138,14 @@ contract BurntatoPauseProperties is Test {
         assertFalse(governance.paused());
     }
 
-    function check_pausedProtocolMintRevertsWithoutSupplyChange(uint96 amount) public {
+    function check_pausedPublicWrapRevertsWithoutSupplyChange(uint96 amount) public {
         vm.prank(GUARDIAN);
         governance.setPaused(true);
         uint256 supplyBefore = potato.totalSupply();
         uint256 balanceBefore = potato.balanceOf(RECIPIENT);
 
         vm.prank(address(diamond));
-        (bool success, bytes memory reason) =
-            address(potato).call(abi.encodeCall(IPotatoToken.protocolMint, (RECIPIENT, uint256(amount))));
+        (bool success, bytes memory reason) = address(potato).call(abi.encodeCall(IPotatoToken.wrap, (uint256(amount))));
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.ProtocolPaused.selector);
@@ -189,7 +192,7 @@ contract BurntatoPauseProperties is Test {
         _assertProtocolPaused(address(claims), abi.encodeCall(IClaims.claimTreasuryPotato, ()));
 
         vm.prank(address(diamond));
-        _assertProtocolPaused(address(potato), abi.encodeCall(IPotatoToken.protocolMint, (RECIPIENT, uint256(1))));
+        _assertProtocolPaused(address(potato), abi.encodeCall(IPotatoToken.wrap, (uint256(1))));
 
         assertEq(potato.totalSupply(), supplyBefore);
         assertEq(game.currentRoundId(), roundBefore);
@@ -256,8 +259,6 @@ contract BurntatoPauseProperties is Test {
             treasuryBps: 0,
             buybackBps: 0,
             operatorPurchaseBps: 0,
-            recoveryBurnBps: 10_000,
-            recoveryTreasuryBps: 0,
             roundTimeoutDecay: 0,
             minimumRoundTimeout: 1
         });

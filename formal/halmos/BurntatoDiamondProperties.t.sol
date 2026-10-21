@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
 
+import {MockStatics} from "../../test/mocks/MockStatics.sol";
+
 import {Test} from "forge-std/Test.sol";
 
 import {BurntatoDiamond} from "../../src/BurntatoDiamond.sol";
@@ -62,7 +64,7 @@ contract BurntatoDiamondProperties is Test {
         cutter.diamondCut(
             cuts,
             address(foundation),
-            abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), 1 ether, 0))
+            abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), address(new MockStatics()), 0))
         );
 
         loupe = IDiamondLoupe(address(diamond));
@@ -132,18 +134,31 @@ contract BurntatoDiamondProperties is Test {
         );
     }
 
+    function check_removedDiamondCutCannotBeRestoredThroughTheRemovedEntry() public {
+        FacetCut[] memory cuts = new FacetCut[](1);
+        cuts[0] = FacetCut(address(0), FacetCutAction.Remove, _single(IDiamondCut.diamondCut.selector));
+        cutter.diamondCut(cuts, address(0), "");
+        assertEq(loupe.facetAddress(IDiamondCut.diamondCut.selector), address(0));
+        (bool ok, bytes memory reason) =
+            address(cutter).call(abi.encodeCall(IDiamondCut.diamondCut, (cuts, address(0), bytes(""))));
+        assertFalse(ok);
+        assertEq(_selector(reason), Errors.FunctionNotFound.selector);
+        assertEq(FormalFacetV1(address(diamond)).formalValue(), 1);
+    }
+
     function check_failedInitializerRollsBackSelectorGraph() public {
         bytes4 newSelector = bytes4(keccak256("newValue()"));
         FacetCut[] memory cuts = new FacetCut[](1);
         cuts[0] = FacetCut(address(facetV2), FacetCutAction.Add, _single(newSelector));
         RevertingFormalInitializer initializer = new RevertingFormalInitializer();
 
-        (bool success, bytes memory reason) = address(cutter).call(
-            abi.encodeCall(
-                IDiamondCut.diamondCut,
-                (cuts, address(initializer), abi.encodeCall(RevertingFormalInitializer.initialize, ()))
-            )
-        );
+        (bool success, bytes memory reason) = address(cutter)
+            .call(
+                abi.encodeCall(
+                    IDiamondCut.diamondCut,
+                    (cuts, address(initializer), abi.encodeCall(RevertingFormalInitializer.initialize, ()))
+                )
+            );
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.InitializationFailed.selector);
@@ -157,16 +172,19 @@ contract BurntatoDiamondProperties is Test {
         FacetCut[] memory cuts = new FacetCut[](1);
         cuts[0] = FacetCut(address(facetV2), FacetCutAction.Add, _single(newSelector));
 
-        (bool success, bytes memory reason) = address(cutter).call(
-            abi.encodeCall(
-                IDiamondCut.diamondCut,
-                (
-                    cuts,
-                    address(foundation),
-                    abi.encodeCall(FoundationInit.initialize, (_config(), TREASURY, address(0), 1 ether, 0))
+        (bool success, bytes memory reason) = address(cutter)
+            .call(
+                abi.encodeCall(
+                    IDiamondCut.diamondCut,
+                    (
+                        cuts,
+                        address(foundation),
+                        abi.encodeCall(
+                            FoundationInit.initialize, (_config(), TREASURY, address(0), address(new MockStatics()), 0)
+                        )
+                    )
                 )
-            )
-        );
+            );
 
         assertFalse(success);
         assertEq(_selector(reason), Errors.InitializationFailed.selector);
@@ -184,9 +202,7 @@ contract BurntatoDiamondProperties is Test {
 
     function _replaceCut() private view returns (FacetCut[] memory cuts) {
         cuts = new FacetCut[](1);
-        cuts[0] = FacetCut(
-            address(facetV2), FacetCutAction.Replace, _single(FormalFacetV1.formalValue.selector)
-        );
+        cuts[0] = FacetCut(address(facetV2), FacetCutAction.Replace, _single(FormalFacetV1.formalValue.selector));
     }
 
     function _single(bytes4 selector) private pure returns (bytes4[] memory selectors) {
@@ -208,8 +224,6 @@ contract BurntatoDiamondProperties is Test {
             treasuryBps: 0,
             buybackBps: 0,
             operatorPurchaseBps: 0,
-            recoveryBurnBps: 10_000,
-            recoveryTreasuryBps: 0,
             roundTimeoutDecay: 0,
             minimumRoundTimeout: 1
         });

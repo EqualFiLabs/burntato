@@ -7,7 +7,6 @@ import {IDiamondCut} from "../../src/interfaces/IDiamondCut.sol";
 import {IDiamondLoupe} from "../../src/interfaces/IDiamondLoupe.sol";
 import {IGame} from "../../src/interfaces/IGame.sol";
 import {IGovernance} from "../../src/interfaces/IGovernance.sol";
-import {IMarket} from "../../src/interfaces/IMarket.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
 import {IRecovery} from "../../src/interfaces/IRecovery.sol";
 import {ISettlement} from "../../src/interfaces/ISettlement.sol";
@@ -45,22 +44,8 @@ library BurntatoSelectors {
         selectors[13] = IGovernance.initializePurchases.selector;
     }
 
-    function market() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](10);
-        selectors[0] = IMarket.configureMarket.selector;
-        selectors[1] = IMarket.launchMarket.selector;
-        selectors[2] = IMarket.marketConfig.selector;
-        selectors[3] = IMarket.canonicalPoolKey.selector;
-        selectors[4] = IMarket.marketState.selector;
-        selectors[5] = IMarket.marketLaunching.selector;
-        selectors[6] = IMarket.marketReady.selector;
-        selectors[7] = IMarket.lockedLpRecipient.selector;
-        selectors[8] = IMarket.marketCurves.selector;
-        selectors[9] = IMarket.marketCurveHash.selector;
-    }
-
     function buyback() internal pure returns (bytes4[] memory selectors) {
-        selectors = new bytes4[](7);
+        selectors = new bytes4[](9);
         selectors[0] = IBuyback.setBuybackConfig.selector;
         selectors[1] = IBuyback.buybackConfig.selector;
         selectors[2] = IBuyback.fundBuybackReserve.selector;
@@ -68,6 +53,8 @@ library BurntatoSelectors {
         selectors[4] = IBuyback.lastBuybackBlock.selector;
         selectors[5] = IBuyback.buyback.selector;
         selectors[6] = IBuyback.unlockCallback.selector;
+        selectors[7] = IBuyback.setBuybackMarket.selector;
+        selectors[8] = IBuyback.buybackMarket.selector;
     }
 
     function token() internal pure returns (bytes4[] memory selectors) {
