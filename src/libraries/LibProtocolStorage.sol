@@ -31,6 +31,15 @@ library LibProtocolStorage {
         mapping(uint256 => uint256) winnerSponsoredByRound;
     }
 
+    bytes32 internal constant WRAPPER_SLOT = keccak256("burntato.storage.wrapper.v1");
+
+    struct WrapperStorage {
+        address underlying;
+        uint256 publicWrapCap;
+        uint256 publicWrapOutstanding;
+        uint256 rewardReserve;
+    }
+
     struct TokenStorage {
         address canonicalHook;
         address poolManager;
@@ -110,6 +119,11 @@ library LibProtocolStorage {
         assembly ("memory-safe") {
             s.slot := slot
         }
+    }
+
+    function wrapper() internal pure returns (WrapperStorage storage s) {
+        bytes32 slot = WRAPPER_SLOT;
+        assembly ("memory-safe") { s.slot := slot }
     }
 
     function token() internal pure returns (TokenStorage storage s) {

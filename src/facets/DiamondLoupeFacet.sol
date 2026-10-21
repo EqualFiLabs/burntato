@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================

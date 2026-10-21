@@ -2,6 +2,9 @@
 pragma solidity 0.8.26;
 
 library Errors {
+    error PublicWrapCapacityExceeded(uint256 available, uint256 requested);
+    error InsufficientRewardReserve(uint256 available, uint256 required);
+    error InvalidBacking();
     error AlreadyClaimed();
     error AlreadyFinalized();
     error AlreadyInitialized();

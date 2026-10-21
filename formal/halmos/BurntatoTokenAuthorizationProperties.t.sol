@@ -1,186 +1,130 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.26;
-
 import {Test} from "forge-std/Test.sol";
-
+import {MockStatics} from "../../test/mocks/MockStatics.sol";
 import {PotatoTokenFacet} from "../../src/facets/PotatoTokenFacet.sol";
-import {LibProtocolStorage} from "../../src/libraries/LibProtocolStorage.sol";
 import {IPotatoToken} from "../../src/interfaces/IPotatoToken.sol";
+import {LibDiamond} from "../../src/libraries/LibDiamond.sol";
+import {LibProtocolStorage} from "../../src/libraries/LibProtocolStorage.sol";
 import {Errors} from "../../src/shared/Errors.sol";
 
 contract SymbolicPotatoHarness is PotatoTokenFacet {
-    function formalConfigureMarket(address hook, address manager) external {
-        LibProtocolStorage.TokenStorage storage tokenStorage = LibProtocolStorage.token();
-        tokenStorage.canonicalHook = hook;
-        tokenStorage.poolManager = manager;
+    constructor(address statics, address authority) {
+        LibProtocolStorage.wrapper().underlying = statics;
+        LibProtocolStorage.wrapper().publicWrapCap = 2_000_000 ether;
+        LibProtocolStorage.treasury().recipient = address(0xD00D);
+        LibDiamond.transferAuthority(authority);
     }
 
     function formalProtocolMovement() external view returns (bytes32 movement) {
         bytes32 slot = LibProtocolStorage.PROTOCOL_MOVEMENT_SLOT;
-        assembly ("memory-safe") {
-            movement := tload(slot)
-        }
+        assembly ("memory-safe") { movement := tload(slot) }
     }
 }
 
 contract BurntatoTokenAuthorizationProperties is Test {
-    address private constant HOOK = address(0xA11CE);
-    address private constant MANAGER = address(0xB0B);
     address private constant HOLDER = address(0xCAFE);
     address private constant RECIPIENT = address(0xD00D);
-
-    SymbolicPotatoHarness private harness;
-    IPotatoToken private token;
+    SymbolicPotatoHarness private token;
+    MockStatics private statics;
 
     function setUp() public {
-        harness = new SymbolicPotatoHarness();
-        token = IPotatoToken(address(harness));
-        harness.formalConfigureMarket(HOOK, MANAGER);
+        statics = new MockStatics();
+        token = new SymbolicPotatoHarness(address(statics), address(this));
     }
 
-    function check_onlyCanonicalHookCanAuthorize(address caller, uint96 amount) public {
-        vm.assume(caller != address(0) && caller != HOOK);
-        uint256 beforeAllowance = token.transientPoolManagerAllowance();
-
-        vm.prank(caller);
-        (bool success, bytes memory reason) =
-            address(token).call(abi.encodeCall(IPotatoToken.authorizePoolManagerTransfer, (uint256(amount))));
-
-        assertFalse(success);
-        assertEq(_selector(reason), Errors.NotCanonicalHook.selector);
-        assertEq(token.transientPoolManagerAllowance(), beforeAllowance);
+    function _wrap(uint256 amount) private {
+        statics.mint(HOLDER, amount);
+        vm.startPrank(HOLDER);
+        statics.approve(address(token), amount);
+        token.wrap(amount);
+        vm.stopPrank();
     }
 
-    function check_poolManagerAllowanceIsConsumedExactly(uint96 amount) public {
+    function check_exactWrapAndUnwrapReopenCapacity(uint96 amount) public {
+        vm.assume(amount > 0 && amount <= 2_000_000 ether);
+        _wrap(amount);
+        assertEq(token.totalSupply(), amount);
+        assertEq(token.backingBalance(), amount);
+        assertEq(token.publicWrapOutstanding(), amount);
+        vm.prank(HOLDER);
+        token.unwrap(amount);
+        assertEq(token.totalSupply(), 0);
+        assertEq(token.publicWrapOutstanding(), 0);
+        assertEq(statics.balanceOf(HOLDER), amount);
+    }
+
+    function check_publicCapRejectsWithoutTakingBacking(uint96 amount) public {
+        vm.assume(amount > 2_000_000 ether);
+        statics.mint(HOLDER, amount);
+        vm.startPrank(HOLDER);
+        statics.approve(address(token), amount);
+        (bool ok,) = address(token).call(abi.encodeCall(IPotatoToken.wrap, (uint256(amount))));
+        vm.stopPrank();
+        assertFalse(ok);
+        assertEq(token.totalSupply(), 0);
+        assertEq(statics.balanceOf(HOLDER), amount);
+    }
+
+    function check_reserveFundingDoesNotConsumePublicCapacity(uint96 amount) public {
         vm.assume(amount > 0);
-        _protocolMint(HOLDER, amount);
-
-        vm.prank(HOOK);
-        token.authorizePoolManagerTransfer(amount);
-        assertEq(token.transientPoolManagerAllowance(), amount);
-
-        vm.prank(HOLDER);
-        assertTrue(token.transfer(MANAGER, amount));
-
-        assertEq(token.transientPoolManagerAllowance(), 0);
-        assertEq(token.balanceOf(HOLDER), 0);
-        assertEq(token.balanceOf(MANAGER), amount);
+        statics.mint(address(this), amount);
+        statics.approve(address(token), amount);
+        token.fundRewardReserve(amount);
+        assertEq(token.rewardReserve(), amount);
+        assertEq(token.totalSupply(), amount);
+        assertEq(token.backingBalance(), amount);
+        assertEq(token.publicWrapOutstanding(), 0);
+        assertEq(token.balanceOf(address(token)), amount);
     }
 
-    function check_poolManagerOverspendRollsBack(uint96 allowance_, uint96 excess) public {
-        vm.assume(excess > 0);
-        uint256 allowanceAmount = allowance_;
-        uint256 required = allowanceAmount + uint256(excess);
-        vm.assume(required <= type(uint96).max);
-        _protocolMint(HOLDER, required);
-
-        vm.prank(HOOK);
-        token.authorizePoolManagerTransfer(allowanceAmount);
-        uint256 holderBefore = token.balanceOf(HOLDER);
-        uint256 managerBefore = token.balanceOf(MANAGER);
-
+    function check_lowerCapNeverPreventsRedemption(uint96 amount, uint96 cap) public {
+        vm.assume(amount > 0 && amount <= 2_000_000 ether);
+        vm.assume(cap < amount);
+        _wrap(amount);
+        token.setPublicWrapCap(cap);
+        assertEq(token.availablePublicWrapCapacity(), 0);
         vm.prank(HOLDER);
-        (bool success, bytes memory reason) =
-            address(token).call(abi.encodeCall(IPotatoToken.transfer, (MANAGER, required)));
-
-        assertFalse(success);
-        assertEq(_selector(reason), Errors.PoolManagerAllowanceExceeded.selector);
-        assertEq(token.transientPoolManagerAllowance(), allowanceAmount);
-        assertEq(token.balanceOf(HOLDER), holderBefore);
-        assertEq(token.balanceOf(MANAGER), managerBefore);
-    }
-
-    function check_consumedAllowanceCannotBeReused(uint96 amount) public {
-        vm.assume(amount > 0 && amount <= type(uint96).max / 2);
-        _protocolMint(HOLDER, uint256(amount) * 2);
-
-        vm.prank(HOOK);
-        token.authorizePoolManagerTransfer(amount);
-        vm.prank(HOLDER);
-        token.transfer(MANAGER, amount);
-
-        vm.prank(HOLDER);
-        (bool success, bytes memory reason) =
-            address(token).call(abi.encodeCall(IPotatoToken.transfer, (MANAGER, uint256(amount))));
-
-        assertFalse(success);
-        assertEq(_selector(reason), Errors.PoolManagerAllowanceExceeded.selector);
-        assertEq(token.transientPoolManagerAllowance(), 0);
-        assertEq(token.balanceOf(HOLDER), amount);
-        assertEq(token.balanceOf(MANAGER), amount);
+        token.unwrap(amount);
+        assertEq(token.publicWrapOutstanding(), 0);
+        assertEq(token.availablePublicWrapCapacity(), cap);
     }
 
     function check_protocolMovementAuthorizationIsSingleUse(uint96 amount) public {
-        vm.assume(amount > 0);
-        _protocolMint(HOLDER, uint256(amount) * 2);
-
-        vm.prank(address(harness));
+        vm.assume(amount > 0 && amount <= 1_000_000 ether);
+        _wrap(uint256(amount) * 2);
+        vm.prank(address(token));
         token.protocolTransfer(HOLDER, RECIPIENT, amount);
-        assertEq(harness.formalProtocolMovement(), bytes32(0));
-        assertEq(token.balanceOf(RECIPIENT), amount);
-
+        assertEq(token.formalProtocolMovement(), bytes32(0));
         vm.prank(HOLDER);
-        (bool success, bytes memory reason) =
-            address(token).call(abi.encodeCall(IPotatoToken.transfer, (RECIPIENT, uint256(amount))));
-        assertFalse(success);
-        assertEq(_selector(reason), Errors.TransferRestricted.selector);
+        (bool ok,) = address(token).call(abi.encodeCall(IPotatoToken.transfer, (RECIPIENT, uint256(amount))));
+        assertFalse(ok);
         assertEq(token.balanceOf(HOLDER), amount);
         assertEq(token.balanceOf(RECIPIENT), amount);
     }
 
-    function check_nonProtocolCannotMint(address caller, uint96 amount) public {
-        vm.assume(caller != address(harness));
-        uint256 supplyBefore = token.totalSupply();
-        uint256 balanceBefore = token.balanceOf(RECIPIENT);
-
+    function check_nonProtocolCannotCreditReserveOrRedeemRecovery(address caller, uint96 amount) public {
+        vm.assume(caller != address(token));
         vm.prank(caller);
-        (bool success, bytes memory reason) =
-            address(token).call(abi.encodeCall(IPotatoToken.protocolMint, (RECIPIENT, uint256(amount))));
-
-        assertFalse(success);
-        assertEq(_selector(reason), Errors.NotProtocol.selector);
-        assertEq(token.totalSupply(), supplyBefore);
-        assertEq(token.balanceOf(RECIPIENT), balanceBefore);
-    }
-
-    function check_protocolBurnReducesBalanceAndSupplyExactly(uint96 amount) public {
-        vm.assume(amount > 0);
-        _protocolMint(HOLDER, amount);
-        uint256 supplyBefore = token.totalSupply();
-        uint256 balanceBefore = token.balanceOf(HOLDER);
-
-        vm.prank(address(harness));
-        token.protocolBurn(HOLDER, amount);
-
-        assertEq(token.totalSupply(), supplyBefore - amount);
-        assertEq(token.balanceOf(HOLDER), balanceBefore - amount);
-    }
-
-    function check_nonProtocolCannotBurn(address caller, uint96 amount) public {
-        vm.assume(caller != address(harness));
-        _protocolMint(HOLDER, amount);
-        uint256 supplyBefore = token.totalSupply();
-        uint256 balanceBefore = token.balanceOf(HOLDER);
-
+        (bool credit,) =
+            address(token).call(abi.encodeCall(IPotatoToken.protocolCreditRewardReserve, (uint256(amount), 0)));
         vm.prank(caller);
-        (bool success, bytes memory reason) =
-            address(token).call(abi.encodeCall(IPotatoToken.protocolBurn, (HOLDER, uint256(amount))));
-
-        assertFalse(success);
-        assertEq(_selector(reason), Errors.NotProtocol.selector);
-        assertEq(token.totalSupply(), supplyBefore);
-        assertEq(token.balanceOf(HOLDER), balanceBefore);
+        (bool redeem,) = address(token).call(abi.encodeCall(IPotatoToken.protocolRedeemRecovery, (uint256(amount))));
+        assertFalse(credit);
+        assertFalse(redeem);
+        assertEq(token.totalSupply(), 0);
+        assertEq(token.rewardReserve(), 0);
     }
 
-    function _protocolMint(address recipient, uint256 amount) private {
-        vm.prank(address(harness));
-        token.protocolMint(recipient, amount);
-    }
-
-    function _selector(bytes memory reason) private pure returns (bytes4 selector) {
-        if (reason.length < 4) return bytes4(0);
-        assembly ("memory-safe") {
-            selector := mload(add(reason, 0x20))
-        }
+    function check_recoveryUsesSameRedemptionAndCapacityAccounting(uint96 amount) public {
+        vm.assume(amount > 0 && amount <= 2_000_000 ether);
+        _wrap(amount);
+        vm.prank(address(token));
+        token.protocolTransfer(HOLDER, address(token), amount);
+        vm.prank(address(token));
+        token.protocolRedeemRecovery(amount);
+        assertEq(token.totalSupply(), 0);
+        assertEq(token.publicWrapOutstanding(), 0);
+        assertEq(statics.balanceOf(RECIPIENT), amount);
     }
 }

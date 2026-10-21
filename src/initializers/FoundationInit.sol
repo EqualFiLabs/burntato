@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 // ============================================================================
-//                                  BURNTATO
-//                         Grab it. Hold it. Burn it.
+//                                BURNTATO
+//                                Grab it.
 //                          https://burntato.fun
 //                              EqualFi Labs
 // ============================================================================
 pragma solidity 0.8.26;
 
-import {ERC20} from "solady/src/tokens/ERC20.sol";
+import {IERC20Metadata} from "openzeppelin-contracts/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {LibProtocolStorage} from "../libraries/LibProtocolStorage.sol";
 import {LibConfig} from "../libraries/LibConfig.sol";
@@ -18,23 +18,14 @@ import {ProtocolConfig} from "../shared/Types.sol";
 import {IOperatorRewards} from "../interfaces/IOperatorRewards.sol";
 import {IGame} from "../interfaces/IGame.sol";
 
-contract FoundationInit is ERC20 {
-    event GenesisMarketSupplyMinted(uint256 amount);
+contract FoundationInit {
     event FoundationConfigured();
-
-    function name() public pure override returns (string memory) {
-        return "Burntato Potato";
-    }
-
-    function symbol() public pure override returns (string memory) {
-        return "POTATO";
-    }
 
     function initialize(
         ProtocolConfig calldata config,
         address treasury,
         address operatorRewardsRouter,
-        uint256 marketPotatoSeed,
+        address statics,
         uint256 initialWinnerReserve
     ) external {
         LibProtocolStorage.InitializationStorage storage initialization = LibProtocolStorage.initialization();
@@ -42,7 +33,10 @@ contract FoundationInit is ERC20 {
         LibProtocolStorage.GameStorage storage gs = LibProtocolStorage.game();
         LibRecipients.enforceExternal(treasury);
         if (treasury == operatorRewardsRouter) revert Errors.InvalidAddress();
-        if (marketPotatoSeed == 0) revert Errors.ZeroAmount();
+        LibDiamond.enforceHasCode(statics);
+        if (statics == treasury || statics == address(this) || IERC20Metadata(statics).decimals() != 18) {
+            revert Errors.InvalidBacking();
+        }
         if (initialWinnerReserve > address(this).balance) revert Errors.InsufficientBalance();
         LibConfig.validate(config);
         if (operatorRewardsRouter == address(0)) {
@@ -61,11 +55,8 @@ contract FoundationInit is ERC20 {
 
         LibProtocolStorage.TreasuryStorage storage ts = LibProtocolStorage.treasury();
         ts.recipient = treasury;
-        ts.potatoInventory = marketPotatoSeed;
-        ts.reservedPotato = marketPotatoSeed;
-        LibProtocolStorage.market().potatoSeed = marketPotatoSeed;
-        _mint(address(this), marketPotatoSeed);
-        emit GenesisMarketSupplyMinted(marketPotatoSeed);
+        LibProtocolStorage.wrapper().underlying = statics;
+        LibProtocolStorage.wrapper().publicWrapCap = 2_000_000 ether;
         if (initialWinnerReserve != 0) {
             emit IGame.WinnerReserveFunded(msg.sender, 1, initialWinnerReserve, initialWinnerReserve);
         }
